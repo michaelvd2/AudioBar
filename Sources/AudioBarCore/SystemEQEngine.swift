@@ -126,21 +126,11 @@ public final class SystemEQEngine: @unchecked Sendable {
             channelCount: Int(max(1, tapFormat.mChannelsPerFrame))
         )
 
-        let aggregateDescription: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "AudioBar System EQ",
-            kAudioAggregateDeviceUIDKey: "com.michaelvandijk.AudioBar.SystemEQ.\(UUID().uuidString)",
-            kAudioAggregateDeviceMainSubDeviceKey: outputDeviceUID,
-            kAudioAggregateDeviceClockDeviceKey: outputDeviceUID,
-            kAudioAggregateDeviceIsPrivateKey: true,
-            kAudioAggregateDeviceTapAutoStartKey: false,
-            kAudioAggregateDeviceSubDeviceListKey: [[
-                kAudioSubDeviceUIDKey: outputDeviceUID
-            ]],
-            kAudioAggregateDeviceTapListKey: [[
-                kAudioSubTapUIDKey: tapUID,
-                kAudioSubTapDriftCompensationKey: true
-            ]]
-        ]
+        let aggregateDescription = SystemEQRouteDescription.makeAggregate(
+            aggregateUID: "com.michaelvandijk.AudioBar.SystemEQ.\(UUID().uuidString)",
+            outputDeviceUID: outputDeviceUID,
+            tapUID: tapUID
+        )
 
         var newAggregateID = AudioObjectID(kAudioObjectUnknown)
         operationStatus = AudioHardwareCreateAggregateDevice(
@@ -170,7 +160,7 @@ public final class SystemEQEngine: @unchecked Sendable {
         }
 
         status = .active
-        systemEQLogger.info("System EQ route active")
+        systemEQLogger.info("System EQ route active; output-clocked with zero extra latency")
         return status
     }
 
@@ -389,7 +379,9 @@ public final class SystemEQEngine: @unchecked Sendable {
     }
 
     private func updateStreamLevels(inputLevelDB: Double, outputLevelDB: Double) {
-        lock.lock()
+        guard lock.try() else {
+            return
+        }
         defer { lock.unlock() }
 
         guard currentStreamSnapshot.isActive else {

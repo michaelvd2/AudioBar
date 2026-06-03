@@ -1,3 +1,4 @@
+import CoreAudio
 import XCTest
 @testable import AudioBarCore
 
@@ -46,5 +47,38 @@ final class SystemEQEngineTests: XCTestCase {
 
         XCTAssertTrue(status == .ready || status.isFailure)
         XCTAssertNotEqual(status, .active)
+    }
+
+    func testRouteDescriptionUsesOutputDeviceForClockAndPlayback() {
+        let description = SystemEQRouteDescription.makeAggregate(
+            aggregateUID: "aggregate",
+            outputDeviceUID: "output",
+            tapUID: "tap"
+        )
+
+        XCTAssertEqual(description[kAudioAggregateDeviceMainSubDeviceKey] as? String, "output")
+        XCTAssertEqual(description[kAudioAggregateDeviceClockDeviceKey] as? String, "output")
+        XCTAssertEqual(description[kAudioAggregateDeviceTapAutoStartKey] as? Bool, false)
+
+        let subDevices = description[kAudioAggregateDeviceSubDeviceListKey] as? [[String: Any]]
+        XCTAssertEqual(subDevices?.first?[kAudioSubDeviceUIDKey] as? String, "output")
+    }
+
+    func testRouteDescriptionRequestsNoExtraLatencyAndTapDriftCompensation() {
+        let description = SystemEQRouteDescription.makeAggregate(
+            aggregateUID: "aggregate",
+            outputDeviceUID: "output",
+            tapUID: "tap"
+        )
+
+        let subDevices = description[kAudioAggregateDeviceSubDeviceListKey] as? [[String: Any]]
+        XCTAssertEqual(subDevices?.first?[kAudioSubDeviceExtraInputLatencyKey] as? Int, 0)
+        XCTAssertEqual(subDevices?.first?[kAudioSubDeviceExtraOutputLatencyKey] as? Int, 0)
+
+        let taps = description[kAudioAggregateDeviceTapListKey] as? [[String: Any]]
+        XCTAssertEqual(taps?.first?[kAudioSubTapUIDKey] as? String, "tap")
+        XCTAssertEqual(taps?.first?[kAudioSubTapExtraInputLatencyKey] as? Int, 0)
+        XCTAssertEqual(taps?.first?[kAudioSubTapExtraOutputLatencyKey] as? Int, 0)
+        XCTAssertEqual(taps?.first?[kAudioSubTapDriftCompensationKey] as? Bool, true)
     }
 }

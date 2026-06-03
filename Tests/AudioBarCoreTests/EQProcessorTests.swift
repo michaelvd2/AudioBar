@@ -69,6 +69,38 @@ final class EQProcessorTests: XCTestCase {
         XCTAssertGreaterThan(rms(boostedOutput.dropFirst(512)), rms(flatOutput.dropFirst(512)) * 1.5)
     }
 
+    func testProcessingFallsThroughWithoutWaitingForSettingsLock() {
+        let processor = EQProcessor(sampleRate: 48_000, channelCount: 2)
+        let input: [Float32] = [0.1, -0.2, 0.3, -0.4]
+        let output = FloatBufferBox([Float32](repeating: 0, count: input.count))
+        let finished = expectation(description: "audio callback returns without waiting")
+
+        processor.withStateLockHeldForTesting {
+            DispatchQueue.global(qos: .userInitiated).async {
+                var renderedOutput = output.values
+                processor.processInterleaved(
+                    input: input,
+                    output: &renderedOutput,
+                    frameCount: 2,
+                    channelCount: 2
+                )
+                output.values = renderedOutput
+                finished.fulfill()
+            }
+            wait(for: [finished], timeout: 0.1)
+        }
+
+        XCTAssertEqual(output.values, input)
+    }
+
+    private final class FloatBufferBox: @unchecked Sendable {
+        var values: [Float32]
+
+        init(_ values: [Float32]) {
+            self.values = values
+        }
+    }
+
     private func sineWave(frequency: Double, sampleRate: Double, frameCount: Int) -> [Float32] {
         (0..<frameCount).map { frame in
             Float32(sin((Double(frame) / sampleRate) * frequency * 2 * .pi) * 0.25)

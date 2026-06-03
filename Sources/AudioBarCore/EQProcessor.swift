@@ -76,7 +76,10 @@ public final class EQProcessor: @unchecked Sendable {
         frameCount: Int,
         channelCount: Int
     ) {
-        lock.lock()
+        guard lock.try() else {
+            output.update(from: input, count: frameCount * max(1, channelCount))
+            return
+        }
         defer { lock.unlock() }
 
         let channelCount = max(1, channelCount)
@@ -111,6 +114,13 @@ public final class EQProcessor: @unchecked Sendable {
             channelCount: extra,
             settings: settings
         ))
+    }
+
+    func withStateLockHeldForTesting(_ body: () -> Void) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        body()
     }
 
     private static func makeFilters(
