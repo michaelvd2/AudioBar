@@ -38,7 +38,7 @@ final class AudioProcessStore: ObservableObject {
         guard timer == nil else {
             return
         }
-        probeEQEngine()
+        startEQEngine()
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -84,31 +84,46 @@ final class AudioProcessStore: ObservableObject {
     func setEQGain(_ gain: Double, for frequencyHz: Int) {
         eqSettings.setGain(gain, for: frequencyHz)
         saveEQSettings()
+        updateEQEngine()
     }
 
     func setEQPreamp(_ gain: Double) {
         eqSettings.preampDB = EQSettings.clamp(gain)
         saveEQSettings()
+        updateEQEngine()
     }
 
     func setEQBypassed(_ isBypassed: Bool) {
         eqSettings.isBypassed = isBypassed
         saveEQSettings()
+        updateEQEngine()
     }
 
     func applyEQPreset(_ preset: EQPreset) {
         eqSettings.apply(preset)
         saveEQSettings()
+        updateEQEngine()
     }
 
     func resetEQ() {
         eqSettings.reset()
         saveEQSettings()
+        updateEQEngine()
     }
 
-    func probeEQEngine() {
-        eqEngineStatus = .probing
-        eqEngineStatus = eqEngine.probe()
+    func startEQEngine() {
+        eqEngineStatus = .starting
+        eqEngineStatus = eqEngine.start(settings: eqSettings)
+    }
+
+    func stopEQEngine() {
+        eqEngine.stop()
+        eqEngineStatus = eqEngine.status
+    }
+
+    private func updateEQEngine() {
+        eqEngine.update(settings: eqSettings)
+        eqEngineStatus = eqEngine.status
     }
 
     private func saveEQSettings() {

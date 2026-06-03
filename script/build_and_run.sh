@@ -45,9 +45,13 @@ cat >"$INFO_PLIST" <<PLIST
   <true/>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>AudioBar captures system audio so the menu bar EQ can process it.</string>
 </dict>
 </plist>
 PLIST
+
+/usr/bin/codesign --force --sign - "$APP_BUNDLE" >/dev/null 2>&1 || true
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"

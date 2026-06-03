@@ -9,7 +9,8 @@ macOS public APIs expose active CoreAudio output processes, but not universal pe
 - Music (`com.apple.Music`)
 - Spotify (`com.spotify.client`)
 
-Other apps appear as view-only rows. Full universal per-app volume would require a heavier virtual audio routing layer or process-tap playback engine.
+Other apps appear as view-only rows for per-track volume. The system EQ uses a
+separate process-tap playback route and applies across routed system audio.
 
 AudioBar also recognizes Safari Web App media helpers, such as the installed
 YouTube app. Those helpers appear as the Web App source instead of
@@ -31,7 +32,11 @@ AudioBar includes a compact 10-band EQ tuner with classic bands:
 
 `31`, `62`, `125`, `250`, `500`, `1k`, `2k`, `4k`, `8k`, `16k`.
 
-The tuner persists band gain, preamp, bypass, and presets. The app also probes
-the macOS process-tap layer by creating and destroying a private global tap. The
-remaining system-wide processing step is routing captured system audio through
-the EQ and back to the selected output device.
+The tuner persists band gain, preamp, bypass, and presets. On launch, AudioBar
+attempts to start a private CoreAudio system route: a global process tap feeds a
+private aggregate device, and the app renders the tapped audio back to the
+current output device through the EQ filters.
+
+The first live EQ start may trigger a macOS system audio recording permission
+prompt. If permission is granted after the first attempt, use the EQ panel's
+start icon or relaunch the app.
