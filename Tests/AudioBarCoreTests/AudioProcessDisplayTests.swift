@@ -66,4 +66,30 @@ final class AudioProcessDisplayTests: XCTestCase {
             ["Music", "Firefox", "Safari"]
         )
     }
+
+    func testVisibleUserSourcesExcludeCurrentAudioBarProcess() {
+        let youtube = AudioProcess(
+            audioObjectID: 1,
+            pid: 100,
+            bundleID: "com.apple.Safari.WebApp.abc",
+            appName: "YouTube",
+            trackTitle: "A Stream",
+            currentVolume: 50,
+            volumeCapability: .webAppKeyboard
+        )
+        let audioBar = AudioProcess(
+            audioObjectID: 2,
+            pid: 200,
+            bundleID: "com.michaelvandijk.AudioBar",
+            appName: "AudioBar",
+            trackTitle: nil,
+            currentVolume: nil,
+            volumeCapability: .unavailable(reason: "No public per-app volume control")
+        )
+
+        XCTAssertEqual(
+            AudioProcess.visibleUserSources([audioBar, youtube], currentPID: 200).map(\.appName),
+            ["YouTube"]
+        )
+    }
 }

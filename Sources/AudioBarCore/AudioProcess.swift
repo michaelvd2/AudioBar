@@ -74,4 +74,8 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
             return left.appName.localizedCaseInsensitiveCompare(right.appName) == .orderedAscending
         }
     }
+
+    public static func visibleUserSources(_ processes: [AudioProcess], currentPID: pid_t) -> [AudioProcess] {
+        sortedForDisplay(processes.filter { $0.pid != currentPID })
+    }
 }

@@ -27,6 +27,19 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertEqual(engine.status, .stopped)
     }
 
+    func testAudioStreamSnapshotFormatsActiveStreamAndLevel() {
+        let snapshot = SystemAudioStreamSnapshot.active(
+            sampleRate: 48_000,
+            channelCount: 2,
+            inputLevelDB: -18,
+            outputLevelDB: -12
+        )
+
+        XCTAssertEqual(snapshot.title, "System Stream")
+        XCTAssertEqual(snapshot.subtitle, "2ch 48 kHz")
+        XCTAssertGreaterThan(snapshot.levelFraction, 0)
+    }
+
     func testEngineProbeReportsReadyOrFailureWithoutActivatingEQ() {
         let engine = SystemEQEngine()
         let status = engine.probe()

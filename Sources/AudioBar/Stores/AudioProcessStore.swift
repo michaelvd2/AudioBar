@@ -10,6 +10,7 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var statusMessage = "Waiting for audio"
     @Published private(set) var eqSettings: EQSettings
     @Published private(set) var eqEngineStatus: SystemEQEngineStatus = .stopped
+    @Published private(set) var eqStreamSnapshot: SystemAudioStreamSnapshot = .inactive
 
     private let provider: AudioProcessProviding
     private let volumeController: AppVolumeControlling
@@ -17,6 +18,7 @@ final class AudioProcessStore: ObservableObject {
     private let eqEngine: SystemEQEngine
     private let userDefaults: UserDefaults
     private var timer: Timer?
+    private var streamTimer: Timer?
     private let eqSettingsKey = "AudioBar.eqSettings"
 
     init(
@@ -45,11 +47,18 @@ final class AudioProcessStore: ObservableObject {
                 self?.refresh()
             }
         }
+        streamTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateEQStreamSnapshot()
+            }
+        }
     }
 
     func stopAutoRefresh() {
         timer?.invalidate()
         timer = nil
+        streamTimer?.invalidate()
+        streamTimer = nil
     }
 
     func refresh() {
@@ -114,16 +123,23 @@ final class AudioProcessStore: ObservableObject {
     func startEQEngine() {
         eqEngineStatus = .starting
         eqEngineStatus = eqEngine.start(settings: eqSettings)
+        updateEQStreamSnapshot()
     }
 
     func stopEQEngine() {
         eqEngine.stop()
         eqEngineStatus = eqEngine.status
+        updateEQStreamSnapshot()
     }
 
     private func updateEQEngine() {
         eqEngine.update(settings: eqSettings)
         eqEngineStatus = eqEngine.status
+        updateEQStreamSnapshot()
+    }
+
+    private func updateEQStreamSnapshot() {
+        eqStreamSnapshot = eqEngine.streamSnapshot
     }
 
     private func saveEQSettings() {

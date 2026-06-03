@@ -158,6 +158,8 @@ private struct EQPanelView: View {
                 .font(.caption)
             }
 
+            AudioStreamMeter(snapshot: store.eqStreamSnapshot)
+
             HStack(alignment: .bottom, spacing: 8) {
                 PreampSlider(store: store)
 
@@ -171,6 +173,49 @@ private struct EQPanelView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+}
+
+private struct AudioStreamMeter: View {
+    let snapshot: SystemAudioStreamSnapshot
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: snapshot.isActive ? "waveform" : "waveform.slash")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(snapshot.title)
+                    .font(.caption)
+                    .foregroundStyle(.primary)
+                Text(snapshot.subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            StreamLevelBar(value: snapshot.levelFraction)
+                .frame(width: 92, height: 5)
+        }
+    }
+}
+
+private struct StreamLevelBar: View {
+    let value: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(.tertiary.opacity(0.28))
+                Capsule()
+                    .fill(.green.opacity(0.8))
+                    .frame(width: proxy.size.width * max(0, min(1, value)))
+            }
+        }
     }
 }
 

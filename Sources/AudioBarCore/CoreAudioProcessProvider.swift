@@ -9,13 +9,16 @@ public protocol AudioProcessProviding {
 public struct CoreAudioProcessProvider: AudioProcessProviding {
     private let volumeController: AppVolumeControlling
     private let webAppProvider: RunningWebAppProvider
+    private let currentProcessID: pid_t
 
     public init(
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
-        webAppProvider: RunningWebAppProvider = RunningWebAppProvider()
+        webAppProvider: RunningWebAppProvider = RunningWebAppProvider(),
+        currentProcessID: pid_t = getpid()
     ) {
         self.volumeController = volumeController
         self.webAppProvider = webAppProvider
+        self.currentProcessID = currentProcessID
     }
 
     public func activeOutputProcesses() -> [AudioProcess] {
@@ -61,7 +64,7 @@ public struct CoreAudioProcessProvider: AudioProcessProviding {
             )
         }
 
-        return AudioProcess.sortedForDisplay(processes)
+        return AudioProcess.visibleUserSources(processes, currentPID: currentProcessID)
     }
 
     private func processObjectIDs() -> [AudioObjectID] {

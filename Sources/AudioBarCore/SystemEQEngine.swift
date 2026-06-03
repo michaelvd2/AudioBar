@@ -48,11 +48,19 @@ public final class SystemEQEngine: @unchecked Sendable {
     private var tapID = AudioObjectID(kAudioObjectUnknown)
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
     private var ioProcID: AudioDeviceIOProcID?
+    private var currentStreamSnapshot = SystemAudioStreamSnapshot.inactive
 
     public init() {}
 
     deinit {
         stop()
+    }
+
+    public var streamSnapshot: SystemAudioStreamSnapshot {
+        lock.lock()
+        defer { lock.unlock() }
+
+        return currentStreamSnapshot
     }
 
     @discardableResult
@@ -113,6 +121,10 @@ public final class SystemEQEngine: @unchecked Sendable {
             channelCount: Int(max(1, tapFormat.mChannelsPerFrame))
         )
         processor.update(settings: settings)
+        currentStreamSnapshot = .active(
+            sampleRate: tapFormat.mSampleRate,
+            channelCount: Int(max(1, tapFormat.mChannelsPerFrame))
+        )
 
         let aggregateDescription: [String: Any] = [
             kAudioAggregateDeviceNameKey: "AudioBar System EQ",
@@ -226,6 +238,8 @@ public final class SystemEQEngine: @unchecked Sendable {
             let channelCount = max(1, Int(inputBuffers[outputIndex].mNumberChannels))
             let byteCount = min(inputBuffers[outputIndex].mDataByteSize, outputBuffers[outputIndex].mDataByteSize)
             let frameCount = Int(byteCount) / (MemoryLayout<Float32>.stride * channelCount)
+            let sampleCount = frameCount * channelCount
+            let inputLevelDB = levelDB(samples: inputPointer, count: sampleCount)
 
             processor.processInterleaved(
                 input: inputPointer,
@@ -233,6 +247,8 @@ public final class SystemEQEngine: @unchecked Sendable {
                 frameCount: frameCount,
                 channelCount: channelCount
             )
+            let outputLevelDB = levelDB(samples: outputPointer, count: sampleCount)
+            updateStreamLevels(inputLevelDB: inputLevelDB, outputLevelDB: outputLevelDB)
             outputBuffers[outputIndex].mDataByteSize = UInt32(
                 frameCount * channelCount * MemoryLayout<Float32>.stride
             )
@@ -270,6 +286,7 @@ public final class SystemEQEngine: @unchecked Sendable {
         if updateStatus {
             status = .stopped
         }
+        currentStreamSnapshot = .inactive
     }
 
     private func currentProcessObjectID() -> AudioObjectID? {
@@ -351,6 +368,40 @@ public final class SystemEQEngine: @unchecked Sendable {
 
     private func formatSummary(_ description: AudioStreamBasicDescription) -> String {
         "format=\(description.mFormatID) flags=\(description.mFormatFlags) bits=\(description.mBitsPerChannel) channels=\(description.mChannelsPerFrame) rate=\(description.mSampleRate)"
+    }
+
+    private func levelDB(samples: UnsafePointer<Float32>, count: Int) -> Double {
+        guard count > 0 else {
+            return -120
+        }
+
+        var sum = 0.0
+        for index in 0..<count {
+            let sample = Double(samples[index])
+            sum += sample * sample
+        }
+
+        let rms = sqrt(sum / Double(count))
+        guard rms > 0 else {
+            return -120
+        }
+        return max(-120, min(0, 20 * log10(rms)))
+    }
+
+    private func updateStreamLevels(inputLevelDB: Double, outputLevelDB: Double) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard currentStreamSnapshot.isActive else {
+            return
+        }
+
+        currentStreamSnapshot = .active(
+            sampleRate: currentStreamSnapshot.sampleRate,
+            channelCount: currentStreamSnapshot.channelCount,
+            inputLevelDB: inputLevelDB,
+            outputLevelDB: outputLevelDB
+        )
     }
 }
 
