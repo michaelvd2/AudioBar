@@ -141,6 +141,10 @@ private struct AudioProcessRow: View {
             Text("scripted volume")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
+        case .webAppKeyboard:
+            Text("web app volume")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         case .unavailable:
             Text("view only")
                 .font(.caption2)
@@ -151,7 +155,7 @@ private struct AudioProcessRow: View {
     @ViewBuilder
     private var control: some View {
         switch process.volumeCapability {
-        case .scripted:
+        case .scripted, .webAppKeyboard:
             VStack(alignment: .trailing, spacing: 4) {
                 Slider(
                     value: Binding(

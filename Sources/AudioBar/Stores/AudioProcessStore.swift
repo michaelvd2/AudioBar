@@ -11,13 +11,16 @@ final class AudioProcessStore: ObservableObject {
 
     private let provider: AudioProcessProviding
     private let volumeController: AppVolumeControlling
+    private let webAppVolumeController: WebAppKeyboardVolumeController
     private var timer: Timer?
 
     init(
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
+        webAppVolumeController: WebAppKeyboardVolumeController = WebAppKeyboardVolumeController(),
         provider: AudioProcessProviding? = nil
     ) {
         self.volumeController = volumeController
+        self.webAppVolumeController = webAppVolumeController
         self.provider = provider ?? CoreAudioProcessProvider(volumeController: volumeController)
     }
 
@@ -49,7 +52,17 @@ final class AudioProcessStore: ObservableObject {
 
     func setVolume(for process: AudioProcess, to value: Double) {
         let volume = Int(value.rounded())
-        guard volumeController.setVolume(volume, for: process.bundleID) else {
+        let didSet: Bool
+        switch process.volumeCapability {
+        case .scripted:
+            didSet = volumeController.setVolume(volume, for: process.bundleID)
+        case .webAppKeyboard:
+            didSet = webAppVolumeController.setVolume(volume, for: process.volumeControlID)
+        case .unavailable:
+            didSet = false
+        }
+
+        guard didSet else {
             return
         }
         if let index = processes.firstIndex(where: { $0.id == process.id }) {

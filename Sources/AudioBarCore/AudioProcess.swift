@@ -2,13 +2,16 @@ import Foundation
 
 public enum VolumeCapability: Equatable, Sendable {
     case scripted
+    case webAppKeyboard
     case unavailable(reason: String)
 
     public var isAdjustable: Bool {
-        if case .scripted = self {
+        switch self {
+        case .scripted, .webAppKeyboard:
             return true
+        case .unavailable:
+            return false
         }
-        return false
     }
 }
 
@@ -20,6 +23,7 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
     public var trackTitle: String?
     public var currentVolume: Int?
     public let volumeCapability: VolumeCapability
+    public let volumeControlID: String?
 
     public var id: String {
         "\(pid)-\(audioObjectID)"
@@ -32,7 +36,8 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
         appName: String,
         trackTitle: String?,
         currentVolume: Int?,
-        volumeCapability: VolumeCapability
+        volumeCapability: VolumeCapability,
+        volumeControlID: String? = nil
     ) {
         self.audioObjectID = audioObjectID
         self.pid = pid
@@ -41,6 +46,7 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
         self.trackTitle = trackTitle
         self.currentVolume = currentVolume
         self.volumeCapability = volumeCapability
+        self.volumeControlID = volumeControlID
     }
 
     public var displayTitle: String {

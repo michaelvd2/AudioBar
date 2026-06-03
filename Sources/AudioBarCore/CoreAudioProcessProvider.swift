@@ -8,12 +8,19 @@ public protocol AudioProcessProviding {
 
 public struct CoreAudioProcessProvider: AudioProcessProviding {
     private let volumeController: AppVolumeControlling
+    private let webAppProvider: RunningWebAppProvider
 
-    public init(volumeController: AppVolumeControlling = ScriptedAppVolumeController()) {
+    public init(
+        volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
+        webAppProvider: RunningWebAppProvider = RunningWebAppProvider()
+    ) {
         self.volumeController = volumeController
+        self.webAppProvider = webAppProvider
     }
 
     public func activeOutputProcesses() -> [AudioProcess] {
+        let webApps = webAppProvider.runningWebApps()
+
         let processes = processObjectIDs().compactMap { processObjectID -> AudioProcess? in
             guard readUInt32(
                 objectID: processObjectID,
@@ -31,6 +38,16 @@ public struct CoreAudioProcessProvider: AudioProcessProviding {
                 selector: kAudioProcessPropertyBundleID
             )
             let runningApp = NSRunningApplication(processIdentifier: pid)
+            if let webAppSource = WebKitMediaSourceResolver.resolve(
+                helperAudioObjectID: processObjectID,
+                helperPID: pid,
+                helperBundleID: bundleID,
+                helperName: runningApp?.localizedName,
+                webApps: webApps
+            ) {
+                return webAppSource
+            }
+
             let trackTitle = volumeController.currentTrackTitle(for: bundleID)
             let currentVolume = volumeController.currentVolume(for: bundleID)
 

@@ -45,4 +45,17 @@ final class VolumeScriptBuilderTests: XCTestCase {
             .unavailable(reason: "No public per-app volume control")
         )
     }
+
+    func testYouTubeWebAppKeyboardVolumeScriptSetsVolumeFromZero() {
+        let script = WebAppKeyboardVolumeCommandBuilder.setYouTubeVolumeScript(
+            bundleID: "com.apple.Safari.WebApp.example",
+            volume: 37
+        )
+
+        XCTAssertTrue(script.contains("tell application id \"com.apple.Safari.WebApp.example\" to activate"))
+        XCTAssertTrue(script.contains("repeat 20 times"))
+        XCTAssertTrue(script.contains("key code 125"))
+        XCTAssertTrue(script.contains("repeat 7 times"))
+        XCTAssertTrue(script.contains("key code 126"))
+    }
 }
