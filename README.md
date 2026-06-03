@@ -24,3 +24,14 @@ volume shortcuts.
 
 The first Music or Spotify control may trigger a macOS Automation permission prompt.
 The first YouTube Web App control may trigger Accessibility or Automation prompts.
+
+## EQ
+
+AudioBar includes a compact 10-band EQ tuner with classic bands:
+
+`31`, `62`, `125`, `250`, `500`, `1k`, `2k`, `4k`, `8k`, `16k`.
+
+The tuner persists band gain, preamp, bypass, and presets. The app also probes
+the macOS process-tap layer by creating and destroying a private global tap. The
+remaining system-wide processing step is routing captured system audio through
+the EQ and back to the selected output device.

@@ -8,26 +8,37 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var isRefreshing = false
     @Published private(set) var lastRefreshDate: Date?
     @Published private(set) var statusMessage = "Waiting for audio"
+    @Published private(set) var eqSettings: EQSettings
+    @Published private(set) var eqEngineStatus: SystemEQEngineStatus = .stopped
 
     private let provider: AudioProcessProviding
     private let volumeController: AppVolumeControlling
     private let webAppVolumeController: WebAppKeyboardVolumeController
+    private let eqEngine: SystemEQEngine
+    private let userDefaults: UserDefaults
     private var timer: Timer?
+    private let eqSettingsKey = "AudioBar.eqSettings"
 
     init(
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
         webAppVolumeController: WebAppKeyboardVolumeController = WebAppKeyboardVolumeController(),
-        provider: AudioProcessProviding? = nil
+        provider: AudioProcessProviding? = nil,
+        eqEngine: SystemEQEngine = SystemEQEngine(),
+        userDefaults: UserDefaults = .standard
     ) {
         self.volumeController = volumeController
         self.webAppVolumeController = webAppVolumeController
         self.provider = provider ?? CoreAudioProcessProvider(volumeController: volumeController)
+        self.eqEngine = eqEngine
+        self.userDefaults = userDefaults
+        self.eqSettings = Self.loadEQSettings(from: userDefaults, key: eqSettingsKey)
     }
 
     func startAutoRefresh() {
         guard timer == nil else {
             return
         }
+        probeEQEngine()
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -68,5 +79,51 @@ final class AudioProcessStore: ObservableObject {
         if let index = processes.firstIndex(where: { $0.id == process.id }) {
             processes[index].currentVolume = min(100, max(0, volume))
         }
+    }
+
+    func setEQGain(_ gain: Double, for frequencyHz: Int) {
+        eqSettings.setGain(gain, for: frequencyHz)
+        saveEQSettings()
+    }
+
+    func setEQPreamp(_ gain: Double) {
+        eqSettings.preampDB = EQSettings.clamp(gain)
+        saveEQSettings()
+    }
+
+    func setEQBypassed(_ isBypassed: Bool) {
+        eqSettings.isBypassed = isBypassed
+        saveEQSettings()
+    }
+
+    func applyEQPreset(_ preset: EQPreset) {
+        eqSettings.apply(preset)
+        saveEQSettings()
+    }
+
+    func resetEQ() {
+        eqSettings.reset()
+        saveEQSettings()
+    }
+
+    func probeEQEngine() {
+        eqEngineStatus = .probing
+        eqEngineStatus = eqEngine.probe()
+    }
+
+    private func saveEQSettings() {
+        guard let data = try? JSONEncoder().encode(eqSettings) else {
+            return
+        }
+        userDefaults.set(data, forKey: eqSettingsKey)
+    }
+
+    private static func loadEQSettings(from userDefaults: UserDefaults, key: String) -> EQSettings {
+        guard let data = userDefaults.data(forKey: key),
+              let settings = try? JSONDecoder().decode(EQSettings.self, from: data)
+        else {
+            return .flat
+        }
+        return settings
     }
 }

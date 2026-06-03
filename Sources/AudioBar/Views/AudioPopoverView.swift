@@ -9,11 +9,13 @@ struct AudioPopoverView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
+            EQPanelView(store: store)
+            Divider()
             content
             Divider()
             footer
         }
-        .frame(width: 360)
+        .frame(width: 430)
         .onAppear {
             store.startAutoRefresh()
         }
@@ -104,6 +106,130 @@ struct AudioPopoverView: View {
         }
         return "Updated \(lastRefreshDate.formatted(date: .omitted, time: .shortened))"
     }
+}
+
+private struct EQPanelView: View {
+    @ObservedObject var store: AudioProcessStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Label("EQ", systemImage: "slider.vertical.3")
+                    .font(.system(size: 13, weight: .semibold))
+
+                Text(store.eqEngineStatus.displayText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Toggle("Bypass", isOn: Binding(
+                    get: { store.eqSettings.isBypassed },
+                    set: { store.setEQBypassed($0) }
+                ))
+                .toggleStyle(.switch)
+                .font(.caption)
+
+                Menu("Preset") {
+                    ForEach(EQPreset.allCases, id: \.self) { preset in
+                        Button(preset.rawValue) {
+                            store.applyEQPreset(preset)
+                        }
+                    }
+                }
+                .font(.caption)
+
+                Button("Reset") {
+                    store.resetEQ()
+                }
+                .font(.caption)
+            }
+
+            HStack(alignment: .bottom, spacing: 8) {
+                PreampSlider(store: store)
+
+                Divider()
+                    .frame(height: 118)
+
+                ForEach(EQBand.classic) { band in
+                    EQBandSlider(band: band, store: store)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+}
+
+private struct PreampSlider: View {
+    @ObservedObject var store: AudioProcessStore
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Text(valueText(store.eqSettings.preampDB))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(height: 14)
+
+            Slider(
+                value: Binding(
+                    get: { store.eqSettings.preampDB },
+                    set: { store.setEQPreamp($0) }
+                ),
+                in: EQSettings.gainRange,
+                step: 1
+            )
+            .frame(width: 100, height: 18)
+            .rotationEffect(.degrees(-90))
+            .frame(width: 26, height: 104)
+
+            Text("Pre")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(width: 28)
+        }
+    }
+}
+
+private struct EQBandSlider: View {
+    let band: EQBand
+    @ObservedObject var store: AudioProcessStore
+
+    var body: some View {
+        let gain = store.eqSettings.gain(for: band.frequencyHz)
+
+        VStack(spacing: 5) {
+            Text(valueText(gain))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(height: 14)
+
+            Slider(
+                value: Binding(
+                    get: { store.eqSettings.gain(for: band.frequencyHz) },
+                    set: { store.setEQGain($0, for: band.frequencyHz) }
+                ),
+                in: EQSettings.gainRange,
+                step: 1
+            )
+            .frame(width: 100, height: 18)
+            .rotationEffect(.degrees(-90))
+            .frame(width: 26, height: 104)
+
+            Text(band.label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(width: 30)
+        }
+    }
+}
+
+private func valueText(_ value: Double) -> String {
+    if value > 0 {
+        return "+\(Int(value))"
+    }
+    return "\(Int(value))"
 }
 
 private struct AudioProcessRow: View {
