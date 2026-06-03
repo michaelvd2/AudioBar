@@ -124,18 +124,6 @@ private struct EQPanelView: View {
 
                 Spacer()
 
-                Button {
-                    if store.eqEngineStatus == .active {
-                        store.stopEQEngine()
-                    } else {
-                        store.startEQEngine()
-                    }
-                } label: {
-                    Image(systemName: store.eqEngineStatus == .active ? "power" : "play.fill")
-                }
-                .buttonStyle(.plain)
-                .help(store.eqEngineStatus == .active ? "Stop system EQ" : "Start system EQ")
-
                 Toggle("Bypass", isOn: Binding(
                     get: { store.eqSettings.isBypassed },
                     set: { store.setEQBypassed($0) }
