@@ -117,20 +117,15 @@ private struct EQPanelView: View {
                 Label("EQ", systemImage: "slider.vertical.3")
                     .font(.system(size: 13, weight: .semibold))
 
-                Text(store.eqEngineStatus.displayText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
                 Spacer()
 
-                Toggle("EQ On", isOn: Binding(
+                Toggle("On", isOn: Binding(
                     get: { !store.eqSettings.isBypassed },
                     set: { store.setEQBypassed(!$0) }
                 ))
                 .toggleStyle(.switch)
                 .font(.caption)
-                .frame(width: 102, alignment: .trailing)
+                .frame(width: 76, alignment: .trailing)
 
                 Menu("Preset") {
                     ForEach(EQPreset.allCases, id: \.self) { preset in
