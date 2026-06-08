@@ -124,12 +124,13 @@ private struct EQPanelView: View {
 
                 Spacer()
 
-                Toggle("Bypass", isOn: Binding(
-                    get: { store.eqSettings.isBypassed },
-                    set: { store.setEQBypassed($0) }
+                Toggle("EQ On", isOn: Binding(
+                    get: { !store.eqSettings.isBypassed },
+                    set: { store.setEQBypassed(!$0) }
                 ))
                 .toggleStyle(.switch)
                 .font(.caption)
+                .frame(width: 102, alignment: .trailing)
 
                 Menu("Preset") {
                     ForEach(EQPreset.allCases, id: \.self) { preset in

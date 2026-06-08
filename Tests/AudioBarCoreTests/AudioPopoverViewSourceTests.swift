@@ -9,7 +9,10 @@ final class AudioPopoverViewSourceTests: XCTestCase {
             to: "private struct AudioStreamMeter"
         ))
 
-        XCTAssertTrue(eqPanel.contains("Toggle(\"Bypass\""))
+        XCTAssertTrue(eqPanel.contains("Toggle(\"EQ On\""))
+        XCTAssertTrue(eqPanel.contains("get: { !store.eqSettings.isBypassed }"))
+        XCTAssertTrue(eqPanel.contains("set: { store.setEQBypassed(!$0) }"))
+        XCTAssertFalse(eqPanel.contains("Toggle(\"Bypass\""))
         XCTAssertFalse(eqPanel.contains("store.stopEQEngine()"))
         XCTAssertFalse(eqPanel.contains("store.startEQEngine()"))
     }
