@@ -359,8 +359,6 @@ private struct AudioProcessRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-
-                capabilityText
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -368,24 +366,6 @@ private struct AudioProcessRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-    }
-
-    @ViewBuilder
-    private var capabilityText: some View {
-        switch process.volumeCapability {
-        case .scripted:
-            Text("scripted volume")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-        case .webAppKeyboard:
-            Text("web app volume")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-        case .unavailable:
-            Text("view only")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-        }
     }
 
     @ViewBuilder

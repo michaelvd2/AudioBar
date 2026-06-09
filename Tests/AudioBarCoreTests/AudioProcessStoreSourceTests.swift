@@ -36,6 +36,16 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(applyFunction.contains("updateEQEngine()"))
     }
 
+    func testStoreKeepsPausedSourcesWithoutCountingThemActive() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("private var processCache = AudioProcessListCache()"))
+
+        let refreshFunction = try XCTUnwrap(source.function(named: "refresh"))
+        XCTAssertTrue(refreshFunction.contains("processCache.merge(activeProcesses: activeProcesses)"))
+        XCTAssertTrue(refreshFunction.contains("activeProcesses.count"))
+    }
+
     private func audioProcessStoreURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

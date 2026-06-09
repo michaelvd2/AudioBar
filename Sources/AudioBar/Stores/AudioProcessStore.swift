@@ -22,6 +22,7 @@ final class AudioProcessStore: ObservableObject {
     private var streamTimer: Timer?
     private let eqSettingsKey = "AudioBar.eqSettings"
     private let savedEQPresetsKey = "AudioBar.savedEQPresets"
+    private var processCache = AudioProcessListCache()
 
     init(
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
@@ -66,10 +67,11 @@ final class AudioProcessStore: ObservableObject {
 
     func refresh() {
         isRefreshing = true
-        let nextProcesses = provider.activeOutputProcesses()
+        let activeProcesses = provider.activeOutputProcesses()
+        let nextProcesses = processCache.merge(activeProcesses: activeProcesses)
         processes = nextProcesses
         lastRefreshDate = Date()
-        statusMessage = nextProcesses.isEmpty ? "No active output detected" : "\(nextProcesses.count) active"
+        statusMessage = activeProcesses.isEmpty ? "No active output detected" : "\(activeProcesses.count) active"
         isRefreshing = false
     }
 

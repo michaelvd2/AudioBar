@@ -46,6 +46,20 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(source.contains("Image(systemName: \"lock\")"))
     }
 
+    func testAudioProcessRowsUseTwoTextLinesOnly() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var control"
+        ))
+
+        XCTAssertTrue(row.contains("Text(process.displayTitle)"))
+        XCTAssertTrue(row.contains("Text(process.displaySubtitle)"))
+        XCTAssertFalse(row.contains("capabilityText"))
+        XCTAssertFalse(row.contains("web app volume"))
+        XCTAssertFalse(row.contains("view only"))
+    }
+
     func testOutputSourceListIsExpandedByDefaultAndDoesNotScrollForSmallLists() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let sourceList = try XCTUnwrap(source.slice(

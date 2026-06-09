@@ -24,9 +24,16 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
     public var currentVolume: Int?
     public let volumeCapability: VolumeCapability
     public let volumeControlID: String?
+    public let isActiveOutput: Bool
 
     public var id: String {
         "\(pid)-\(audioObjectID)"
+    }
+
+    public var stableSourceID: String {
+        volumeControlID
+            ?? bundleID
+            ?? "\(pid)-\(appName)"
     }
 
     public init(
@@ -37,7 +44,8 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
         trackTitle: String?,
         currentVolume: Int?,
         volumeCapability: VolumeCapability,
-        volumeControlID: String? = nil
+        volumeControlID: String? = nil,
+        isActiveOutput: Bool = true
     ) {
         self.audioObjectID = audioObjectID
         self.pid = pid
@@ -47,6 +55,7 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
         self.currentVolume = currentVolume
         self.volumeCapability = volumeCapability
         self.volumeControlID = volumeControlID
+        self.isActiveOutput = isActiveOutput
     }
 
     public var displayTitle: String {
@@ -57,6 +66,9 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
     }
 
     public var displaySubtitle: String {
+        guard isActiveOutput else {
+            return "Paused"
+        }
         if !normalizedTrackTitle.isEmpty {
             return displayAppName
         }
@@ -96,8 +108,25 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
             .replacingOccurrences(of: "_", with: " ")
     }
 
+    public func markingActiveOutput(_ isActiveOutput: Bool) -> AudioProcess {
+        AudioProcess(
+            audioObjectID: audioObjectID,
+            pid: pid,
+            bundleID: bundleID,
+            appName: appName,
+            trackTitle: trackTitle,
+            currentVolume: currentVolume,
+            volumeCapability: volumeCapability,
+            volumeControlID: volumeControlID,
+            isActiveOutput: isActiveOutput
+        )
+    }
+
     public static func sortedForDisplay(_ processes: [AudioProcess]) -> [AudioProcess] {
         processes.sorted { left, right in
+            if left.isActiveOutput != right.isActiveOutput {
+                return left.isActiveOutput
+            }
             if left.volumeCapability.isAdjustable != right.volumeCapability.isAdjustable {
                 return left.volumeCapability.isAdjustable
             }

@@ -58,6 +58,22 @@ final class AudioProcessDisplayTests: XCTestCase {
         XCTAssertFalse(safari.displaySubtitle.contains("com.apple"))
     }
 
+    func testDisplaySubtitleMarksInactiveSourcesAsPaused() {
+        let process = AudioProcess(
+            audioObjectID: 12,
+            pid: 345,
+            bundleID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718",
+            appName: "YouTube",
+            trackTitle: nil,
+            currentVolume: 50,
+            volumeCapability: .webAppKeyboard,
+            volumeControlID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718",
+            isActiveOutput: false
+        )
+
+        XCTAssertEqual(process.displaySubtitle, "Paused")
+    }
+
     func testDisplayTitleUsesHumanReadableBundleNameWhenOnlyBundleIDIsAvailable() {
         let process = AudioProcess(
             audioObjectID: 14,
