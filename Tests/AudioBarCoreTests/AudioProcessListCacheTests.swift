@@ -92,4 +92,24 @@ final class AudioProcessListCacheTests: XCTestCase {
 
         XCTAssertTrue(merged.isEmpty)
     }
+
+    func testCacheKeepsSystemSoundsVisibleAfterNotificationAudioStops() {
+        var cache = AudioProcessListCache()
+        let systemSounds = AudioProcess(
+            audioObjectID: 100,
+            pid: 789,
+            bundleID: "systemsoundserverd",
+            appName: "systemsoundserverd",
+            trackTitle: nil,
+            currentVolume: 50,
+            volumeCapability: .systemRoute
+        )
+
+        XCTAssertEqual(cache.merge(activeProcesses: [systemSounds]).map(\.displayTitle), ["System Sounds"])
+
+        let merged = cache.merge(activeProcesses: [])
+
+        XCTAssertEqual(merged.map(\.displayTitle), ["System Sounds"])
+        XCTAssertEqual(merged.first?.displaySubtitle, "Paused")
+    }
 }

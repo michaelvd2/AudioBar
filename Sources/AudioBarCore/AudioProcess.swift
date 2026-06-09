@@ -46,6 +46,10 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
             break
         }
 
+        if isSystemSoundsSource {
+            return true
+        }
+
         guard let bundleID else {
             return false
         }
@@ -100,6 +104,9 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
     }
 
     private var displayAppName: String {
+        if isSystemSoundsSource {
+            return "System Sounds"
+        }
         guard appName == bundleID else {
             return appName
         }
@@ -113,7 +120,14 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
         if bundleID.hasPrefix("com.apple.Safari.WebApp.") {
             return "Safari web app"
         }
+        if isSystemSoundsSource {
+            return "System audio"
+        }
         return "App audio"
+    }
+
+    private var isSystemSoundsSource: Bool {
+        bundleID == "systemsoundserverd" || appName == "systemsoundserverd"
     }
 
     private func humanReadableName(fromBundleID bundleID: String) -> String? {

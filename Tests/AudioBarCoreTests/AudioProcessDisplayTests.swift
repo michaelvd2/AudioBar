@@ -89,6 +89,22 @@ final class AudioProcessDisplayTests: XCTestCase {
         XCTAssertEqual(process.displaySubtitle, "App audio")
     }
 
+    func testSystemSoundServerDisplaysAsSystemSounds() {
+        let process = AudioProcess(
+            audioObjectID: 15,
+            pid: 348,
+            bundleID: "systemsoundserverd",
+            appName: "systemsoundserverd",
+            trackTitle: nil,
+            currentVolume: 50,
+            volumeCapability: .systemRoute
+        )
+
+        XCTAssertEqual(process.displayTitle, "System Sounds")
+        XCTAssertEqual(process.displaySubtitle, "System audio")
+        XCTAssertTrue(process.shouldRemainVisibleWhenPaused)
+    }
+
     func testSortedForDisplayPutsAdjustableAppsFirstThenNames() {
         let safari = AudioProcess(
             audioObjectID: 1,
