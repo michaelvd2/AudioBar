@@ -20,6 +20,22 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(function.contains("updateEQEngine()"))
     }
 
+    func testStorePersistsAndAppliesSavedEQPresets() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("@Published private(set) var savedEQPresets: [SavedEQPreset]"))
+        XCTAssertTrue(source.contains("private let savedEQPresetsKey"))
+
+        let saveFunction = try XCTUnwrap(source.function(named: "saveCurrentEQPreset"))
+        XCTAssertTrue(saveFunction.contains("savedEQPresets.append"))
+        XCTAssertTrue(saveFunction.contains("saveSavedEQPresets()"))
+
+        let applyFunction = try XCTUnwrap(source.function(named: "applySavedEQPreset"))
+        XCTAssertTrue(applyFunction.contains("eqSettings = preset.settings"))
+        XCTAssertTrue(applyFunction.contains("eqSettings.isBypassed = false"))
+        XCTAssertTrue(applyFunction.contains("updateEQEngine()"))
+    }
+
     private func audioProcessStoreURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

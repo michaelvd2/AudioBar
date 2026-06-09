@@ -44,4 +44,29 @@ final class EQSettingsTests: XCTestCase {
         XCTAssertEqual(settings.gain(for: 125), 3)
         XCTAssertEqual(settings.gain(for: 16_000), 0)
     }
+
+    func testHarmanPresetUsesPreferredCurveShape() {
+        let settings = EQSettings.applying(.harman)
+
+        XCTAssertEqual(EQPreset.harman.rawValue, "Harman")
+        XCTAssertEqual(settings.gain(for: 31), 6)
+        XCTAssertEqual(settings.gain(for: 62), 5)
+        XCTAssertEqual(settings.gain(for: 125), 3)
+        XCTAssertEqual(settings.gain(for: 250), 1)
+        XCTAssertEqual(settings.gain(for: 1_000), 0)
+        XCTAssertEqual(settings.gain(for: 4_000), 2)
+        XCTAssertEqual(settings.gain(for: 16_000), 0)
+    }
+
+    func testSavedEQPresetStoresANameAndSettings() {
+        let settings = EQSettings.applying(.harman)
+        let preset = SavedEQPreset(
+            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            name: "Desk",
+            settings: settings
+        )
+
+        XCTAssertEqual(preset.name, "Desk")
+        XCTAssertEqual(preset.settings, settings)
+    }
 }

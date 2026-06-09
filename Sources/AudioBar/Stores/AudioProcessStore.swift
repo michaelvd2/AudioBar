@@ -11,6 +11,7 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var eqSettings: EQSettings
     @Published private(set) var eqEngineStatus: SystemEQEngineStatus = .stopped
     @Published private(set) var eqStreamSnapshot: SystemAudioStreamSnapshot = .inactive
+    @Published private(set) var savedEQPresets: [SavedEQPreset]
 
     private let provider: AudioProcessProviding
     private let volumeController: AppVolumeControlling
@@ -20,6 +21,7 @@ final class AudioProcessStore: ObservableObject {
     private var timer: Timer?
     private var streamTimer: Timer?
     private let eqSettingsKey = "AudioBar.eqSettings"
+    private let savedEQPresetsKey = "AudioBar.savedEQPresets"
 
     init(
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
@@ -34,6 +36,7 @@ final class AudioProcessStore: ObservableObject {
         self.eqEngine = eqEngine
         self.userDefaults = userDefaults
         self.eqSettings = Self.loadEQSettings(from: userDefaults, key: eqSettingsKey)
+        self.savedEQPresets = Self.loadSavedEQPresets(from: userDefaults, key: savedEQPresetsKey)
     }
 
     func startAutoRefresh() {
@@ -121,6 +124,36 @@ final class AudioProcessStore: ObservableObject {
         updateEQEngine()
     }
 
+    func applySavedEQPreset(_ preset: SavedEQPreset) {
+        eqSettings = preset.settings
+        eqSettings.isBypassed = false
+        saveEQSettings()
+        updateEQEngine()
+    }
+
+    func saveCurrentEQPreset(named name: String) {
+        let cleanName = sanitizedPresetName(name)
+        guard !cleanName.isEmpty else {
+            return
+        }
+
+        var settings = eqSettings
+        settings.isBypassed = false
+        savedEQPresets.removeAll { $0.name.caseInsensitiveCompare(cleanName) == .orderedSame }
+        savedEQPresets.append(SavedEQPreset(name: cleanName, settings: settings))
+        saveSavedEQPresets()
+    }
+
+    func nextSavedEQPresetName() -> String {
+        var index = savedEQPresets.count + 1
+        var name = "Custom \(index)"
+        while savedEQPresets.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+            index += 1
+            name = "Custom \(index)"
+        }
+        return name
+    }
+
     func resetEQ() {
         eqSettings.reset()
         saveEQSettings()
@@ -169,6 +202,17 @@ final class AudioProcessStore: ObservableObject {
         userDefaults.set(data, forKey: eqSettingsKey)
     }
 
+    private func saveSavedEQPresets() {
+        guard let data = try? JSONEncoder().encode(savedEQPresets) else {
+            return
+        }
+        userDefaults.set(data, forKey: savedEQPresetsKey)
+    }
+
+    private func sanitizedPresetName(_ name: String) -> String {
+        String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(30))
+    }
+
     private static func loadEQSettings(from userDefaults: UserDefaults, key: String) -> EQSettings {
         guard let data = userDefaults.data(forKey: key),
               let settings = try? JSONDecoder().decode(EQSettings.self, from: data)
@@ -176,5 +220,14 @@ final class AudioProcessStore: ObservableObject {
             return .flat
         }
         return settings
+    }
+
+    private static func loadSavedEQPresets(from userDefaults: UserDefaults, key: String) -> [SavedEQPreset] {
+        guard let data = userDefaults.data(forKey: key),
+              let presets = try? JSONDecoder().decode([SavedEQPreset].self, from: data)
+        else {
+            return []
+        }
+        return presets
     }
 }

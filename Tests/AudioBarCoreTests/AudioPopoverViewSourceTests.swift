@@ -20,6 +20,27 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(eqPanel.contains("store.startEQEngine()"))
     }
 
+    func testSourceListAppearsBeforeEQPanel() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let body = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
+        let contentIndex = try XCTUnwrap(body.range(of: "content")?.lowerBound)
+        let eqIndex = try XCTUnwrap(body.range(of: "EQPanelView(store: store)")?.lowerBound)
+
+        XCTAssertLessThan(contentIndex, eqIndex)
+    }
+
+    func testEQPresetMenuCanSaveAndApplyCustomPresets() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let eqPanel = try XCTUnwrap(source.slice(
+            from: "private struct EQPanelView",
+            to: "private struct AudioStreamMeter"
+        ))
+
+        XCTAssertTrue(eqPanel.contains("Save Current..."))
+        XCTAssertTrue(eqPanel.contains("store.saveCurrentEQPreset(named: presetName)"))
+        XCTAssertTrue(eqPanel.contains("store.applySavedEQPreset(preset)"))
+    }
+
     private func audioPopoverViewURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

@@ -24,6 +24,7 @@ public struct EQBand: Equatable, Identifiable, Codable, Sendable {
 
 public enum EQPreset: String, CaseIterable, Codable, Sendable {
     case flat = "Flat"
+    case harman = "Harman"
     case bassBoost = "Bass"
     case vocalLift = "Vocal"
     case bright = "Bright"
@@ -32,6 +33,19 @@ public enum EQPreset: String, CaseIterable, Codable, Sendable {
         switch self {
         case .flat:
             return EQBand.classic.reduce(into: [:]) { $0[$1.frequencyHz] = 0 }
+        case .harman:
+            return [
+                31: 6,
+                62: 5,
+                125: 3,
+                250: 1,
+                500: 0,
+                1_000: 0,
+                2_000: 1,
+                4_000: 2,
+                8_000: 1,
+                16_000: 0
+            ]
         case .bassBoost:
             return [
                 31: 6,
@@ -72,6 +86,18 @@ public enum EQPreset: String, CaseIterable, Codable, Sendable {
                 16_000: 4
             ]
         }
+    }
+}
+
+public struct SavedEQPreset: Equatable, Identifiable, Codable, Sendable {
+    public let id: UUID
+    public var name: String
+    public var settings: EQSettings
+
+    public init(id: UUID = UUID(), name: String, settings: EQSettings) {
+        self.id = id
+        self.name = name
+        self.settings = settings
     }
 }
 

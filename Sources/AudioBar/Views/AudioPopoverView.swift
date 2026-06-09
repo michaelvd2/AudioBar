@@ -9,9 +9,9 @@ struct AudioPopoverView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
-            EQPanelView(store: store)
-            Divider()
             content
+            Divider()
+            EQPanelView(store: store)
             Divider()
             footer
         }
@@ -110,6 +110,8 @@ struct AudioPopoverView: View {
 
 private struct EQPanelView: View {
     @ObservedObject var store: AudioProcessStore
+    @State private var isSavingPreset = false
+    @State private var presetName = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -132,6 +134,21 @@ private struct EQPanelView: View {
                         Button(preset.rawValue) {
                             store.applyEQPreset(preset)
                         }
+                    }
+
+                    if !store.savedEQPresets.isEmpty {
+                        Divider()
+                        ForEach(store.savedEQPresets) { preset in
+                            Button(preset.name) {
+                                store.applySavedEQPreset(preset)
+                            }
+                        }
+                    }
+
+                    Divider()
+                    Button("Save Current...") {
+                        presetName = store.nextSavedEQPresetName()
+                        isSavingPreset = true
                     }
                 }
                 .font(.caption)
@@ -157,6 +174,15 @@ private struct EQPanelView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .alert("Save Preset", isPresented: $isSavingPreset) {
+            TextField("Name", text: $presetName)
+            Button("Save") {
+                store.saveCurrentEQPreset(named: presetName)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Save the current EQ curve as a preset.")
+        }
     }
 }
 
