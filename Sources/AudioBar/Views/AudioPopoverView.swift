@@ -371,16 +371,13 @@ private struct AudioProcessRow: View {
     @ViewBuilder
     private var control: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            Slider(
-                value: Binding(
-                    get: { Double(process.currentVolume ?? 50) },
-                    set: { store.setVolume(for: process, to: $0) }
-                ),
-                in: 0...100,
-                step: 1
+            VolumeDragBar(
+                value: Double(process.currentVolume ?? 50),
+                isEnabled: process.volumeCapability.isAdjustable,
+                step: 1,
+                onCommit: { store.setVolume(for: process, to: $0) }
             )
             .frame(width: 118)
-            .disabled(!process.volumeCapability.isAdjustable)
             .help(volumeHelpText)
 
             Text(volumeLabel)
@@ -404,5 +401,73 @@ private struct AudioProcessRow: View {
             return "macOS does not expose a public per-app volume control for this source"
         }
         return "Set source volume"
+    }
+}
+
+private struct VolumeDragBar: View {
+    let value: Double
+    let isEnabled: Bool
+    let step: Double
+    let onCommit: (Double) -> Void
+
+    @State private var draftValue: Double?
+
+    private var visibleValue: Double {
+        min(100, max(0, draftValue ?? value))
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let fraction = visibleValue / 100
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(.tertiary.opacity(isEnabled ? 0.28 : 0.14))
+                    .frame(height: 6)
+
+                Capsule()
+                    .fill(.secondary.opacity(isEnabled ? 0.58 : 0.22))
+                    .frame(width: max(0, proxy.size.width * fraction), height: 6)
+
+                Circle()
+                    .fill(isEnabled ? Color.primary.opacity(0.92) : Color.secondary.opacity(0.42))
+                    .frame(width: 18, height: 18)
+                    .offset(x: knobOffset(for: proxy.size.width))
+                    .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { gesture in
+                        guard isEnabled else {
+                            return
+                        }
+                        draftValue = snappedValue(for: gesture.location.x, width: proxy.size.width)
+                    }
+                    .onEnded { gesture in
+                        guard isEnabled else {
+                            return
+                        }
+                        let committedValue = snappedValue(for: gesture.location.x, width: proxy.size.width)
+                        draftValue = committedValue
+                        onCommit(committedValue)
+                    }
+            )
+        }
+        .frame(height: 18)
+        .opacity(isEnabled ? 1 : 0.62)
+    }
+
+    private func knobOffset(for width: Double) -> Double {
+        let knobWidth = 18.0
+        return max(0, min(width - knobWidth, width * (visibleValue / 100) - knobWidth / 2))
+    }
+
+    private func snappedValue(for locationX: Double, width: Double) -> Double {
+        guard width > 0 else {
+            return visibleValue
+        }
+        let rawValue = min(100, max(0, (locationX / width) * 100))
+        return (rawValue / step).rounded() * step
     }
 }

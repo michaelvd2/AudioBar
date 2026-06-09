@@ -40,9 +40,9 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(sourceList.contains("ForEach(store.processes)"))
         XCTAssertTrue(sourceList.contains("AudioProcessRow(process: process, store: store)"))
         XCTAssertTrue(sourceList.contains(".frame(minHeight:"))
-        XCTAssertTrue(source.contains("Slider("))
+        XCTAssertTrue(source.contains("VolumeDragBar("))
         XCTAssertTrue(source.contains("store.setVolume(for: process, to: $0)"))
-        XCTAssertTrue(source.contains(".disabled(!process.volumeCapability.isAdjustable)"))
+        XCTAssertTrue(source.contains("isEnabled: process.volumeCapability.isAdjustable"))
         XCTAssertFalse(source.contains("Image(systemName: \"lock\")"))
     }
 
@@ -58,6 +58,24 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(row.contains("capabilityText"))
         XCTAssertFalse(row.contains("web app volume"))
         XCTAssertFalse(row.contains("view only"))
+    }
+
+    func testAudioProcessRowsUseCustomCommitOnEndVolumeDragBar() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var volumeLabel"
+        ))
+        let dragBar = try XCTUnwrap(source.sliceToEnd(from: "private struct VolumeDragBar"))
+
+        XCTAssertTrue(row.contains("VolumeDragBar("))
+        XCTAssertTrue(row.contains("step: 1"))
+        XCTAssertFalse(row.contains("Slider("))
+        XCTAssertTrue(dragBar.contains("DragGesture(minimumDistance: 0)"))
+        XCTAssertTrue(dragBar.contains(".onChanged"))
+        XCTAssertTrue(dragBar.contains(".onEnded"))
+        XCTAssertTrue(dragBar.contains("onCommit"))
+        XCTAssertFalse(dragBar.contains("Slider("))
     }
 
     func testOutputSourceListIsExpandedByDefaultAndDoesNotScrollForSmallLists() throws {
@@ -104,5 +122,12 @@ private extension String {
         }
 
         return String(self[startRange.lowerBound..<endRange.lowerBound])
+    }
+
+    func sliceToEnd(from start: String) -> String? {
+        guard let startRange = range(of: start) else {
+            return nil
+        }
+        return String(self[startRange.lowerBound..<endIndex])
     }
 }

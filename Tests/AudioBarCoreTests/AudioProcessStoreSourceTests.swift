@@ -46,6 +46,13 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(refreshFunction.contains("activeProcesses.count"))
     }
 
+    func testStorePersistsCommittedVolumeIntoProcessCache() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let setVolumeFunction = try XCTUnwrap(source.function(named: "setVolume"))
+
+        XCTAssertTrue(setVolumeFunction.contains("processCache.setCurrentVolume(volume, forStableSourceID: process.stableSourceID)"))
+    }
+
     private func audioProcessStoreURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

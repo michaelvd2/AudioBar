@@ -52,4 +52,25 @@ final class AudioProcessListCacheTests: XCTestCase {
         XCTAssertEqual(merged.map(\.displayTitle), ["Safari", "YouTube"])
         XCTAssertEqual(merged.map(\.isActiveOutput), [true, false])
     }
+
+    func testCachePreservesCommittedWebAppVolumeAcrossRefreshes() {
+        var cache = AudioProcessListCache()
+        let youtube = AudioProcess(
+            audioObjectID: 12,
+            pid: 345,
+            bundleID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718",
+            appName: "YouTube",
+            trackTitle: nil,
+            currentVolume: 50,
+            volumeCapability: .webAppKeyboard,
+            volumeControlID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718"
+        )
+
+        _ = cache.merge(activeProcesses: [youtube])
+        cache.setCurrentVolume(37, forStableSourceID: youtube.stableSourceID)
+
+        let refreshed = cache.merge(activeProcesses: [youtube])
+
+        XCTAssertEqual(refreshed.first?.currentVolume, 37)
+    }
 }

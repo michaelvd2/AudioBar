@@ -90,6 +90,7 @@ final class AudioProcessStore: ObservableObject {
         guard didSet else {
             return
         }
+        processCache.setCurrentVolume(volume, forStableSourceID: process.stableSourceID)
         if let index = processes.firstIndex(where: { $0.id == process.id }) {
             processes[index].currentVolume = min(100, max(0, volume))
         }

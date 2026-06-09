@@ -122,6 +122,20 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
         )
     }
 
+    public func withCurrentVolume(_ currentVolume: Int?) -> AudioProcess {
+        AudioProcess(
+            audioObjectID: audioObjectID,
+            pid: pid,
+            bundleID: bundleID,
+            appName: appName,
+            trackTitle: trackTitle,
+            currentVolume: currentVolume,
+            volumeCapability: volumeCapability,
+            volumeControlID: volumeControlID,
+            isActiveOutput: isActiveOutput
+        )
+    }
+
     public static func sortedForDisplay(_ processes: [AudioProcess]) -> [AudioProcess] {
         processes.sorted { left, right in
             if left.isActiveOutput != right.isActiveOutput {
