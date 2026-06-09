@@ -36,4 +36,20 @@ final class WebKitMediaSourceResolverTests: XCTestCase {
 
         XCTAssertNil(source)
     }
+
+    func testSafariGraphicsHelperResolvesToSafariSourceWhenNoWebAppMatches() {
+        let source = WebKitMediaSourceResolver.resolve(
+            helperAudioObjectID: 45,
+            helperPID: 83415,
+            helperBundleID: "com.apple.WebKit.GPU",
+            helperName: "Safari Graphics and Media",
+            webApps: []
+        )
+
+        XCTAssertEqual(source?.bundleID, "com.apple.Safari")
+        XCTAssertEqual(source?.appName, "Safari")
+        XCTAssertNil(source?.trackTitle)
+        XCTAssertEqual(source?.volumeCapability, .unavailable(reason: "No public per-app volume control"))
+        XCTAssertNil(source?.volumeControlID)
+    }
 }

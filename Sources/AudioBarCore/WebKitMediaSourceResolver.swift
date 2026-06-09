@@ -31,7 +31,11 @@ public enum WebKitMediaSourceResolver {
         guard let webApp = webApps.first(where: { app in
             app.displayName.localizedCaseInsensitiveCompare(helperDisplayName) == .orderedSame
         }) else {
-            return nil
+            return fallbackBrowserSource(
+                helperAudioObjectID: helperAudioObjectID,
+                helperPID: helperPID,
+                displayName: helperDisplayName
+            )
         }
 
         return AudioProcess(
@@ -44,6 +48,33 @@ public enum WebKitMediaSourceResolver {
             volumeCapability: .webAppKeyboard,
             volumeControlID: webApp.bundleID
         )
+    }
+
+    private static func fallbackBrowserSource(
+        helperAudioObjectID: UInt32,
+        helperPID: Int32,
+        displayName: String
+    ) -> AudioProcess {
+        let bundleID = browserBundleID(for: displayName)
+        return AudioProcess(
+            audioObjectID: helperAudioObjectID,
+            pid: helperPID,
+            bundleID: bundleID,
+            appName: displayName,
+            trackTitle: nil,
+            currentVolume: nil,
+            volumeCapability: ScriptedAppVolumeSupport.capability(for: bundleID),
+            volumeControlID: nil
+        )
+    }
+
+    private static func browserBundleID(for displayName: String) -> String? {
+        switch displayName.lowercased() {
+        case "safari":
+            return "com.apple.Safari"
+        default:
+            return nil
+        }
     }
 
     private static func normalizedTrackTitle(_ windowTitle: String?, appName: String) -> String? {
