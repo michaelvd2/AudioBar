@@ -42,8 +42,17 @@ final class VolumeScriptBuilderTests: XCTestCase {
         )
         XCTAssertEqual(
             ScriptedAppVolumeSupport.capability(for: "com.apple.Safari"),
-            .unavailable(reason: "No public per-app volume control")
+            .safariMedia
         )
+    }
+
+    func testSafariMediaVolumeScriptSetsMediaElementsInFrontTab() {
+        let script = SafariMediaVolumeCommandBuilder.setVolumeScript(volume: 37)
+
+        XCTAssertTrue(script.contains("tell application id \"com.apple.Safari\""))
+        XCTAssertTrue(script.contains("current tab of front window"))
+        XCTAssertTrue(script.contains("media.volume = 0.37"))
+        XCTAssertTrue(script.contains("audio,video"))
     }
 
     func testYouTubeWebAppKeyboardVolumeScriptSetsVolumeFromZero() {

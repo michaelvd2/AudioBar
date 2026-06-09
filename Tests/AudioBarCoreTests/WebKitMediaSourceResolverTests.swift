@@ -49,7 +49,7 @@ final class WebKitMediaSourceResolverTests: XCTestCase {
         XCTAssertEqual(source?.bundleID, "com.apple.Safari")
         XCTAssertEqual(source?.appName, "Safari")
         XCTAssertNil(source?.trackTitle)
-        XCTAssertEqual(source?.volumeCapability, .unavailable(reason: "No public per-app volume control"))
-        XCTAssertNil(source?.volumeControlID)
+        XCTAssertEqual(source?.volumeCapability, .safariMedia)
+        XCTAssertEqual(source?.volumeControlID, "com.apple.Safari")
     }
 }

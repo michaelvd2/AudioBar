@@ -16,6 +16,7 @@ final class AudioProcessStore: ObservableObject {
     private let provider: AudioProcessProviding
     private let volumeController: AppVolumeControlling
     private let webAppVolumeController: WebAppKeyboardVolumeController
+    private let safariMediaVolumeController: SafariMediaVolumeController
     private let eqEngine: SystemEQEngine
     private let userDefaults: UserDefaults
     private var timer: Timer?
@@ -27,12 +28,14 @@ final class AudioProcessStore: ObservableObject {
     init(
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
         webAppVolumeController: WebAppKeyboardVolumeController = WebAppKeyboardVolumeController(),
+        safariMediaVolumeController: SafariMediaVolumeController = SafariMediaVolumeController(),
         provider: AudioProcessProviding? = nil,
         eqEngine: SystemEQEngine = SystemEQEngine(),
         userDefaults: UserDefaults = .standard
     ) {
         self.volumeController = volumeController
         self.webAppVolumeController = webAppVolumeController
+        self.safariMediaVolumeController = safariMediaVolumeController
         self.provider = provider ?? CoreAudioProcessProvider(volumeController: volumeController)
         self.eqEngine = eqEngine
         self.userDefaults = userDefaults
@@ -83,6 +86,8 @@ final class AudioProcessStore: ObservableObject {
             didSet = volumeController.setVolume(volume, for: process.bundleID)
         case .webAppKeyboard:
             didSet = webAppVolumeController.setVolume(volume, for: process.volumeControlID)
+        case .safariMedia:
+            didSet = safariMediaVolumeController.setVolume(volume)
         case .unavailable:
             didSet = false
         }

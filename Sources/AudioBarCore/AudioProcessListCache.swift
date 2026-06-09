@@ -8,9 +8,8 @@ public struct AudioProcessListCache {
     public mutating func merge(activeProcesses: [AudioProcess]) -> [AudioProcess] {
         let activeProcesses = activeProcesses.map { process in
             let activeProcess = process.markingActiveOutput(true)
-            guard case .webAppKeyboard = process.volumeCapability,
-                  let knownVolume = knownProcesses[process.stableSourceID]?.currentVolume
-            else {
+            guard process.volumeCapability.isAdjustable,
+                  let knownVolume = knownProcesses[process.stableSourceID]?.currentVolume else {
                 return activeProcess
             }
             return activeProcess.withCurrentVolume(knownVolume)

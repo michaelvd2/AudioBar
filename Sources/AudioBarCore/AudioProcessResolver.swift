@@ -14,14 +14,18 @@ public enum AudioProcessResolver {
             ?? bundleID?.nilIfBlank
             ?? "PID \(pid)"
 
+        let volumeCapability = ScriptedAppVolumeSupport.capability(for: bundleID)
+        let resolvedCurrentVolume = currentVolume ?? (volumeCapability.isAdjustable ? 50 : nil)
+
         return AudioProcess(
             audioObjectID: audioObjectID,
             pid: pid,
             bundleID: bundleID?.nilIfBlank,
             appName: appName,
             trackTitle: trackTitle?.nilIfBlank,
-            currentVolume: currentVolume,
-            volumeCapability: ScriptedAppVolumeSupport.capability(for: bundleID)
+            currentVolume: resolvedCurrentVolume,
+            volumeCapability: volumeCapability,
+            volumeControlID: volumeCapability.isAdjustable ? bundleID?.nilIfBlank : nil
         )
     }
 }

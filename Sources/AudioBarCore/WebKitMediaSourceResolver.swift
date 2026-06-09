@@ -56,15 +56,17 @@ public enum WebKitMediaSourceResolver {
         displayName: String
     ) -> AudioProcess {
         let bundleID = browserBundleID(for: displayName)
+        let volumeCapability = ScriptedAppVolumeSupport.capability(for: bundleID)
+        let isAdjustable = volumeCapability.isAdjustable
         return AudioProcess(
             audioObjectID: helperAudioObjectID,
             pid: helperPID,
             bundleID: bundleID,
             appName: displayName,
             trackTitle: nil,
-            currentVolume: nil,
-            volumeCapability: ScriptedAppVolumeSupport.capability(for: bundleID),
-            volumeControlID: nil
+            currentVolume: isAdjustable ? 50 : nil,
+            volumeCapability: volumeCapability,
+            volumeControlID: isAdjustable ? bundleID : nil
         )
     }
 

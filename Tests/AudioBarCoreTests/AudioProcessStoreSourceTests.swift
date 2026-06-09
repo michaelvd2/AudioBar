@@ -53,6 +53,15 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(setVolumeFunction.contains("processCache.setCurrentVolume(volume, forStableSourceID: process.stableSourceID)"))
     }
 
+    func testStoreRoutesSafariMediaVolumeToSafariController() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let setVolumeFunction = try XCTUnwrap(source.function(named: "setVolume"))
+
+        XCTAssertTrue(source.contains("private let safariMediaVolumeController"))
+        XCTAssertTrue(setVolumeFunction.contains("case .safariMedia:"))
+        XCTAssertTrue(setVolumeFunction.contains("didSet = safariMediaVolumeController.setVolume(volume)"))
+    }
+
     private func audioProcessStoreURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

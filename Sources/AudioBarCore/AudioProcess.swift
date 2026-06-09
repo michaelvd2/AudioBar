@@ -3,11 +3,12 @@ import Foundation
 public enum VolumeCapability: Equatable, Sendable {
     case scripted
     case webAppKeyboard
+    case safariMedia
     case unavailable(reason: String)
 
     public var isAdjustable: Bool {
         switch self {
-        case .scripted, .webAppKeyboard:
+        case .scripted, .webAppKeyboard, .safariMedia:
             return true
         case .unavailable:
             return false
