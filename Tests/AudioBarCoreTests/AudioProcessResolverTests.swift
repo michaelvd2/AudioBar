@@ -18,7 +18,7 @@ final class AudioProcessResolverTests: XCTestCase {
         XCTAssertEqual(process.volumeCapability, .scripted)
     }
 
-    func testResolverFallsBackToBundleIDWhenAppNameIsMissing() {
+    func testResolverFallsBackToRouteVolumeWhenAppNameIsMissing() {
         let process = AudioProcessResolver.resolve(
             audioObjectID: 90,
             pid: 451,
@@ -29,9 +29,7 @@ final class AudioProcessResolverTests: XCTestCase {
         )
 
         XCTAssertEqual(process.appName, "com.example.Player")
-        XCTAssertEqual(
-            process.volumeCapability,
-            .unavailable(reason: "No public per-app volume control")
-        )
+        XCTAssertEqual(process.currentVolume, 50)
+        XCTAssertEqual(process.volumeCapability, .systemRoute)
     }
 }

@@ -1,6 +1,7 @@
 import Foundation
 
 public enum VolumeCapability: Equatable, Sendable {
+    case systemRoute
     case scripted
     case webAppKeyboard
     case safariMedia
@@ -8,7 +9,7 @@ public enum VolumeCapability: Equatable, Sendable {
 
     public var isAdjustable: Bool {
         switch self {
-        case .scripted, .webAppKeyboard, .safariMedia:
+        case .systemRoute, .scripted, .webAppKeyboard, .safariMedia:
             return true
         case .unavailable:
             return false

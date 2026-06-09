@@ -20,6 +20,13 @@ public final class EQProcessor: @unchecked Sendable {
         )
     }
 
+    public var currentSettings: EQSettings {
+        lock.lock()
+        defer { lock.unlock() }
+
+        return settings
+    }
+
     public func update(settings: EQSettings) {
         lock.lock()
         defer { lock.unlock() }

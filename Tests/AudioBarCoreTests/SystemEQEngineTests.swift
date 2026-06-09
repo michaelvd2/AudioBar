@@ -81,4 +81,33 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertEqual(taps?.first?[kAudioSubTapExtraOutputLatencyKey] as? Int, 0)
         XCTAssertEqual(taps?.first?[kAudioSubTapDriftCompensationKey] as? Bool, true)
     }
+
+    func testRouteDescriptionCanCarryFallbackAndSourceTaps() {
+        let description = SystemEQRouteDescription.makeAggregate(
+            aggregateUID: "aggregate",
+            outputDeviceUID: "output",
+            tapUIDs: ["fallback", "youtube", "safari"]
+        )
+
+        let taps = description[kAudioAggregateDeviceTapListKey] as? [[String: Any]]
+        XCTAssertEqual(taps?.map { $0[kAudioSubTapUIDKey] as? String }, ["fallback", "youtube", "safari"])
+    }
+
+    func testEngineKeepsSourceTapGainStateForRouteMixer() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("private var sourceProcessObjectIDs"))
+        XCTAssertTrue(source.contains("private var sourceVolumeByProcessObjectID"))
+        XCTAssertTrue(source.contains("CATapDescription(stereoMixdownOfProcesses: [processObjectID])"))
+        XCTAssertTrue(source.contains("AudioSourceMixer.mixInterleaved"))
+        XCTAssertTrue(source.contains("processor.processInterleaved"))
+    }
+
+    private func systemEQEngineURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/AudioBarCore/SystemEQEngine.swift")
+    }
 }

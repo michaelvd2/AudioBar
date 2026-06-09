@@ -42,6 +42,7 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("private var processCache = AudioProcessListCache()"))
 
         let refreshFunction = try XCTUnwrap(source.function(named: "refresh"))
+        XCTAssertTrue(refreshFunction.contains("eqEngine.setSourceProcesses(activeProcesses)"))
         XCTAssertTrue(refreshFunction.contains("processCache.merge(activeProcesses: activeProcesses)"))
         XCTAssertTrue(refreshFunction.contains("activeProcesses.count"))
     }
@@ -51,6 +52,7 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         let setVolumeFunction = try XCTUnwrap(source.function(named: "setVolume"))
 
         XCTAssertTrue(setVolumeFunction.contains("guard process.volumeCapability.isAdjustable else"))
+        XCTAssertTrue(setVolumeFunction.contains("eqEngine.setSourceVolume(volume, for: process.audioObjectID)"))
         XCTAssertTrue(setVolumeFunction.contains("processCache.setCurrentVolume(volume, forStableSourceID: process.stableSourceID)"))
         XCTAssertTrue(setVolumeFunction.contains("processes[index].currentVolume = min(100, max(0, volume))"))
     }
@@ -60,6 +62,8 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         let setVolumeFunction = try XCTUnwrap(source.function(named: "setVolume"))
 
         XCTAssertTrue(source.contains("private let safariMediaVolumeController"))
+        XCTAssertTrue(setVolumeFunction.contains("case .systemRoute:"))
+        XCTAssertTrue(setVolumeFunction.contains("didSet = true"))
         XCTAssertTrue(setVolumeFunction.contains("case .safariMedia:"))
         XCTAssertTrue(setVolumeFunction.contains("didSet = safariMediaVolumeController.setVolume(volume)"))
     }

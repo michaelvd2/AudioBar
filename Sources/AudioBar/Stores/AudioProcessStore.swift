@@ -71,6 +71,7 @@ final class AudioProcessStore: ObservableObject {
     func refresh() {
         isRefreshing = true
         let activeProcesses = provider.activeOutputProcesses()
+        eqEngine.setSourceProcesses(activeProcesses)
         let nextProcesses = processCache.merge(activeProcesses: activeProcesses)
         processes = nextProcesses
         lastRefreshDate = Date()
@@ -84,8 +85,12 @@ final class AudioProcessStore: ObservableObject {
             return
         }
 
+        eqEngine.setSourceVolume(volume, for: process.audioObjectID)
+
         let didSet: Bool
         switch process.volumeCapability {
+        case .systemRoute:
+            didSet = true
         case .scripted:
             didSet = volumeController.setVolume(volume, for: process.bundleID)
         case .webAppKeyboard:
