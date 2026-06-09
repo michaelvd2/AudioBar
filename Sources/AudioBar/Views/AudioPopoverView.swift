@@ -345,6 +345,7 @@ private func valueText(_ value: Double) -> String {
 private struct AudioProcessRow: View {
     let process: AudioProcess
     @ObservedObject var store: AudioProcessStore
+    @State private var draftVolume: Double?
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -372,10 +373,14 @@ private struct AudioProcessRow: View {
     private var control: some View {
         VStack(alignment: .trailing, spacing: 4) {
             VolumeDragBar(
-                value: Double(process.currentVolume ?? 50),
+                value: displayedVolume,
                 isEnabled: process.volumeCapability.isAdjustable,
                 step: 1,
-                onCommit: { store.setVolume(for: process, to: $0) }
+                onPreview: { draftVolume = $0 },
+                onCommit: {
+                    draftVolume = $0
+                    store.setVolume(for: process, to: $0)
+                }
             )
             .frame(width: 118)
             .help(volumeHelpText)
@@ -390,10 +395,11 @@ private struct AudioProcessRow: View {
         guard process.volumeCapability.isAdjustable else {
             return "view"
         }
-        if let currentVolume = process.currentVolume {
-            return "\(currentVolume)%"
-        }
-        return "--%"
+        return "\(Int(displayedVolume.rounded()))%"
+    }
+
+    private var displayedVolume: Double {
+        min(100, max(0, draftVolume ?? Double(process.currentVolume ?? 50)))
     }
 
     private var volumeHelpText: String {
@@ -408,6 +414,7 @@ private struct VolumeDragBar: View {
     let value: Double
     let isEnabled: Bool
     let step: Double
+    let onPreview: (Double) -> Void
     let onCommit: (Double) -> Void
 
     @State private var draftValue: Double?
@@ -442,7 +449,9 @@ private struct VolumeDragBar: View {
                         guard isEnabled else {
                             return
                         }
-                        draftValue = snappedValue(for: gesture.location.x, width: proxy.size.width)
+                        let previewValue = snappedValue(for: gesture.location.x, width: proxy.size.width)
+                        draftValue = previewValue
+                        onPreview(previewValue)
                     }
                     .onEnded { gesture in
                         guard isEnabled else {

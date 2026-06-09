@@ -50,7 +50,9 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let setVolumeFunction = try XCTUnwrap(source.function(named: "setVolume"))
 
+        XCTAssertTrue(setVolumeFunction.contains("guard process.volumeCapability.isAdjustable else"))
         XCTAssertTrue(setVolumeFunction.contains("processCache.setCurrentVolume(volume, forStableSourceID: process.stableSourceID)"))
+        XCTAssertTrue(setVolumeFunction.contains("processes[index].currentVolume = min(100, max(0, volume))"))
     }
 
     func testStoreRoutesSafariMediaVolumeToSafariController() throws {

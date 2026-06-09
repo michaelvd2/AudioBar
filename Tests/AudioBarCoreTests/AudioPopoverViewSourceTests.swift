@@ -70,10 +70,14 @@ final class AudioPopoverViewSourceTests: XCTestCase {
 
         XCTAssertTrue(row.contains("VolumeDragBar("))
         XCTAssertTrue(row.contains("step: 1"))
+        XCTAssertTrue(row.contains("@State private var draftVolume"))
+        XCTAssertTrue(row.contains("onPreview: { draftVolume = $0 }"))
+        XCTAssertTrue(row.contains("draftVolume = $0"))
         XCTAssertFalse(row.contains("Slider("))
         XCTAssertTrue(dragBar.contains("DragGesture(minimumDistance: 0)"))
         XCTAssertTrue(dragBar.contains(".onChanged"))
         XCTAssertTrue(dragBar.contains(".onEnded"))
+        XCTAssertTrue(dragBar.contains("onPreview"))
         XCTAssertTrue(dragBar.contains("onCommit"))
         XCTAssertFalse(dragBar.contains("Slider("))
     }

@@ -80,6 +80,10 @@ final class AudioProcessStore: ObservableObject {
 
     func setVolume(for process: AudioProcess, to value: Double) {
         let volume = Int(value.rounded())
+        guard process.volumeCapability.isAdjustable else {
+            return
+        }
+
         let didSet: Bool
         switch process.volumeCapability {
         case .scripted:
@@ -91,10 +95,8 @@ final class AudioProcessStore: ObservableObject {
         case .unavailable:
             didSet = false
         }
+        _ = didSet
 
-        guard didSet else {
-            return
-        }
         processCache.setCurrentVolume(volume, forStableSourceID: process.stableSourceID)
         if let index = processes.firstIndex(where: { $0.id == process.id }) {
             processes[index].currentVolume = min(100, max(0, volume))
