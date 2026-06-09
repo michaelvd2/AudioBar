@@ -103,6 +103,14 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertTrue(source.contains("processor.processInterleaved"))
     }
 
+    func testActiveRouteRestartsWhenSourceProcessesChange() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let setSourceProcesses = try XCTUnwrap(source.function(named: "setSourceProcesses"))
+
+        XCTAssertTrue(setSourceProcesses.contains("restartLocked(settings: settings)"))
+        XCTAssertFalse(setSourceProcesses.contains("_ = start(settings: settings)"))
+    }
+
     func testInputBufferMapAlignsTapMetadataAfterExtraDeviceBuffers() {
         let source = AudioObjectID(42)
         let tapProcesses: [AudioObjectID?] = [nil, source]
@@ -130,5 +138,32 @@ final class SystemEQEngineTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/AudioBarCore/SystemEQEngine.swift")
+    }
+}
+
+private extension String {
+    func function(named name: String) -> String? {
+        guard let start = range(of: "func \(name)")?.lowerBound else {
+            return nil
+        }
+
+        var braceDepth = 0
+        var didOpenBody = false
+        var index = start
+        while index < endIndex {
+            let character = self[index]
+            if character == "{" {
+                braceDepth += 1
+                didOpenBody = true
+            } else if character == "}" {
+                braceDepth -= 1
+                if didOpenBody && braceDepth == 0 {
+                    return String(self[start...index])
+                }
+            }
+            index = self.index(after: index)
+        }
+
+        return nil
     }
 }

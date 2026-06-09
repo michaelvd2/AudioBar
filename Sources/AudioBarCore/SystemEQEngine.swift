@@ -207,7 +207,7 @@ public final class SystemEQEngine: @unchecked Sendable {
 
         if status == .active {
             let settings = processor.currentSettings
-            _ = start(settings: settings)
+            _ = restartLocked(settings: settings)
         }
     }
 
@@ -348,6 +348,12 @@ public final class SystemEQEngine: @unchecked Sendable {
             return nil
         }
         return newTapID
+    }
+
+    private func restartLocked(settings: EQSettings) -> SystemEQEngineStatus {
+        stopLocked(updateStatus: false)
+        status = .stopped
+        return start(settings: settings)
     }
 
     private func failLocked(_ message: String) -> SystemEQEngineStatus {
