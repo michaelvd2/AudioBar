@@ -92,12 +92,14 @@ final class AudioProcessStore: ObservableObject {
 
     func setEQGain(_ gain: Double, for frequencyHz: Int) {
         eqSettings.setGain(gain, for: frequencyHz)
+        eqSettings.isBypassed = false
         saveEQSettings()
         updateEQEngine()
     }
 
     func setEQPreamp(_ gain: Double) {
         eqSettings.preampDB = EQSettings.clamp(gain)
+        eqSettings.isBypassed = false
         saveEQSettings()
         updateEQEngine()
     }
@@ -105,11 +107,16 @@ final class AudioProcessStore: ObservableObject {
     func setEQBypassed(_ isBypassed: Bool) {
         eqSettings.isBypassed = isBypassed
         saveEQSettings()
-        updateEQEngine()
+        if isBypassed {
+            updateEQEngine()
+        } else {
+            restartEQEngine()
+        }
     }
 
     func applyEQPreset(_ preset: EQPreset) {
         eqSettings.apply(preset)
+        eqSettings.isBypassed = false
         saveEQSettings()
         updateEQEngine()
     }
@@ -132,7 +139,20 @@ final class AudioProcessStore: ObservableObject {
         updateEQStreamSnapshot()
     }
 
+    private func restartEQEngine() {
+        eqEngine.stop()
+        startEQEngine()
+    }
+
     private func updateEQEngine() {
+        guard eqEngineStatus != .stopped else {
+            if eqSettings.isBypassed {
+                updateEQStreamSnapshot()
+            } else {
+                startEQEngine()
+            }
+            return
+        }
         eqEngine.update(settings: eqSettings)
         eqEngineStatus = eqEngine.status
         updateEQStreamSnapshot()
