@@ -402,7 +402,7 @@ private struct AudioProcessRow: View {
     }
 
     private var displayedVolume: Double {
-        min(100, max(0, draftVolume ?? Double(process.currentVolume ?? 50)))
+        min(100, max(0, draftVolume ?? Double(process.currentVolume ?? 100)))
     }
 
     private var volumeHelpText: String {

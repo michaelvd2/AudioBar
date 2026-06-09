@@ -29,7 +29,7 @@ final class AudioProcessResolverTests: XCTestCase {
         )
 
         XCTAssertEqual(process.appName, "com.example.Player")
-        XCTAssertEqual(process.currentVolume, 50)
+        XCTAssertEqual(process.currentVolume, 100)
         XCTAssertEqual(process.volumeCapability, .systemRoute)
     }
 }

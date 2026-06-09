@@ -82,6 +82,17 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(dragBar.contains("Slider("))
     }
 
+    func testAudioProcessRowsDefaultMissingVolumeToFullVolume() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let displayedVolume = try XCTUnwrap(source.slice(
+            from: "private var displayedVolume",
+            to: "private var volumeHelpText"
+        ))
+
+        XCTAssertTrue(displayedVolume.contains("process.currentVolume ?? 100"))
+        XCTAssertFalse(displayedVolume.contains("process.currentVolume ?? 50"))
+    }
+
     func testOutputSourceListIsExpandedByDefaultAndDoesNotScrollForSmallLists() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let sourceList = try XCTUnwrap(source.slice(

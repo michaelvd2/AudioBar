@@ -16,7 +16,7 @@ public enum AudioProcessResolver {
 
         let scriptedCapability = ScriptedAppVolumeSupport.capability(for: bundleID)
         let volumeCapability: VolumeCapability = scriptedCapability.isAdjustable ? scriptedCapability : .systemRoute
-        let resolvedCurrentVolume = currentVolume ?? (volumeCapability.isAdjustable ? 50 : nil)
+        let resolvedCurrentVolume = currentVolume ?? (volumeCapability.isAdjustable ? 100 : nil)
 
         return AudioProcess(
             audioObjectID: audioObjectID,

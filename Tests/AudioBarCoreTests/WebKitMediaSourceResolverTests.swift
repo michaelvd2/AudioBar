@@ -20,7 +20,7 @@ final class WebKitMediaSourceResolverTests: XCTestCase {
         XCTAssertEqual(source?.bundleID, "com.apple.Safari.WebApp.abc")
         XCTAssertEqual(source?.appName, "YouTube")
         XCTAssertEqual(source?.trackTitle, "Chris Liebing | Techno Live Set | SECTION. | May 2026")
-        XCTAssertEqual(source?.currentVolume, 50)
+        XCTAssertEqual(source?.currentVolume, 100)
         XCTAssertEqual(source?.volumeCapability, .webAppKeyboard)
         XCTAssertEqual(source?.volumeControlID, "com.apple.Safari.WebApp.abc")
     }

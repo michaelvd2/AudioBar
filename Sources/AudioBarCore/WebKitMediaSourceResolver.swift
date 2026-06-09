@@ -44,7 +44,7 @@ public enum WebKitMediaSourceResolver {
             bundleID: webApp.bundleID,
             appName: webApp.displayName,
             trackTitle: normalizedTrackTitle(webApp.windowTitle, appName: webApp.displayName),
-            currentVolume: 50,
+            currentVolume: 100,
             volumeCapability: .webAppKeyboard,
             volumeControlID: webApp.bundleID
         )
@@ -64,7 +64,7 @@ public enum WebKitMediaSourceResolver {
             bundleID: bundleID,
             appName: displayName,
             trackTitle: nil,
-            currentVolume: isAdjustable ? 50 : nil,
+            currentVolume: isAdjustable ? 100 : nil,
             volumeCapability: volumeCapability,
             volumeControlID: isAdjustable ? bundleID : nil
         )
