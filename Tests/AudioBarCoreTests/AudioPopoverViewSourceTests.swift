@@ -43,7 +43,18 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("VolumeDragBar("))
         XCTAssertTrue(source.contains("store.setVolume(for: process, to: $0)"))
         XCTAssertTrue(source.contains("isEnabled: process.volumeCapability.isAdjustable"))
+        XCTAssertTrue(source.contains("store.hideSource(process)"))
         XCTAssertFalse(source.contains("Image(systemName: \"lock\")"))
+    }
+
+    func testPopoverShowsRestorableHiddenSourcesSettings() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("SourceSettingsView(store: store)"))
+        XCTAssertTrue(source.contains("private struct SourceSettingsView"))
+        XCTAssertTrue(source.contains("Text(\"Hidden Sources\")"))
+        XCTAssertTrue(source.contains("ForEach(store.hiddenSources)"))
+        XCTAssertTrue(source.contains("store.restoreHiddenSource(source.id)"))
     }
 
     func testAudioProcessRowsUseTwoTextLinesOnly() throws {

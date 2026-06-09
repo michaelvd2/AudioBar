@@ -10,6 +10,7 @@ struct AudioPopoverView: View {
             header
             Divider()
             OutputSourceListView(store: store)
+            SourceSettingsView(store: store)
             Divider()
             EQPanelView(store: store)
             Divider()
@@ -146,6 +147,54 @@ private struct OutputSourceListView: View {
                 .frame(maxHeight: 220)
             } else {
                 sourceRows
+            }
+        }
+    }
+}
+
+private struct SourceSettingsView: View {
+    @ObservedObject var store: AudioProcessStore
+    @State private var isExpanded = false
+
+    var body: some View {
+        if !store.hiddenSources.isEmpty {
+            VStack(spacing: 0) {
+                Divider()
+
+                DisclosureGroup(isExpanded: $isExpanded) {
+                    VStack(spacing: 0) {
+                        ForEach(store.hiddenSources) { source in
+                            HStack(spacing: 10) {
+                                Text(source.name)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+
+                                Spacer()
+
+                                Button("Restore") {
+                                    store.restoreHiddenSource(source.id)
+                                }
+                                .buttonStyle(.plain)
+                                .font(.caption)
+                            }
+                            .padding(.vertical, 6)
+                        }
+                    }
+                    .padding(.top, 6)
+                } label: {
+                    HStack {
+                        Text("Hidden Sources")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(store.hiddenSources.count)")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
             }
         }
     }
@@ -363,7 +412,20 @@ private struct AudioProcessRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            control
+            HStack(spacing: 8) {
+                control
+
+                Button {
+                    store.hideSource(process)
+                } label: {
+                    Image(systemName: "eye.slash")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Hide source")
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

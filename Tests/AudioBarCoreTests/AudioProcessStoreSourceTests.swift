@@ -70,6 +70,21 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("JSONDecoder().decode([String: Int].self"))
     }
 
+    func testStorePersistsAndFiltersHiddenSources() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let refreshFunction = try XCTUnwrap(source.function(named: "refresh"))
+        let hideFunction = try XCTUnwrap(source.function(named: "hideSource"))
+        let restoreFunction = try XCTUnwrap(source.function(named: "restoreHiddenSource"))
+
+        XCTAssertTrue(source.contains("@Published private(set) var hiddenSources: [HiddenAudioSource]"))
+        XCTAssertTrue(source.contains("private let hiddenSourcesKey"))
+        XCTAssertTrue(refreshFunction.contains("filter { !isHiddenSource($0) }"))
+        XCTAssertTrue(hideFunction.contains("hiddenSourceNames[process.stableSourceID] = process.displayTitle"))
+        XCTAssertTrue(hideFunction.contains("saveHiddenSources()"))
+        XCTAssertTrue(restoreFunction.contains("hiddenSourceNames.removeValue(forKey: sourceID)"))
+        XCTAssertTrue(restoreFunction.contains("refresh()"))
+    }
+
     func testStorePreviewsRouteVolumeWithoutRunningAppScripts() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let previewFunction = try XCTUnwrap(source.function(named: "previewVolume"))

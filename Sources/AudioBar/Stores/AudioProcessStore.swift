@@ -2,6 +2,11 @@ import AudioBarCore
 import Combine
 import Foundation
 
+struct HiddenAudioSource: Equatable, Identifiable {
+    let id: String
+    let name: String
+}
+
 @MainActor
 final class AudioProcessStore: ObservableObject {
     @Published private(set) var processes: [AudioProcess] = []
@@ -12,6 +17,7 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var eqEngineStatus: SystemEQEngineStatus = .stopped
     @Published private(set) var eqStreamSnapshot: SystemAudioStreamSnapshot = .inactive
     @Published private(set) var savedEQPresets: [SavedEQPreset]
+    @Published private(set) var hiddenSources: [HiddenAudioSource]
 
     private let provider: AudioProcessProviding
     private let volumeController: AppVolumeControlling
@@ -24,7 +30,9 @@ final class AudioProcessStore: ObservableObject {
     private let eqSettingsKey = "AudioBar.eqSettings"
     private let savedEQPresetsKey = "AudioBar.savedEQPresets"
     private let sourceVolumesKey = "AudioBar.sourceVolumes"
+    private let hiddenSourcesKey = "AudioBar.hiddenSources"
     private var processCache: AudioProcessListCache
+    private var hiddenSourceNames: [String: String]
 
     init(
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
@@ -42,6 +50,8 @@ final class AudioProcessStore: ObservableObject {
         self.userDefaults = userDefaults
         self.eqSettings = Self.loadEQSettings(from: userDefaults, key: eqSettingsKey)
         self.savedEQPresets = Self.loadSavedEQPresets(from: userDefaults, key: savedEQPresetsKey)
+        self.hiddenSourceNames = Self.loadHiddenSources(from: userDefaults, key: hiddenSourcesKey)
+        self.hiddenSources = Self.makeHiddenSources(from: hiddenSourceNames)
         self.processCache = AudioProcessListCache(
             persistedVolumes: Self.loadSourceVolumes(from: userDefaults, key: sourceVolumesKey)
         )
@@ -76,11 +86,27 @@ final class AudioProcessStore: ObservableObject {
         isRefreshing = true
         let activeProcesses = provider.activeOutputProcesses()
         let nextProcesses = processCache.merge(activeProcesses: activeProcesses)
+            .filter { !isHiddenSource($0) }
         eqEngine.setSourceProcesses(nextProcesses)
         processes = nextProcesses
         lastRefreshDate = Date()
         statusMessage = activeProcesses.isEmpty ? "No active output detected" : "\(activeProcesses.count) active"
         isRefreshing = false
+    }
+
+    func hideSource(_ process: AudioProcess) {
+        hiddenSourceNames[process.stableSourceID] = process.displayTitle
+        updateHiddenSources()
+        saveHiddenSources()
+        processes.removeAll { isHiddenSource($0) }
+        eqEngine.setSourceProcesses(processes)
+    }
+
+    func restoreHiddenSource(_ sourceID: String) {
+        hiddenSourceNames.removeValue(forKey: sourceID)
+        updateHiddenSources()
+        saveHiddenSources()
+        refresh()
     }
 
     func setVolume(for process: AudioProcess, to value: Double) {
@@ -231,6 +257,14 @@ final class AudioProcessStore: ObservableObject {
         eqEngine.setSourceVolume(volume, for: process.audioObjectID)
     }
 
+    private func isHiddenSource(_ process: AudioProcess) -> Bool {
+        hiddenSourceNames[process.stableSourceID] != nil
+    }
+
+    private func updateHiddenSources() {
+        hiddenSources = Self.makeHiddenSources(from: hiddenSourceNames)
+    }
+
     private func saveEQSettings() {
         guard let data = try? JSONEncoder().encode(eqSettings) else {
             return
@@ -250,6 +284,13 @@ final class AudioProcessStore: ObservableObject {
             return
         }
         userDefaults.set(data, forKey: sourceVolumesKey)
+    }
+
+    private func saveHiddenSources() {
+        guard let data = try? JSONEncoder().encode(hiddenSourceNames) else {
+            return
+        }
+        userDefaults.set(data, forKey: hiddenSourcesKey)
     }
 
     private func sanitizedPresetName(_ name: String) -> String {
@@ -281,5 +322,20 @@ final class AudioProcessStore: ObservableObject {
             return [:]
         }
         return volumes.mapValues { min(100, max(0, $0)) }
+    }
+
+    private static func loadHiddenSources(from userDefaults: UserDefaults, key: String) -> [String: String] {
+        guard let data = userDefaults.data(forKey: key),
+              let sources = try? JSONDecoder().decode([String: String].self, from: data)
+        else {
+            return [:]
+        }
+        return sources
+    }
+
+    private static func makeHiddenSources(from hiddenSourceNames: [String: String]) -> [HiddenAudioSource] {
+        hiddenSourceNames
+            .map { HiddenAudioSource(id: $0.key, name: $0.value) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 }
