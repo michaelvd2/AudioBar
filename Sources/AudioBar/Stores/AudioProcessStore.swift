@@ -71,8 +71,8 @@ final class AudioProcessStore: ObservableObject {
     func refresh() {
         isRefreshing = true
         let activeProcesses = provider.activeOutputProcesses()
-        eqEngine.setSourceProcesses(activeProcesses)
         let nextProcesses = processCache.merge(activeProcesses: activeProcesses)
+        eqEngine.setSourceProcesses(nextProcesses)
         processes = nextProcesses
         lastRefreshDate = Date()
         statusMessage = activeProcesses.isEmpty ? "No active output detected" : "\(activeProcesses.count) active"

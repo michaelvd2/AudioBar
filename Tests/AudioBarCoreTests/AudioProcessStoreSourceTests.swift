@@ -42,7 +42,7 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("private var processCache = AudioProcessListCache()"))
 
         let refreshFunction = try XCTUnwrap(source.function(named: "refresh"))
-        XCTAssertTrue(refreshFunction.contains("eqEngine.setSourceProcesses(activeProcesses)"))
+        XCTAssertTrue(refreshFunction.contains("eqEngine.setSourceProcesses(nextProcesses)"))
         XCTAssertTrue(refreshFunction.contains("processCache.merge(activeProcesses: activeProcesses)"))
         XCTAssertTrue(refreshFunction.contains("activeProcesses.count"))
     }

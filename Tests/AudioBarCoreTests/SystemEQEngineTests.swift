@@ -111,6 +111,14 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertFalse(setSourceProcesses.contains("_ = start(settings: settings)"))
     }
 
+    func testRetainedPausedSourcesStayInRouteToAvoidNotificationChurn() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let setSourceProcesses = try XCTUnwrap(source.function(named: "setSourceProcesses"))
+
+        XCTAssertTrue(setSourceProcesses.contains("$0.isActiveOutput || $0.shouldRemainVisibleWhenPaused"))
+        XCTAssertFalse(setSourceProcesses.contains(".filter(\\.isActiveOutput)"))
+    }
+
     func testInputBufferMapAlignsTapMetadataAfterExtraDeviceBuffers() {
         let source = AudioObjectID(42)
         let tapProcesses: [AudioObjectID?] = [nil, source]

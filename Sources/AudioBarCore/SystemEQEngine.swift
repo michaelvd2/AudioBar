@@ -193,7 +193,7 @@ public final class SystemEQEngine: @unchecked Sendable {
         defer { lock.unlock() }
 
         let nextIDs = Array(Set(processes
-            .filter(\.isActiveOutput)
+            .filter { $0.isActiveOutput || $0.shouldRemainVisibleWhenPaused }
             .map { AudioObjectID($0.audioObjectID) }
             .filter { $0 != kAudioObjectUnknown }
         )).sorted()
