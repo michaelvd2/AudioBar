@@ -46,6 +46,20 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(source.contains("Image(systemName: \"lock\")"))
     }
 
+    func testOutputSourceListIsExpandedByDefaultAndDoesNotScrollForSmallLists() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let sourceList = try XCTUnwrap(source.slice(
+            from: "private struct OutputSourceListView",
+            to: "private struct EQPanelView"
+        ))
+
+        XCTAssertTrue(sourceList.contains("@State private var isExpanded = true"))
+        XCTAssertTrue(sourceList.contains("DisclosureGroup("))
+        XCTAssertTrue(sourceList.contains("if store.processes.count > visibleRowLimit"))
+        XCTAssertTrue(sourceList.contains("LazyVStack(spacing: 0)"))
+        XCTAssertTrue(sourceList.contains("sourceRows"))
+    }
+
     func testEQPresetMenuCanSaveAndApplyCustomPresets() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let eqPanel = try XCTUnwrap(source.slice(

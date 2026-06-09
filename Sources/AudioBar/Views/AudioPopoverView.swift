@@ -81,24 +81,48 @@ struct AudioPopoverView: View {
 
 private struct OutputSourceListView: View {
     @ObservedObject var store: AudioProcessStore
+    @State private var isExpanded = true
+
+    private let visibleRowLimit = 3
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Audio Outputs")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("\(store.processes.count)")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.tertiary)
-            }
+            DisclosureGroup(
+                isExpanded: $isExpanded,
+                content: {
+                    content
+                },
+                label: {
+                    HStack {
+                        Text("Audio Outputs")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(store.processes.count)")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            )
+            .disclosureGroupStyle(.automatic)
             .padding(.horizontal, 14)
             .padding(.top, 10)
-
-            content
+            .padding(.bottom, isExpanded ? 0 : 10)
         }
-        .frame(minHeight: store.processes.isEmpty ? 104 : 86)
+        .frame(minHeight: store.processes.isEmpty ? 104 : nil)
+    }
+
+    @ViewBuilder
+    private var sourceRows: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(store.processes) { process in
+                AudioProcessRow(process: process, store: store)
+                if process.id != store.processes.last?.id {
+                    Divider()
+                        .padding(.leading, 14)
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -115,18 +139,14 @@ private struct OutputSourceListView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 28)
         } else {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(store.processes) { process in
-                        AudioProcessRow(process: process, store: store)
-                        if process.id != store.processes.last?.id {
-                            Divider()
-                                .padding(.leading, 14)
-                        }
-                    }
+            if store.processes.count > visibleRowLimit {
+                ScrollView {
+                    sourceRows
                 }
+                .frame(maxHeight: 220)
+            } else {
+                sourceRows
             }
-            .frame(minHeight: 64, maxHeight: 220)
         }
     }
 }

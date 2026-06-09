@@ -50,20 +50,50 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
     }
 
     public var displayTitle: String {
-        guard let trackTitle, !trackTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return appName
+        guard !normalizedTrackTitle.isEmpty else {
+            return displayAppName
         }
-        return trackTitle
+        return normalizedTrackTitle
     }
 
     public var displaySubtitle: String {
-        if displayTitle != appName {
-            return appName
+        if !normalizedTrackTitle.isEmpty {
+            return displayAppName
         }
-        if let bundleID, !bundleID.isEmpty {
-            return bundleID
+        if let sourceKind = humanReadableSourceKind {
+            return sourceKind
         }
         return "PID \(pid)"
+    }
+
+    private var normalizedTrackTitle: String {
+        trackTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private var displayAppName: String {
+        guard appName == bundleID else {
+            return appName
+        }
+        return humanReadableName(fromBundleID: appName) ?? appName
+    }
+
+    private var humanReadableSourceKind: String? {
+        guard let bundleID, !bundleID.isEmpty else {
+            return nil
+        }
+        if bundleID.hasPrefix("com.apple.Safari.WebApp.") {
+            return "Safari web app"
+        }
+        return "App audio"
+    }
+
+    private func humanReadableName(fromBundleID bundleID: String) -> String? {
+        bundleID
+            .split(separator: ".")
+            .last
+            .map(String.init)?
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
     }
 
     public static func sortedForDisplay(_ processes: [AudioProcess]) -> [AudioProcess] {

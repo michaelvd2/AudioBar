@@ -32,6 +32,47 @@ final class AudioProcessDisplayTests: XCTestCase {
         XCTAssertEqual(process.displaySubtitle, "PID 345")
     }
 
+    func testDisplaySubtitleUsesHumanReadableSourceKindInsteadOfBundleID() {
+        let webApp = AudioProcess(
+            audioObjectID: 12,
+            pid: 345,
+            bundleID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718",
+            appName: "YouTube",
+            trackTitle: nil,
+            currentVolume: 50,
+            volumeCapability: .webAppKeyboard
+        )
+        let safari = AudioProcess(
+            audioObjectID: 13,
+            pid: 346,
+            bundleID: "com.apple.Safari",
+            appName: "Safari",
+            trackTitle: nil,
+            currentVolume: nil,
+            volumeCapability: .unavailable(reason: "No public per-app volume control")
+        )
+
+        XCTAssertEqual(webApp.displaySubtitle, "Safari web app")
+        XCTAssertEqual(safari.displaySubtitle, "App audio")
+        XCTAssertFalse(webApp.displaySubtitle.contains("com.apple"))
+        XCTAssertFalse(safari.displaySubtitle.contains("com.apple"))
+    }
+
+    func testDisplayTitleUsesHumanReadableBundleNameWhenOnlyBundleIDIsAvailable() {
+        let process = AudioProcess(
+            audioObjectID: 14,
+            pid: 347,
+            bundleID: "com.example.Clean.Player",
+            appName: "com.example.Clean.Player",
+            trackTitle: nil,
+            currentVolume: nil,
+            volumeCapability: .unavailable(reason: "No public per-app volume control")
+        )
+
+        XCTAssertEqual(process.displayTitle, "Player")
+        XCTAssertEqual(process.displaySubtitle, "App audio")
+    }
+
     func testSortedForDisplayPutsAdjustableAppsFirstThenNames() {
         let safari = AudioProcess(
             audioObjectID: 1,
