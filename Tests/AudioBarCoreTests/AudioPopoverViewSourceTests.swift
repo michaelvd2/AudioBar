@@ -23,10 +23,27 @@ final class AudioPopoverViewSourceTests: XCTestCase {
     func testSourceListAppearsBeforeEQPanel() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let body = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
-        let contentIndex = try XCTUnwrap(body.range(of: "content")?.lowerBound)
+        let contentIndex = try XCTUnwrap(body.range(of: "OutputSourceListView(store: store)")?.lowerBound)
         let eqIndex = try XCTUnwrap(body.range(of: "EQPanelView(store: store)")?.lowerBound)
 
         XCTAssertLessThan(contentIndex, eqIndex)
+    }
+
+    func testOutputSourceListIsAlwaysAVisibleViewerWithVolumeSliders() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let sourceList = try XCTUnwrap(source.slice(
+            from: "private struct OutputSourceListView",
+            to: "private struct EQPanelView"
+        ))
+
+        XCTAssertTrue(sourceList.contains("Text(\"Audio Outputs\")"))
+        XCTAssertTrue(sourceList.contains("ForEach(store.processes)"))
+        XCTAssertTrue(sourceList.contains("AudioProcessRow(process: process, store: store)"))
+        XCTAssertTrue(sourceList.contains(".frame(minHeight:"))
+        XCTAssertTrue(source.contains("Slider("))
+        XCTAssertTrue(source.contains("store.setVolume(for: process, to: $0)"))
+        XCTAssertTrue(source.contains(".disabled(!process.volumeCapability.isAdjustable)"))
+        XCTAssertFalse(source.contains("Image(systemName: \"lock\")"))
     }
 
     func testEQPresetMenuCanSaveAndApplyCustomPresets() throws {

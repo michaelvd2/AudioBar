@@ -9,7 +9,7 @@ struct AudioPopoverView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
-            content
+            OutputSourceListView(store: store)
             Divider()
             EQPanelView(store: store)
             Divider()
@@ -52,6 +52,55 @@ struct AudioPopoverView: View {
         .padding(.vertical, 12)
     }
 
+    private var footer: some View {
+        HStack {
+            Text(footerText)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+
+            Spacer()
+
+            Button("Quit") {
+                NSApp.terminate(nil)
+            }
+            .buttonStyle(.plain)
+            .font(.caption)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+    }
+
+    private var footerText: String {
+        guard let lastRefreshDate = store.lastRefreshDate else {
+            return "Refreshes every 3s"
+        }
+        return "Updated \(lastRefreshDate.formatted(date: .omitted, time: .shortened))"
+    }
+}
+
+private struct OutputSourceListView: View {
+    @ObservedObject var store: AudioProcessStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Audio Outputs")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(store.processes.count)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+
+            content
+        }
+        .frame(minHeight: store.processes.isEmpty ? 104 : 86)
+    }
+
     @ViewBuilder
     private var content: some View {
         if store.processes.isEmpty {
@@ -77,34 +126,8 @@ struct AudioPopoverView: View {
                     }
                 }
             }
-            .frame(maxHeight: 360)
+            .frame(minHeight: 64, maxHeight: 220)
         }
-    }
-
-    private var footer: some View {
-        HStack {
-            Text(footerText)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
-
-            Spacer()
-
-            Button("Quit") {
-                NSApp.terminate(nil)
-            }
-            .buttonStyle(.plain)
-            .font(.caption)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-    }
-
-    private var footerText: String {
-        guard let lastRefreshDate = store.lastRefreshDate else {
-            return "Refreshes every 3s"
-        }
-        return "Updated \(lastRefreshDate.formatted(date: .omitted, time: .shortened))"
     }
 }
 
@@ -347,36 +370,39 @@ private struct AudioProcessRow: View {
 
     @ViewBuilder
     private var control: some View {
-        switch process.volumeCapability {
-        case .scripted, .webAppKeyboard:
-            VStack(alignment: .trailing, spacing: 4) {
-                Slider(
-                    value: Binding(
-                        get: { Double(process.currentVolume ?? 50) },
-                        set: { store.setVolume(for: process, to: $0) }
-                    ),
-                    in: 0...100,
-                    step: 1
-                )
-                .frame(width: 118)
+        VStack(alignment: .trailing, spacing: 4) {
+            Slider(
+                value: Binding(
+                    get: { Double(process.currentVolume ?? 50) },
+                    set: { store.setVolume(for: process, to: $0) }
+                ),
+                in: 0...100,
+                step: 1
+            )
+            .frame(width: 118)
+            .disabled(!process.volumeCapability.isAdjustable)
+            .help(volumeHelpText)
 
-                Text(volumeLabel)
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-        case .unavailable:
-            Image(systemName: "lock")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.tertiary)
-                .frame(width: 24, height: 24)
-                .help("macOS public APIs do not expose per-app volume for this app")
+            Text(volumeLabel)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
         }
     }
 
     private var volumeLabel: String {
+        guard process.volumeCapability.isAdjustable else {
+            return "view"
+        }
         if let currentVolume = process.currentVolume {
             return "\(currentVolume)%"
         }
         return "--%"
+    }
+
+    private var volumeHelpText: String {
+        guard process.volumeCapability.isAdjustable else {
+            return "macOS does not expose a public per-app volume control for this source"
+        }
+        return "Set source volume"
     }
 }
