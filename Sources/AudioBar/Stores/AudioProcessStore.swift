@@ -23,7 +23,8 @@ final class AudioProcessStore: ObservableObject {
     private var streamTimer: Timer?
     private let eqSettingsKey = "AudioBar.eqSettings"
     private let savedEQPresetsKey = "AudioBar.savedEQPresets"
-    private var processCache = AudioProcessListCache()
+    private let sourceVolumesKey = "AudioBar.sourceVolumes"
+    private var processCache: AudioProcessListCache
 
     init(
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
@@ -41,6 +42,9 @@ final class AudioProcessStore: ObservableObject {
         self.userDefaults = userDefaults
         self.eqSettings = Self.loadEQSettings(from: userDefaults, key: eqSettingsKey)
         self.savedEQPresets = Self.loadSavedEQPresets(from: userDefaults, key: savedEQPresetsKey)
+        self.processCache = AudioProcessListCache(
+            persistedVolumes: Self.loadSourceVolumes(from: userDefaults, key: sourceVolumesKey)
+        )
     }
 
     func startAutoRefresh() {
@@ -103,6 +107,7 @@ final class AudioProcessStore: ObservableObject {
         _ = didSet
 
         processCache.setCurrentVolume(volume, forStableSourceID: process.stableSourceID)
+        saveSourceVolumes()
         if let index = processes.firstIndex(where: { $0.id == process.id }) {
             processes[index].currentVolume = min(100, max(0, volume))
         }
@@ -240,6 +245,13 @@ final class AudioProcessStore: ObservableObject {
         userDefaults.set(data, forKey: savedEQPresetsKey)
     }
 
+    private func saveSourceVolumes() {
+        guard let data = try? JSONEncoder().encode(processCache.persistedVolumes) else {
+            return
+        }
+        userDefaults.set(data, forKey: sourceVolumesKey)
+    }
+
     private func sanitizedPresetName(_ name: String) -> String {
         String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(30))
     }
@@ -260,5 +272,14 @@ final class AudioProcessStore: ObservableObject {
             return []
         }
         return presets
+    }
+
+    private static func loadSourceVolumes(from userDefaults: UserDefaults, key: String) -> [String: Int] {
+        guard let data = userDefaults.data(forKey: key),
+              let volumes = try? JSONDecoder().decode([String: Int].self, from: data)
+        else {
+            return [:]
+        }
+        return volumes.mapValues { min(100, max(0, $0)) }
     }
 }

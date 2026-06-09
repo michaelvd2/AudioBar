@@ -2,17 +2,25 @@ import Foundation
 
 public struct AudioProcessListCache {
     private var knownProcesses: [String: AudioProcess] = [:]
+    public private(set) var persistedVolumes: [String: Int]
 
-    public init() {}
+    public init(persistedVolumes: [String: Int] = [:]) {
+        self.persistedVolumes = persistedVolumes.mapValues { min(100, max(0, $0)) }
+    }
 
     public mutating func merge(activeProcesses: [AudioProcess]) -> [AudioProcess] {
         let activeProcesses = activeProcesses.map { process in
             let activeProcess = process.markingActiveOutput(true)
-            guard process.volumeCapability.isAdjustable,
-                  let knownVolume = knownProcesses[process.stableSourceID]?.currentVolume else {
+            guard process.volumeCapability.isAdjustable else {
                 return activeProcess
             }
-            return activeProcess.withCurrentVolume(knownVolume)
+            if let knownVolume = knownProcesses[process.stableSourceID]?.currentVolume {
+                return activeProcess.withCurrentVolume(knownVolume)
+            }
+            if let persistedVolume = persistedVolumes[process.stableSourceID] {
+                return activeProcess.withCurrentVolume(persistedVolume)
+            }
+            return activeProcess
         }
         let activeIDs = Set(activeProcesses.map(\.stableSourceID))
 
@@ -29,9 +37,11 @@ public struct AudioProcessListCache {
     }
 
     public mutating func setCurrentVolume(_ volume: Int, forStableSourceID stableSourceID: String) {
+        let volume = min(100, max(0, volume))
+        persistedVolumes[stableSourceID] = volume
         guard let process = knownProcesses[stableSourceID] else {
             return
         }
-        knownProcesses[stableSourceID] = process.withCurrentVolume(min(100, max(0, volume)))
+        knownProcesses[stableSourceID] = process.withCurrentVolume(volume)
     }
 }

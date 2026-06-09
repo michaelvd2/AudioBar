@@ -39,7 +39,9 @@ final class AudioProcessStoreSourceTests: XCTestCase {
     func testStoreKeepsPausedSourcesWithoutCountingThemActive() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
 
-        XCTAssertTrue(source.contains("private var processCache = AudioProcessListCache()"))
+        XCTAssertTrue(source.contains("private var processCache: AudioProcessListCache"))
+        XCTAssertTrue(source.contains("AudioProcessListCache("))
+        XCTAssertTrue(source.contains("persistedVolumes: Self.loadSourceVolumes"))
 
         let refreshFunction = try XCTUnwrap(source.function(named: "refresh"))
         XCTAssertTrue(refreshFunction.contains("eqEngine.setSourceProcesses(nextProcesses)"))
@@ -54,7 +56,18 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(setVolumeFunction.contains("guard process.volumeCapability.isAdjustable else"))
         XCTAssertTrue(setVolumeFunction.contains("applyRouteVolume(volume, for: process)"))
         XCTAssertTrue(setVolumeFunction.contains("processCache.setCurrentVolume(volume, forStableSourceID: process.stableSourceID)"))
+        XCTAssertTrue(setVolumeFunction.contains("saveSourceVolumes()"))
         XCTAssertTrue(setVolumeFunction.contains("processes[index].currentVolume = min(100, max(0, volume))"))
+    }
+
+    func testStorePersistsSourceVolumeMapInUserDefaults() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("private let sourceVolumesKey"))
+        XCTAssertTrue(source.contains("private func saveSourceVolumes()"))
+        XCTAssertTrue(source.contains("private static func loadSourceVolumes"))
+        XCTAssertTrue(source.contains("JSONEncoder().encode(processCache.persistedVolumes)"))
+        XCTAssertTrue(source.contains("JSONDecoder().decode([String: Int].self"))
     }
 
     func testStorePreviewsRouteVolumeWithoutRunningAppScripts() throws {

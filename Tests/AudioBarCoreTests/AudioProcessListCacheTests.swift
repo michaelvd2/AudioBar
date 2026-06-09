@@ -74,6 +74,46 @@ final class AudioProcessListCacheTests: XCTestCase {
         XCTAssertEqual(refreshed.first?.currentVolume, 37)
     }
 
+    func testCacheLoadsPersistedVolumesForKnownSourceIDs() {
+        var cache = AudioProcessListCache(persistedVolumes: [
+            "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718": 24
+        ])
+        let youtube = AudioProcess(
+            audioObjectID: 12,
+            pid: 345,
+            bundleID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718",
+            appName: "YouTube",
+            trackTitle: nil,
+            currentVolume: 100,
+            volumeCapability: .webAppKeyboard,
+            volumeControlID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718"
+        )
+
+        let refreshed = cache.merge(activeProcesses: [youtube])
+
+        XCTAssertEqual(refreshed.first?.currentVolume, 24)
+    }
+
+    func testCacheReturnsPersistedVolumeMapWhenVolumeChanges() {
+        var cache = AudioProcessListCache(persistedVolumes: ["old": 10])
+        let youtube = AudioProcess(
+            audioObjectID: 12,
+            pid: 345,
+            bundleID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718",
+            appName: "YouTube",
+            trackTitle: nil,
+            currentVolume: 100,
+            volumeCapability: .webAppKeyboard,
+            volumeControlID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718"
+        )
+
+        _ = cache.merge(activeProcesses: [youtube])
+        cache.setCurrentVolume(37, forStableSourceID: youtube.stableSourceID)
+
+        XCTAssertEqual(cache.persistedVolumes[youtube.stableSourceID], 37)
+        XCTAssertEqual(cache.persistedVolumes["old"], 10)
+    }
+
     func testCacheDoesNotKeepTransientRouteOnlySourcesAsPaused() {
         var cache = AudioProcessListCache()
         let appCleaner = AudioProcess(
