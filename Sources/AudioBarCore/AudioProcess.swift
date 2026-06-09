@@ -38,6 +38,21 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
             ?? "\(pid)-\(appName)"
     }
 
+    public var shouldRemainVisibleWhenPaused: Bool {
+        switch volumeCapability {
+        case .scripted, .webAppKeyboard, .safariMedia:
+            return true
+        case .systemRoute, .unavailable:
+            break
+        }
+
+        guard let bundleID else {
+            return false
+        }
+        return bundleID == "com.apple.Safari"
+            || bundleID.hasPrefix("com.apple.Safari.WebApp.")
+    }
+
     public init(
         audioObjectID: UInt32,
         pid: Int32,

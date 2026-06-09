@@ -85,7 +85,7 @@ final class AudioProcessStore: ObservableObject {
             return
         }
 
-        eqEngine.setSourceVolume(volume, for: process.audioObjectID)
+        applyRouteVolume(volume, for: process)
 
         let didSet: Bool
         switch process.volumeCapability {
@@ -103,6 +103,18 @@ final class AudioProcessStore: ObservableObject {
         _ = didSet
 
         processCache.setCurrentVolume(volume, forStableSourceID: process.stableSourceID)
+        if let index = processes.firstIndex(where: { $0.id == process.id }) {
+            processes[index].currentVolume = min(100, max(0, volume))
+        }
+    }
+
+    func previewVolume(for process: AudioProcess, to value: Double) {
+        let volume = Int(value.rounded())
+        guard process.volumeCapability.isAdjustable else {
+            return
+        }
+
+        applyRouteVolume(volume, for: process)
         if let index = processes.firstIndex(where: { $0.id == process.id }) {
             processes[index].currentVolume = min(100, max(0, volume))
         }
@@ -208,6 +220,10 @@ final class AudioProcessStore: ObservableObject {
 
     private func updateEQStreamSnapshot() {
         eqStreamSnapshot = eqEngine.streamSnapshot
+    }
+
+    private func applyRouteVolume(_ volume: Int, for process: AudioProcess) {
+        eqEngine.setSourceVolume(volume, for: process.audioObjectID)
     }
 
     private func saveEQSettings() {

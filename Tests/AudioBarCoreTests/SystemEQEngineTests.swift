@@ -103,6 +103,27 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertTrue(source.contains("processor.processInterleaved"))
     }
 
+    func testInputBufferMapAlignsTapMetadataAfterExtraDeviceBuffers() {
+        let source = AudioObjectID(42)
+        let tapProcesses: [AudioObjectID?] = [nil, source]
+
+        XCTAssertNil(SystemEQInputBufferMap.processObjectID(
+            inputIndex: 0,
+            inputBufferCount: 3,
+            tapProcessObjectIDs: tapProcesses
+        ))
+        XCTAssertNil(SystemEQInputBufferMap.processObjectID(
+            inputIndex: 1,
+            inputBufferCount: 3,
+            tapProcessObjectIDs: tapProcesses
+        ))
+        XCTAssertEqual(SystemEQInputBufferMap.processObjectID(
+            inputIndex: 2,
+            inputBufferCount: 3,
+            tapProcessObjectIDs: tapProcesses
+        ), source)
+    }
+
     private func systemEQEngineURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

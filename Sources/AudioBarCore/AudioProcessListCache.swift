@@ -22,6 +22,7 @@ public struct AudioProcessListCache {
 
         let pausedProcesses = knownProcesses.values
             .filter { !activeIDs.contains($0.stableSourceID) }
+            .filter(\.shouldRemainVisibleWhenPaused)
             .map { $0.markingActiveOutput(false) }
 
         return AudioProcess.sortedForDisplay(activeProcesses + pausedProcesses)

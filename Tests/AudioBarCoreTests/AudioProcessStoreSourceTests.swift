@@ -52,9 +52,19 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         let setVolumeFunction = try XCTUnwrap(source.function(named: "setVolume"))
 
         XCTAssertTrue(setVolumeFunction.contains("guard process.volumeCapability.isAdjustable else"))
-        XCTAssertTrue(setVolumeFunction.contains("eqEngine.setSourceVolume(volume, for: process.audioObjectID)"))
+        XCTAssertTrue(setVolumeFunction.contains("applyRouteVolume(volume, for: process)"))
         XCTAssertTrue(setVolumeFunction.contains("processCache.setCurrentVolume(volume, forStableSourceID: process.stableSourceID)"))
         XCTAssertTrue(setVolumeFunction.contains("processes[index].currentVolume = min(100, max(0, volume))"))
+    }
+
+    func testStorePreviewsRouteVolumeWithoutRunningAppScripts() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let previewFunction = try XCTUnwrap(source.function(named: "previewVolume"))
+
+        XCTAssertTrue(previewFunction.contains("guard process.volumeCapability.isAdjustable else"))
+        XCTAssertTrue(previewFunction.contains("applyRouteVolume(volume, for: process)"))
+        XCTAssertFalse(previewFunction.contains("volumeController.setVolume"))
+        XCTAssertFalse(previewFunction.contains("safariMediaVolumeController.setVolume"))
     }
 
     func testStoreRoutesSafariMediaVolumeToSafariController() throws {

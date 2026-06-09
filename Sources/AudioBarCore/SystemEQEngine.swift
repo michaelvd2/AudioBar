@@ -292,7 +292,7 @@ public final class SystemEQEngine: @unchecked Sendable {
                     continue
                 }
                 let inputSampleCount = Int(inputBuffers[inputIndex].mDataByteSize) / MemoryLayout<Float32>.stride
-                let gain = gainForInputBuffer(at: inputIndex)
+                let gain = gainForInputBuffer(at: inputIndex, inputBufferCount: inputBuffers.count)
                 sources.append((pointer: UnsafePointer(inputPointer), sampleCount: inputSampleCount, gain: gain))
             }
 
@@ -322,14 +322,17 @@ public final class SystemEQEngine: @unchecked Sendable {
         }
     }
 
-    private func gainForInputBuffer(at inputIndex: Int) -> Float32 {
+    private func gainForInputBuffer(at inputIndex: Int, inputBufferCount: Int) -> Float32 {
         guard lock.try() else {
             return 1
         }
         defer { lock.unlock() }
 
-        guard inputIndex < inputBufferProcessObjectIDs.count,
-              let processObjectID = inputBufferProcessObjectIDs[inputIndex]
+        guard let processObjectID = SystemEQInputBufferMap.processObjectID(
+            inputIndex: inputIndex,
+            inputBufferCount: inputBufferCount,
+            tapProcessObjectIDs: inputBufferProcessObjectIDs
+        )
         else {
             return 1
         }

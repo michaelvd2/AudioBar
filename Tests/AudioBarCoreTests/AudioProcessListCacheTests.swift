@@ -73,4 +73,23 @@ final class AudioProcessListCacheTests: XCTestCase {
 
         XCTAssertEqual(refreshed.first?.currentVolume, 37)
     }
+
+    func testCacheDoesNotKeepTransientRouteOnlySourcesAsPaused() {
+        var cache = AudioProcessListCache()
+        let appCleaner = AudioProcess(
+            audioObjectID: 99,
+            pid: 456,
+            bundleID: "net.freemacsoft.AppCleaner",
+            appName: "AppCleaner",
+            trackTitle: nil,
+            currentVolume: 50,
+            volumeCapability: .systemRoute
+        )
+
+        XCTAssertEqual(cache.merge(activeProcesses: [appCleaner]).map(\.displayTitle), ["AppCleaner"])
+
+        let merged = cache.merge(activeProcesses: [])
+
+        XCTAssertTrue(merged.isEmpty)
+    }
 }

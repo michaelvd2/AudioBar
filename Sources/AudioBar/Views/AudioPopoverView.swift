@@ -376,7 +376,10 @@ private struct AudioProcessRow: View {
                 value: displayedVolume,
                 isEnabled: process.volumeCapability.isAdjustable,
                 step: 1,
-                onPreview: { draftVolume = $0 },
+                onPreview: {
+                    draftVolume = $0
+                    store.previewVolume(for: process, to: $0)
+                },
                 onCommit: {
                     draftVolume = $0
                     store.setVolume(for: process, to: $0)

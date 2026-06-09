@@ -60,7 +60,7 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(row.contains("view only"))
     }
 
-    func testAudioProcessRowsUseCustomCommitOnEndVolumeDragBar() throws {
+    func testAudioProcessRowsUpdateRouteVolumeWhileDragging() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let row = try XCTUnwrap(source.slice(
             from: "private struct AudioProcessRow",
@@ -71,7 +71,7 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(row.contains("VolumeDragBar("))
         XCTAssertTrue(row.contains("step: 1"))
         XCTAssertTrue(row.contains("@State private var draftVolume"))
-        XCTAssertTrue(row.contains("onPreview: { draftVolume = $0 }"))
+        XCTAssertTrue(row.contains("store.previewVolume(for: process, to: $0)"))
         XCTAssertTrue(row.contains("draftVolume = $0"))
         XCTAssertFalse(row.contains("Slider("))
         XCTAssertTrue(dragBar.contains("DragGesture(minimumDistance: 0)"))
