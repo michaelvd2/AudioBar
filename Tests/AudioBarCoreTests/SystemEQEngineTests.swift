@@ -81,35 +81,4 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertEqual(taps?.first?[kAudioSubTapExtraOutputLatencyKey] as? Int, 0)
         XCTAssertEqual(taps?.first?[kAudioSubTapDriftCompensationKey] as? Bool, true)
     }
-
-    func testRouteDescriptionCanCarryMultipleProcessTaps() {
-        let description = SystemEQRouteDescription.makeAggregate(
-            aggregateUID: "aggregate",
-            outputDeviceUID: "output",
-            tapUIDs: ["global", "source-1", "source-2"]
-        )
-
-        let taps = description[kAudioAggregateDeviceTapListKey] as? [[String: Any]]
-        XCTAssertEqual(taps?.map { $0[kAudioSubTapUIDKey] as? String }, ["global", "source-1", "source-2"])
-    }
-
-    func testEngineTracksSourceProcessIDsAndGainsForRealAudioRoute() throws {
-        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
-
-        XCTAssertTrue(source.contains("setSourceProcesses"))
-        XCTAssertTrue(source.contains("sourceProcessObjectIDs"))
-        XCTAssertTrue(source.contains("CATapDescription(stereoMixdownOfProcesses: [processObjectID])"))
-        XCTAssertTrue(source.contains("CATapDescription(stereoGlobalTapButExcludeProcesses: excludedProcesses)"))
-        XCTAssertTrue(source.contains("setSourceVolume"))
-        XCTAssertTrue(source.contains("sourceVolumeByProcessObjectID"))
-        XCTAssertTrue(source.contains("gainForInputBuffer"))
-    }
-
-    private func systemEQEngineURL() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/AudioBarCore/SystemEQEngine.swift")
-    }
 }

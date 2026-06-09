@@ -71,7 +71,6 @@ final class AudioProcessStore: ObservableObject {
     func refresh() {
         isRefreshing = true
         let activeProcesses = provider.activeOutputProcesses()
-        eqEngine.setSourceProcesses(activeProcesses)
         let nextProcesses = processCache.merge(activeProcesses: activeProcesses)
         processes = nextProcesses
         lastRefreshDate = Date()
@@ -99,7 +98,6 @@ final class AudioProcessStore: ObservableObject {
         _ = didSet
 
         processCache.setCurrentVolume(volume, forStableSourceID: process.stableSourceID)
-        eqEngine.setSourceVolume(volume, for: process.audioObjectID)
         if let index = processes.firstIndex(where: { $0.id == process.id }) {
             processes[index].currentVolume = min(100, max(0, volume))
         }

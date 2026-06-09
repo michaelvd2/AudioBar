@@ -45,13 +45,10 @@ public final class SystemEQEngine: @unchecked Sendable {
 
     private let lock = NSRecursiveLock()
     private let processor = EQProcessor(sampleRate: 48_000, channelCount: 2)
-    private var tapIDs: [AudioObjectID] = []
+    private var tapID = AudioObjectID(kAudioObjectUnknown)
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
     private var ioProcID: AudioDeviceIOProcID?
     private var currentStreamSnapshot = SystemAudioStreamSnapshot.inactive
-    private var sourceProcessObjectIDs: [AudioObjectID] = []
-    private var sourceVolumeByProcessObjectID: [AudioObjectID: Float32] = [:]
-    private var inputBufferProcessObjectIDs: [AudioObjectID?] = [nil]
 
     public init() {}
 
@@ -88,8 +85,7 @@ public final class SystemEQEngine: @unchecked Sendable {
             return failLocked("Audio tap unavailable")
         }
 
-        var excludedProcesses = currentProcessObjectID().map { [$0] } ?? []
-        excludedProcesses.append(contentsOf: sourceProcessObjectIDs)
+        let excludedProcesses = currentProcessObjectID().map { [$0] } ?? []
         let tapDescription = CATapDescription(stereoGlobalTapButExcludeProcesses: excludedProcesses)
         tapDescription.name = "AudioBar System EQ Tap"
         tapDescription.isPrivate = true
@@ -100,28 +96,9 @@ public final class SystemEQEngine: @unchecked Sendable {
         guard operationStatus == noErr else {
             return failLocked("Tap failed (\(operationStatus))")
         }
-        tapIDs = [newTapID]
-        inputBufferProcessObjectIDs = [nil]
+        tapID = newTapID
 
-        for processObjectID in sourceProcessObjectIDs {
-            let tapDescription = CATapDescription(stereoMixdownOfProcesses: [processObjectID])
-            tapDescription.name = "AudioBar Source \(processObjectID) Tap"
-            tapDescription.isPrivate = true
-            tapDescription.muteBehavior = CATapMuteBehavior(rawValue: 2) ?? tapDescription.muteBehavior
-
-            var sourceTapID = AudioObjectID(kAudioObjectUnknown)
-            operationStatus = AudioHardwareCreateProcessTap(tapDescription, &sourceTapID)
-            guard operationStatus == noErr else {
-                return failLocked("Source tap failed (\(operationStatus))")
-            }
-            tapIDs.append(sourceTapID)
-            inputBufferProcessObjectIDs.append(processObjectID)
-        }
-
-        let tapUIDs = tapIDs.compactMap {
-            readString(objectID: $0, selector: kAudioTapPropertyUID)
-        }
-        guard tapUIDs.count == tapIDs.count else {
+        guard let tapUID = readString(objectID: tapID, selector: kAudioTapPropertyUID) else {
             return failLocked("Tap UID unavailable")
         }
 
@@ -131,7 +108,7 @@ public final class SystemEQEngine: @unchecked Sendable {
             return failLocked("Output device unavailable")
         }
 
-        guard let tapFormat = readStreamDescription(objectID: tapIDs[0], selector: kAudioTapPropertyFormat) else {
+        guard let tapFormat = readStreamDescription(objectID: tapID, selector: kAudioTapPropertyFormat) else {
             return failLocked("Tap format unavailable")
         }
 
@@ -152,7 +129,7 @@ public final class SystemEQEngine: @unchecked Sendable {
         let aggregateDescription = SystemEQRouteDescription.makeAggregate(
             aggregateUID: "com.michaelvandijk.AudioBar.SystemEQ.\(UUID().uuidString)",
             outputDeviceUID: outputDeviceUID,
-            tapUIDs: tapUIDs
+            tapUID: tapUID
         )
 
         var newAggregateID = AudioObjectID(kAudioObjectUnknown)
@@ -189,34 +166,6 @@ public final class SystemEQEngine: @unchecked Sendable {
 
     public func update(settings: EQSettings) {
         processor.update(settings: settings)
-    }
-
-    public func setSourceProcesses(_ processes: [AudioProcess]) {
-        lock.lock()
-        defer { lock.unlock() }
-
-        let nextIDs = processes
-            .filter(\.isActiveOutput)
-            .map(\.audioObjectID)
-            .filter { $0 != kAudioObjectUnknown }
-
-        guard nextIDs != sourceProcessObjectIDs else {
-            return
-        }
-
-        sourceProcessObjectIDs = nextIDs
-        if status == .active {
-            let settings = processor.currentSettings
-            stopLocked(updateStatus: false)
-            _ = start(settings: settings)
-        }
-    }
-
-    public func setSourceVolume(_ volume: Int, for processObjectID: UInt32) {
-        lock.lock()
-        defer { lock.unlock() }
-
-        sourceVolumeByProcessObjectID[AudioObjectID(processObjectID)] = Float32(min(100, max(0, volume))) / 100
     }
 
     public func stop() {
@@ -288,12 +237,6 @@ public final class SystemEQEngine: @unchecked Sendable {
                 frameCount: frameCount,
                 channelCount: channelCount
             )
-            let gain = gainForInputBuffer(outputIndex)
-            if gain != 1 {
-                for sampleIndex in 0..<sampleCount {
-                    outputPointer[sampleIndex] *= gain
-                }
-            }
             let outputLevelDB = levelDB(samples: outputPointer, count: sampleCount)
             updateStreamLevels(inputLevelDB: inputLevelDB, outputLevelDB: outputLevelDB)
             outputBuffers[outputIndex].mDataByteSize = UInt32(
@@ -323,13 +266,12 @@ public final class SystemEQEngine: @unchecked Sendable {
             aggregateID = AudioObjectID(kAudioObjectUnknown)
         }
 
-        if #available(macOS 14.2, *) {
-            for tapID in tapIDs where tapID != kAudioObjectUnknown {
+        if tapID != kAudioObjectUnknown {
+            if #available(macOS 14.2, *) {
                 AudioHardwareDestroyProcessTap(tapID)
             }
+            tapID = AudioObjectID(kAudioObjectUnknown)
         }
-        tapIDs = []
-        inputBufferProcessObjectIDs = [nil]
 
         if updateStatus {
             status = .stopped
@@ -452,15 +394,6 @@ public final class SystemEQEngine: @unchecked Sendable {
             inputLevelDB: inputLevelDB,
             outputLevelDB: outputLevelDB
         )
-    }
-
-    private func gainForInputBuffer(_ index: Int) -> Float32 {
-        guard index < inputBufferProcessObjectIDs.count,
-              let processObjectID = inputBufferProcessObjectIDs[index]
-        else {
-            return 1
-        }
-        return sourceVolumeByProcessObjectID[processObjectID] ?? 1
     }
 }
 
