@@ -188,7 +188,7 @@ final class AudioPopoverViewSourceTests: XCTestCase {
 
         XCTAssertTrue(playbackButton.contains("process.playbackCapability.isControllable"))
         XCTAssertTrue(playbackButton.contains("store.togglePlayback(for: process)"))
-        XCTAssertTrue(playbackButton.contains("process.isActiveOutput ? \"pause.fill\" : \"play.fill\""))
+        XCTAssertTrue(playbackButton.contains("store.isPlaybackPlaying(process) ? \"pause.fill\" : \"play.fill\""))
         XCTAssertTrue(playbackButton.contains(".help(playbackHelpText)"))
     }
 

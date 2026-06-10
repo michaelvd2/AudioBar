@@ -593,7 +593,7 @@ private struct PlaybackControlButton: View {
         Button {
             store.togglePlayback(for: process)
         } label: {
-            Image(systemName: process.isActiveOutput ? "pause.fill" : "play.fill")
+            Image(systemName: store.isPlaybackPlaying(process) ? "pause.fill" : "play.fill")
                 .font(.system(size: 10, weight: .semibold))
                 .frame(width: 20, height: 18)
         }
@@ -607,7 +607,7 @@ private struct PlaybackControlButton: View {
         guard process.playbackCapability.isControllable else {
             return "macOS does not expose playback control for this source"
         }
-        return process.isActiveOutput ? "Pause source" : "Play source"
+        return store.isPlaybackPlaying(process) ? "Pause source" : "Play source"
     }
 }
 

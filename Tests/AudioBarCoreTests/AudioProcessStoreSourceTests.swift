@@ -161,6 +161,17 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(togglePlaybackFunction.contains("playbackController.togglePlayback(for: process)"))
     }
 
+    func testPlaybackToggleUpdatesDisplayedPlaybackStateImmediately() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let togglePlaybackFunction = try XCTUnwrap(source.function(named: "togglePlayback"))
+        let isPlayingFunction = try XCTUnwrap(source.function(named: "isPlaybackPlaying"))
+
+        XCTAssertTrue(source.contains("private var playbackStateOverrides: [String: Bool]"))
+        XCTAssertTrue(togglePlaybackFunction.contains("guard playbackController.togglePlayback(for: process) else"))
+        XCTAssertTrue(togglePlaybackFunction.contains("playbackStateOverrides[process.stableSourceID] = !isPlaybackPlaying(process)"))
+        XCTAssertTrue(isPlayingFunction.contains("playbackStateOverrides[process.stableSourceID] ?? process.isActiveOutput"))
+    }
+
     func testWebAppPlaybackUsesBackgroundMediaKeyInsteadOfActivatingWebApp() throws {
         let source = try String(contentsOf: sourcePlaybackControllerURL(), encoding: .utf8)
 

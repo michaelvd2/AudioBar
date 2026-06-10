@@ -40,6 +40,7 @@ final class AudioProcessStore: ObservableObject {
     private let firstUseSetupCompletedKey = "AudioBar.firstUseSetupCompleted"
     private var processCache: AudioProcessListCache
     private var hiddenSourceNames: [String: String]
+    private var playbackStateOverrides: [String: Bool] = [:]
 
     init(
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
@@ -180,8 +181,16 @@ final class AudioProcessStore: ObservableObject {
             return
         }
 
-        _ = playbackController.togglePlayback(for: process)
+        guard playbackController.togglePlayback(for: process) else {
+            return
+        }
+
+        playbackStateOverrides[process.stableSourceID] = !isPlaybackPlaying(process)
         refresh()
+    }
+
+    func isPlaybackPlaying(_ process: AudioProcess) -> Bool {
+        playbackStateOverrides[process.stableSourceID] ?? process.isActiveOutput
     }
 
     func setLaunchAtLoginEnabled(_ isEnabled: Bool) {
