@@ -6,6 +6,8 @@ final class AudioBarStatusBarController: NSObject {
     private let statusItem: NSStatusItem
     private let store: AudioProcessStore
     private let popover = NSPopover()
+    private var outsideClickMonitor: Any?
+    private var localClickMonitor: Any?
 
     init(store: AudioProcessStore) {
         self.store = store
@@ -18,6 +20,9 @@ final class AudioBarStatusBarController: NSObject {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        MainActor.assumeIsolated {
+            removeOutsideClickMonitors()
+        }
     }
 
     private func configureButton() {
@@ -66,7 +71,7 @@ final class AudioBarStatusBarController: NSObject {
 
     private func togglePopover(relativeTo button: NSStatusBarButton) {
         if popover.isShown {
-            popover.performClose(nil)
+            closePopover()
             return
         }
 
@@ -74,7 +79,7 @@ final class AudioBarStatusBarController: NSObject {
     }
 
     private func showContextMenu(for button: NSStatusBarButton) {
-        popover.performClose(nil)
+        closePopover()
 
         let menu = NSMenu()
         let quitItem = NSMenuItem(title: "Quit", action: #selector(quitFromMenu), keyEquivalent: "")
@@ -88,6 +93,7 @@ final class AudioBarStatusBarController: NSObject {
         popover.contentSize = NSSize(width: 430, height: 560)
         let anchorRect = NSRect(x: 0, y: 0, width: button.bounds.width, height: button.bounds.height)
         popover.show(relativeTo: anchorRect, of: button, preferredEdge: .minY)
+        installOutsideClickMonitors()
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -104,6 +110,69 @@ final class AudioBarStatusBarController: NSObject {
     }
 
     @objc private func closePopoverWhenAppResignsActive() {
+        closePopover()
+    }
+
+    private func closePopover() {
         popover.performClose(nil)
+        removeOutsideClickMonitors()
+    }
+
+    private func installOutsideClickMonitors() {
+        removeOutsideClickMonitors()
+
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            self?.closePopoverIfClickIsOutside(event)
+        }
+
+        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            self?.closePopoverIfClickIsOutside(event)
+            return event
+        }
+    }
+
+    private func removeOutsideClickMonitors() {
+        if let outsideClickMonitor {
+            NSEvent.removeMonitor(outsideClickMonitor)
+            self.outsideClickMonitor = nil
+        }
+
+        if let localClickMonitor {
+            NSEvent.removeMonitor(localClickMonitor)
+            self.localClickMonitor = nil
+        }
+    }
+
+    private func closePopoverIfClickIsOutside(_ event: NSEvent) {
+        guard popover.isShown,
+              let popoverWindow = popover.contentViewController?.view.window,
+              let button = statusItem.button
+        else {
+            return
+        }
+
+        if let eventWindow = event.window,
+           eventWindow === popoverWindow || eventWindow === button.window
+        {
+            return
+        }
+
+        let screenPoint = event.locationInWindow
+        let clickPoint: NSPoint
+        if let eventWindow = event.window {
+            clickPoint = eventWindow.convertPoint(toScreen: screenPoint)
+        } else {
+            clickPoint = screenPoint
+        }
+
+        if button.window?.frame.contains(clickPoint) == true {
+            return
+        }
+
+        if popoverWindow.frame.contains(clickPoint) {
+            return
+        }
+
+        closePopover()
     }
 }

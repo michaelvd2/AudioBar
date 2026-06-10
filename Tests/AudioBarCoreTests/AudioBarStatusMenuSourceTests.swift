@@ -37,6 +37,26 @@ final class AudioBarStatusMenuSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("popover.performClose(nil)"))
     }
 
+    func testPopoverClosesWhenClickingOutsideStatusItemAndPopover() throws {
+        let source = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("outsideClickMonitor"))
+        XCTAssertTrue(source.contains("NSEvent.addGlobalMonitorForEvents"))
+        XCTAssertTrue(source.contains("NSEvent.addLocalMonitorForEvents"))
+        XCTAssertTrue(source.contains("closePopoverIfClickIsOutside"))
+        XCTAssertTrue(source.contains("popover.contentViewController?.view.window"))
+        XCTAssertTrue(source.contains("button.window?.frame.contains"))
+        XCTAssertTrue(source.contains("popoverWindow.frame.contains"))
+        XCTAssertTrue(source.contains("popover.performClose(nil)"))
+    }
+
+    func testPopoverDoesNotCloseForClicksDeliveredInsideAudioBarWindows() throws {
+        let source = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("eventWindow === popoverWindow"))
+        XCTAssertTrue(source.contains("eventWindow === button.window"))
+    }
+
     private func audioBarAppURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
