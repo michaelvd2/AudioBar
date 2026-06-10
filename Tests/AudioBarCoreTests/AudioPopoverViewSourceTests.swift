@@ -175,7 +175,7 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(row.contains("Image(systemName: \"eye.slash\")"))
         XCTAssertTrue(row.contains(".opacity(isHovered ? 1 : 0)"))
         XCTAssertTrue(row.contains(".allowsHitTesting(isHovered)"))
-        XCTAssertTrue(row.contains(".frame(width: 174, height: 18, alignment: .trailing)"))
+        XCTAssertTrue(row.contains(".frame(width: 234, height: 42, alignment: .trailing)"))
         XCTAssertTrue(row.contains(".padding(.trailing, 56)"))
     }
 
@@ -183,15 +183,24 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let playbackButton = try XCTUnwrap(source.slice(
             from: "private struct PlaybackControlButton",
+            to: "private struct RewindPlaybackButton"
+        ))
+        let rewindButton = try XCTUnwrap(source.slice(
+            from: "private struct RewindPlaybackButton",
             to: "private struct VolumeDragBar"
         ))
 
         XCTAssertTrue(playbackButton.contains("process.playbackCapability.isControllable"))
         XCTAssertTrue(playbackButton.contains("store.togglePlayback(for: process)"))
         XCTAssertTrue(playbackButton.contains("store.isPlaybackPlaying(process) ? \"pause.fill\" : \"play.fill\""))
-        XCTAssertTrue(playbackButton.contains(".font(.system(size: 13, weight: .semibold))"))
-        XCTAssertTrue(playbackButton.contains(".frame(width: 28, height: 26)"))
+        XCTAssertTrue(playbackButton.contains(".font(.system(size: 26, weight: .semibold))"))
+        XCTAssertTrue(playbackButton.contains(".frame(width: 44, height: 42)"))
         XCTAssertTrue(playbackButton.contains(".help(playbackHelpText)"))
+        XCTAssertTrue(rewindButton.contains("Image(systemName: \"gobackward.15\")"))
+        XCTAssertTrue(rewindButton.contains("store.rewindPlayback(for: process)"))
+        XCTAssertTrue(rewindButton.contains(".font(.system(size: 26, weight: .semibold))"))
+        XCTAssertTrue(rewindButton.contains(".frame(width: 44, height: 42)"))
+        XCTAssertTrue(rewindButton.contains(".help(\"Rewind 15 seconds\")"))
     }
 
     func testAudioProcessRowsDefaultMissingVolumeToFullVolume() throws {

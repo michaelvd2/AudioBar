@@ -189,6 +189,14 @@ final class AudioProcessStore: ObservableObject {
         refresh()
     }
 
+    func rewindPlayback(for process: AudioProcess) {
+        guard process.playbackCapability.isControllable else {
+            return
+        }
+
+        _ = playbackController.rewind15Seconds(for: process)
+    }
+
     func isPlaybackPlaying(_ process: AudioProcess) -> Bool {
         playbackStateOverrides[process.stableSourceID] ?? process.isActiveOutput
     }

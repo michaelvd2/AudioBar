@@ -161,6 +161,14 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(togglePlaybackFunction.contains("playbackController.togglePlayback(for: process)"))
     }
 
+    func testStoreRoutesFifteenSecondRewindBySourceCapability() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let rewindFunction = try XCTUnwrap(source.function(named: "rewindPlayback"))
+
+        XCTAssertTrue(rewindFunction.contains("guard process.playbackCapability.isControllable else"))
+        XCTAssertTrue(rewindFunction.contains("playbackController.rewind15Seconds(for: process)"))
+    }
+
     func testPlaybackToggleUpdatesDisplayedPlaybackStateImmediately() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let togglePlaybackFunction = try XCTUnwrap(source.function(named: "togglePlayback"))
@@ -179,6 +187,9 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("nowPlayingController.togglePlayPause()"))
         XCTAssertTrue(source.contains("MRMediaRemoteSendCommand"))
         XCTAssertTrue(source.contains("let togglePlayPauseCommand: Int32 = 2"))
+        XCTAssertTrue(source.contains("let goBackFifteenSecondsCommand: Int32 = 12"))
+        XCTAssertTrue(source.contains("public func rewind15Seconds() -> Bool"))
+        XCTAssertTrue(source.contains("sendCommand(goBackFifteenSecondsCommand"))
         XCTAssertTrue(source.contains("private let mediaKeyController"))
         XCTAssertTrue(source.contains("mediaKeyController.togglePlayPause()"))
         XCTAssertTrue(source.contains("CGPreflightListenEventAccess()"))

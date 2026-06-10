@@ -524,8 +524,9 @@ private struct AudioProcessRow: View {
     @ViewBuilder
     private var control: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            HStack(alignment: .center, spacing: 6) {
+            HStack(alignment: .center, spacing: 8) {
                 PlaybackControlButton(process: process, store: store)
+                RewindPlaybackButton(process: process, store: store)
 
                 VolumeDragBar(
                     value: displayedVolume,
@@ -556,7 +557,7 @@ private struct AudioProcessRow: View {
                 .allowsHitTesting(isHovered)
                 .help("Hide source")
             }
-            .frame(width: 174, height: 18, alignment: .trailing)
+            .frame(width: 234, height: 42, alignment: .trailing)
 
             Text(volumeLabel)
                 .font(.caption2.monospacedDigit())
@@ -594,8 +595,8 @@ private struct PlaybackControlButton: View {
             store.togglePlayback(for: process)
         } label: {
             Image(systemName: store.isPlaybackPlaying(process) ? "pause.fill" : "play.fill")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 28, height: 26)
+                .font(.system(size: 26, weight: .semibold))
+                .frame(width: 44, height: 42)
         }
         .buttonStyle(.plain)
         .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)
@@ -608,6 +609,25 @@ private struct PlaybackControlButton: View {
             return "macOS does not expose playback control for this source"
         }
         return store.isPlaybackPlaying(process) ? "Pause source" : "Play source"
+    }
+}
+
+private struct RewindPlaybackButton: View {
+    let process: AudioProcess
+    @ObservedObject var store: AudioProcessStore
+
+    var body: some View {
+        Button {
+            store.rewindPlayback(for: process)
+        } label: {
+            Image(systemName: "gobackward.15")
+                .font(.system(size: 26, weight: .semibold))
+                .frame(width: 44, height: 42)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)
+        .disabled(!process.playbackCapability.isControllable)
+        .help("Rewind 15 seconds")
     }
 }
 

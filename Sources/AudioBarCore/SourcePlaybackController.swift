@@ -32,6 +32,19 @@ public enum ScriptPlaybackCommandBuilder {
         end tell
         """
     }
+
+    public static func rewind15SecondsScript(bundleID: String) -> String {
+        """
+        tell application id "\(bundleID)"
+            try
+                set player position to ((player position) - 15)
+                return true
+            on error
+                return false
+            end try
+        end tell
+        """
+    }
 }
 
 public enum SafariMediaPlaybackCommandBuilder {
@@ -42,6 +55,26 @@ public enum SafariMediaPlaybackCommandBuilder {
             const target = media.find(function(item) { return !item.paused; }) || media[0];
             if (!target) { return false; }
             if (target.paused) { target.play(); } else { target.pause(); }
+            return true;
+        })();
+        """
+
+        return """
+        tell application id "com.apple.Safari"
+            if (count of windows) is 0 then return false
+            do JavaScript "\(javascript.escapedForAppleScript)" in current tab of front window
+            return true
+        end tell
+        """
+    }
+
+    public static func rewind15SecondsScript() -> String {
+        let javascript = """
+        (function() {
+            const media = Array.from(document.querySelectorAll('audio,video'));
+            const target = media.find(function(item) { return !item.paused; }) || media[0];
+            if (!target) { return false; }
+            target.currentTime = Math.max(0, target.currentTime - 15);
             return true;
         })();
         """
@@ -100,10 +133,19 @@ public final class NowPlayingPlaybackController {
 
     private let frameworkPath = "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote"
     private let togglePlayPauseCommand: Int32 = 2
+    private let goBackFifteenSecondsCommand: Int32 = 12
 
     public init() {}
 
     public func togglePlayPause() -> Bool {
+        sendCommand(togglePlayPauseCommand, logMessage: "Sent Now Playing toggle through MediaRemote")
+    }
+
+    public func rewind15Seconds() -> Bool {
+        sendCommand(goBackFifteenSecondsCommand, logMessage: "Sent Now Playing 15-second rewind through MediaRemote")
+    }
+
+    private func sendCommand(_ command: Int32, logMessage: StaticString) -> Bool {
         guard
             let handle = dlopen(frameworkPath, RTLD_NOW),
             let symbol = dlsym(handle, "MRMediaRemoteSendCommand")
@@ -114,8 +156,8 @@ public final class NowPlayingPlaybackController {
         defer { dlclose(handle) }
 
         let sendCommand = unsafeBitCast(symbol, to: SendCommand.self)
-        sendCommand(togglePlayPauseCommand, nil)
-        playbackLogger.info("Sent Now Playing toggle through MediaRemote")
+        sendCommand(command, nil)
+        playbackLogger.info("\(logMessage)")
         return true
     }
 }
@@ -157,6 +199,30 @@ public final class SourcePlaybackController {
         var error: NSDictionary?
         _ = script.executeAndReturnError(&error)
         return error == nil
+    }
+
+    public func rewind15Seconds(for process: AudioProcess) -> Bool {
+        let source: String?
+        switch process.playbackCapability {
+        case .scripted:
+            guard let bundleID = process.bundleID else {
+                return false
+            }
+            source = ScriptPlaybackCommandBuilder.rewind15SecondsScript(bundleID: bundleID)
+        case .webAppKeyboard:
+            return nowPlayingController.rewind15Seconds()
+        case .safariMedia:
+            source = SafariMediaPlaybackCommandBuilder.rewind15SecondsScript()
+        case .unavailable:
+            source = nil
+        }
+
+        guard let source, let script = NSAppleScript(source: source) else {
+            return false
+        }
+        var error: NSDictionary?
+        let result = script.executeAndReturnError(&error)
+        return error == nil && result.booleanValue
     }
 }
 
