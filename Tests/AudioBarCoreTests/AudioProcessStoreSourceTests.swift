@@ -132,12 +132,31 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(togglePlaybackFunction.contains("playbackController.togglePlayback(for: process)"))
     }
 
+    func testWebAppPlaybackUsesBackgroundMediaKeyInsteadOfActivatingWebApp() throws {
+        let source = try String(contentsOf: sourcePlaybackControllerURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("private let mediaKeyController"))
+        XCTAssertTrue(source.contains("mediaKeyController.togglePlayPause()"))
+        XCTAssertFalse(source.contains("WebAppKeyboardPlaybackCommandBuilder"))
+        XCTAssertFalse(source.contains("to activate"))
+        XCTAssertFalse(source.contains("key code 40"))
+        XCTAssertFalse(source.contains("key code 49"))
+    }
+
     private func audioProcessStoreURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/AudioBar/Stores/AudioProcessStore.swift")
+    }
+
+    private func sourcePlaybackControllerURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/AudioBarCore/SourcePlaybackController.swift")
     }
 }
 

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 public enum ScriptedAppPlaybackSupport {
@@ -48,24 +49,41 @@ public enum SafariMediaPlaybackCommandBuilder {
     }
 }
 
-public enum WebAppKeyboardPlaybackCommandBuilder {
-    public static func togglePlaybackScript(bundleID: String, appName: String) -> String {
-        let keyCode = appName.localizedCaseInsensitiveContains("youtube") ? 40 : 49
+public final class SystemMediaKeyPlaybackController {
+    public init() {}
 
-        return """
-        tell application id "\(bundleID)" to activate
-        delay 0.08
-        tell application "System Events"
-            tell (first process whose bundle identifier is "\(bundleID)")
-                key code \(keyCode)
-            end tell
-        end tell
-        """
+    public func togglePlayPause() -> Bool {
+        postMediaKey(NX_KEYTYPE_PLAY, state: NX_KEYDOWN)
+        postMediaKey(NX_KEYTYPE_PLAY, state: NX_KEYUP)
+        return true
+    }
+
+    private func postMediaKey(_ key: Int32, state: Int32) {
+        let data1 = (Int(key) << 16) | (Int(state) << 8)
+        guard let event = NSEvent.otherEvent(
+            with: .systemDefined,
+            location: .zero,
+            modifierFlags: NSEvent.ModifierFlags(rawValue: 0xA00),
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            subtype: Int16(NX_SUBTYPE_AUX_CONTROL_BUTTONS),
+            data1: data1,
+            data2: -1
+        )?.cgEvent else {
+            return
+        }
+
+        event.post(tap: .cghidEventTap)
     }
 }
 
 public final class SourcePlaybackController {
-    public init() {}
+    private let mediaKeyController: SystemMediaKeyPlaybackController
+
+    public init(mediaKeyController: SystemMediaKeyPlaybackController = SystemMediaKeyPlaybackController()) {
+        self.mediaKeyController = mediaKeyController
+    }
 
     public func togglePlayback(for process: AudioProcess) -> Bool {
         let source: String?
@@ -76,13 +94,7 @@ public final class SourcePlaybackController {
             }
             source = ScriptPlaybackCommandBuilder.togglePlaybackScript(bundleID: bundleID)
         case .webAppKeyboard:
-            guard let bundleID = process.volumeControlID else {
-                return false
-            }
-            source = WebAppKeyboardPlaybackCommandBuilder.togglePlaybackScript(
-                bundleID: bundleID,
-                appName: process.appName
-            )
+            return mediaKeyController.togglePlayPause()
         case .safariMedia:
             source = SafariMediaPlaybackCommandBuilder.togglePlaybackScript()
         case .unavailable:
