@@ -93,7 +93,7 @@ public final class SystemEQEngine: @unchecked Sendable {
         let fallbackTapDescription = CATapDescription(stereoGlobalTapButExcludeProcesses: excludedProcesses)
         fallbackTapDescription.name = "AudioBar System EQ Fallback Tap"
         fallbackTapDescription.isPrivate = true
-        fallbackTapDescription.muteBehavior = CATapMuteBehavior(rawValue: 0) ?? fallbackTapDescription.muteBehavior
+        fallbackTapDescription.muteBehavior = CATapMuteBehavior(rawValue: 2) ?? fallbackTapDescription.muteBehavior
 
         guard let fallbackTapID = createProcessTap(fallbackTapDescription) else {
             return failLocked("Fallback tap failed")
@@ -105,7 +105,7 @@ public final class SystemEQEngine: @unchecked Sendable {
             let tapDescription = CATapDescription(stereoMixdownOfProcesses: [processObjectID])
             tapDescription.name = "AudioBar Source Tap \(processObjectID)"
             tapDescription.isPrivate = true
-            tapDescription.muteBehavior = CATapMuteBehavior(rawValue: 0) ?? tapDescription.muteBehavior
+            tapDescription.muteBehavior = CATapMuteBehavior(rawValue: 2) ?? tapDescription.muteBehavior
 
             guard let sourceTapID = createProcessTap(tapDescription) else {
                 return failLocked("Source tap failed (\(processObjectID))")

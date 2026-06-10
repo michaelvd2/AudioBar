@@ -93,11 +93,12 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertEqual(taps?.map { $0[kAudioSubTapUIDKey] as? String }, ["fallback", "youtube", "safari"])
     }
 
-    func testProcessTapsKeepOriginalHardwarePlaybackUnmuted() throws {
+    func testProcessTapsMuteOriginalHardwarePlaybackWhileRouteReadsTap() throws {
         let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let startFunction = try XCTUnwrap(source.function(named: "start"))
 
-        XCTAssertTrue(source.contains("CATapMuteBehavior(rawValue: 0)"))
-        XCTAssertFalse(source.contains("CATapMuteBehavior(rawValue: 2)"))
+        XCTAssertTrue(startFunction.contains("CATapMuteBehavior(rawValue: 2)"))
+        XCTAssertFalse(startFunction.contains("CATapMuteBehavior(rawValue: 0)"))
     }
 
     func testEngineKeepsSourceTapGainStateForRouteMixer() throws {
