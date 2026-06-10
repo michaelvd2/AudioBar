@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AudioBar</title>
-  <meta name="description" content="AudioBar is a small macOS menu bar app for viewing active audio sources and tuning routed system audio with a compact EQ.">
+  <meta name="description" content="AudioBar adds the per-channel volume mixer macOS is missing, plus a compact system EQ in your menu bar.">
   <style>
     :root {
       color-scheme: light dark;
@@ -227,11 +227,12 @@
   <main>
     <div class="hero">
       <div>
-        <p class="eyebrow">macOS menu bar audio control</p>
+        <p class="eyebrow">The channel mixer macOS forgot</p>
         <h1>AudioBar</h1>
         <p class="intro">
-          A small menu bar app for seeing active audio sources, hiding noisy rows,
-          and tuning routed system audio with a compact 10-band EQ.
+          Control the volume of different audio sources from your menu bar.
+          AudioBar gives macOS the per-channel mixer people keep looking for,
+          then adds a compact 10-band EQ for shaping the routed system sound.
         </p>
         <div class="actions">
           <a class="button" href="#" aria-disabled="true">Download pending notarization</a>
@@ -242,15 +243,15 @@
       <div class="mock" aria-label="AudioBar interface preview">
         <header><span class="dot"></span> AudioBar</header>
         <div class="row">
-          <div><strong>YouTube</strong><span>Safari Web App</span></div>
+          <div><strong>YouTube</strong><span>Channel volume</span></div>
           <div class="bar" style="--value: 86%"></div>
         </div>
         <div class="row">
-          <div><strong>Music</strong><span>Scriptable app volume</span></div>
+          <div><strong>Music</strong><span>Channel volume</span></div>
           <div class="bar" style="--value: 62%"></div>
         </div>
         <div class="row">
-          <div><strong>System Stream</strong><span>2ch 48 kHz EQ route</span></div>
+          <div><strong>EQ Route</strong><span>10-band system tune</span></div>
           <div class="bar" style="--value: 74%"></div>
         </div>
       </div>
@@ -259,8 +260,9 @@
     <section>
       <h2>What It Does</h2>
       <ul>
-        <li>Lists active CoreAudio output sources in the menu bar.</li>
-        <li>Controls known scriptable sources such as Music, Spotify, and Safari Web App media.</li>
+        <li>Adds a practical menu bar mixer for separate audio channels, so one loud app does not force you to change the whole Mac volume.</li>
+        <li>Controls supported sources such as Music, Spotify, and Safari Web App media with direct channel volume sliders.</li>
+        <li>Shows active CoreAudio output sources and lets you hide rows you do not want to manage.</li>
         <li>Applies a compact 10-band EQ to routed system audio on supported macOS versions.</li>
         <li>Lets you hide sources and restore them later from the left-click panel.</li>
       </ul>
