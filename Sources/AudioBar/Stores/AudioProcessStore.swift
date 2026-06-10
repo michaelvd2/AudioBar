@@ -19,6 +19,7 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var eqEngineStatus: SystemEQEngineStatus = .stopped
     @Published private(set) var eqStreamSnapshot: SystemAudioStreamSnapshot = .inactive
     @Published private(set) var needsFirstUseSetup: Bool
+    @Published private(set) var isLaunchAtLoginEnabled: Bool
     @Published private(set) var savedEQPresets: [SavedEQPreset]
     @Published private(set) var hiddenSources: [HiddenAudioSource]
 
@@ -27,6 +28,7 @@ final class AudioProcessStore: ObservableObject {
     private let webAppVolumeController: WebAppKeyboardVolumeController
     private let safariMediaVolumeController: SafariMediaVolumeController
     private let playbackController: SourcePlaybackController
+    private let loginItemController: LoginItemController
     private let eqEngine: SystemEQEngine
     private let userDefaults: UserDefaults
     private var timer: Timer?
@@ -44,6 +46,7 @@ final class AudioProcessStore: ObservableObject {
         webAppVolumeController: WebAppKeyboardVolumeController = WebAppKeyboardVolumeController(),
         safariMediaVolumeController: SafariMediaVolumeController = SafariMediaVolumeController(),
         playbackController: SourcePlaybackController = SourcePlaybackController(),
+        loginItemController: LoginItemController = LoginItemController(),
         provider: AudioProcessProviding? = nil,
         eqEngine: SystemEQEngine = SystemEQEngine(),
         userDefaults: UserDefaults = .standard
@@ -52,11 +55,13 @@ final class AudioProcessStore: ObservableObject {
         self.webAppVolumeController = webAppVolumeController
         self.safariMediaVolumeController = safariMediaVolumeController
         self.playbackController = playbackController
+        self.loginItemController = loginItemController
         self.provider = provider ?? CoreAudioProcessProvider(volumeController: volumeController)
         self.eqEngine = eqEngine
         self.userDefaults = userDefaults
         self.eqSettings = Self.loadEQSettings(from: userDefaults, key: eqSettingsKey)
         self.needsFirstUseSetup = !userDefaults.bool(forKey: firstUseSetupCompletedKey)
+        self.isLaunchAtLoginEnabled = loginItemController.isEnabled
         self.savedEQPresets = Self.loadSavedEQPresets(from: userDefaults, key: savedEQPresetsKey)
         self.hiddenSourceNames = Self.loadHiddenSources(from: userDefaults, key: hiddenSourcesKey)
         self.hiddenSources = Self.makeHiddenSources(from: hiddenSourceNames)
@@ -177,6 +182,11 @@ final class AudioProcessStore: ObservableObject {
 
         _ = playbackController.togglePlayback(for: process)
         refresh()
+    }
+
+    func setLaunchAtLoginEnabled(_ isEnabled: Bool) {
+        loginItemController.setEnabled(isEnabled)
+        isLaunchAtLoginEnabled = loginItemController.isEnabled
     }
 
     func setEQGain(_ gain: Double, for frequencyHz: Int) {

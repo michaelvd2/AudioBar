@@ -103,6 +103,20 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("store.restoreHiddenSource(source.id)"))
     }
 
+    func testSettingsShowsLaunchAtLoginToggleEvenWithoutHiddenSources() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let settingsView = try XCTUnwrap(source.slice(
+            from: "private struct SourceSettingsView",
+            to: "private struct EQPanelView"
+        ))
+
+        XCTAssertTrue(settingsView.contains("VStack(spacing: 0)"))
+        XCTAssertTrue(settingsView.contains("Toggle(\"Launch at Login\""))
+        XCTAssertTrue(settingsView.contains("get: { store.isLaunchAtLoginEnabled }"))
+        XCTAssertTrue(settingsView.contains("set: { store.setLaunchAtLoginEnabled($0) }"))
+        XCTAssertTrue(settingsView.contains("if !store.hiddenSources.isEmpty"))
+    }
+
     func testFooterShowsHiddenSourceCountWhenBlacklistHasEntries() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let footer = try XCTUnwrap(source.slice(from: "private var footer", to: "private var footerText"))

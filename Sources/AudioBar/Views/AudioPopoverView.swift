@@ -221,10 +221,34 @@ private struct SourceSettingsView: View {
     @State private var isExpanded = false
 
     var body: some View {
-        if !store.hiddenSources.isEmpty {
-            VStack(spacing: 0) {
-                Divider()
+        VStack(spacing: 0) {
+            Divider()
 
+            HStack(spacing: 10) {
+                Image(systemName: "power")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16)
+
+                Text("Launch at Login")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Toggle("Launch at Login", isOn: Binding(
+                    get: { store.isLaunchAtLoginEnabled },
+                    set: { store.setLaunchAtLoginEnabled($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .help("Open AudioBar automatically when you sign in")
+
+            if !store.hiddenSources.isEmpty {
                 DisclosureGroup(isExpanded: $isExpanded) {
                     VStack(spacing: 0) {
                         ForEach(store.hiddenSources) { source in

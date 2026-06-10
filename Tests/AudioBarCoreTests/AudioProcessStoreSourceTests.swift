@@ -50,6 +50,22 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(completeSetupFunction.contains("startEQEngine()"))
     }
 
+    func testStoreRoutesLaunchAtLoginThroughLoginItemController() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let setLaunchFunction = try XCTUnwrap(source.function(named: "setLaunchAtLoginEnabled"))
+        let loginController = try String(contentsOf: loginItemControllerURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("@Published private(set) var isLaunchAtLoginEnabled"))
+        XCTAssertTrue(source.contains("private let loginItemController"))
+        XCTAssertTrue(source.contains("loginItemController.isEnabled"))
+        XCTAssertTrue(setLaunchFunction.contains("loginItemController.setEnabled(isEnabled)"))
+        XCTAssertTrue(setLaunchFunction.contains("isLaunchAtLoginEnabled = loginItemController.isEnabled"))
+        XCTAssertTrue(loginController.contains("import ServiceManagement"))
+        XCTAssertTrue(loginController.contains("SMAppService.mainApp"))
+        XCTAssertTrue(loginController.contains(".register()"))
+        XCTAssertTrue(loginController.contains(".unregister()"))
+    }
+
     func testStorePersistsAndAppliesSavedEQPresets() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
 
@@ -176,6 +192,14 @@ final class AudioProcessStoreSourceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/AudioBarCore/SourcePlaybackController.swift")
+    }
+
+    private func loginItemControllerURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/AudioBar/Services/LoginItemController.swift")
     }
 }
 
