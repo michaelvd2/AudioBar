@@ -594,8 +594,8 @@ private struct PlaybackControlButton: View {
             store.togglePlayback(for: process)
         } label: {
             Image(systemName: store.isPlaybackPlaying(process) ? "pause.fill" : "play.fill")
-                .font(.system(size: 10, weight: .semibold))
-                .frame(width: 20, height: 18)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 28, height: 26)
         }
         .buttonStyle(.plain)
         .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)
