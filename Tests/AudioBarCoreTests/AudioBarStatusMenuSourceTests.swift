@@ -21,6 +21,13 @@ final class AudioBarStatusMenuSourceTests: XCTestCase {
         XCTAssertFalse(source.contains("#selector(showSettingsFromMenu)"))
     }
 
+    func testPopoverStaysOpenDuringAutomatedVolumeChanges() throws {
+        let source = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("popover.behavior = .applicationDefined"))
+        XCTAssertFalse(source.contains("popover.behavior = .transient"))
+    }
+
     private func audioBarAppURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

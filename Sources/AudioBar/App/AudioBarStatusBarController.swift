@@ -28,7 +28,7 @@ final class AudioBarStatusBarController: NSObject {
     }
 
     private func configurePopover() {
-        popover.behavior = .transient
+        popover.behavior = .applicationDefined
         popover.contentSize = NSSize(width: 430, height: 560)
         popover.contentViewController = NSHostingController(rootView: AudioPopoverView(store: store))
     }
