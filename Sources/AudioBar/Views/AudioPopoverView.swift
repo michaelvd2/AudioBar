@@ -595,8 +595,8 @@ private struct PlaybackControlButton: View {
             store.togglePlayback(for: process)
         } label: {
             Image(systemName: store.isPlaybackPlaying(process) ? "pause.fill" : "play.fill")
-                .font(.system(size: 21, weight: .semibold))
-                .frame(width: 35, height: 34)
+                .font(.system(size: 19, weight: .semibold))
+                .frame(width: 32, height: 31)
         }
         .buttonStyle(.plain)
         .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)
@@ -621,8 +621,8 @@ private struct RewindPlaybackButton: View {
             store.rewindPlayback(for: process)
         } label: {
             Image(systemName: "gobackward.15")
-                .font(.system(size: 21, weight: .semibold))
-                .frame(width: 35, height: 34)
+                .font(.system(size: 19, weight: .semibold))
+                .frame(width: 32, height: 31)
         }
         .buttonStyle(.plain)
         .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)
