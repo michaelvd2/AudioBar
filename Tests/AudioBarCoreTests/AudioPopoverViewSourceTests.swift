@@ -193,13 +193,13 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(playbackButton.contains("process.playbackCapability.isControllable"))
         XCTAssertTrue(playbackButton.contains("store.togglePlayback(for: process)"))
         XCTAssertTrue(playbackButton.contains("store.isPlaybackPlaying(process) ? \"pause.fill\" : \"play.fill\""))
-        XCTAssertTrue(playbackButton.contains(".font(.system(size: 26, weight: .semibold))"))
-        XCTAssertTrue(playbackButton.contains(".frame(width: 44, height: 42)"))
+        XCTAssertTrue(playbackButton.contains(".font(.system(size: 21, weight: .semibold))"))
+        XCTAssertTrue(playbackButton.contains(".frame(width: 35, height: 34)"))
         XCTAssertTrue(playbackButton.contains(".help(playbackHelpText)"))
         XCTAssertTrue(rewindButton.contains("Image(systemName: \"gobackward.15\")"))
         XCTAssertTrue(rewindButton.contains("store.rewindPlayback(for: process)"))
-        XCTAssertTrue(rewindButton.contains(".font(.system(size: 26, weight: .semibold))"))
-        XCTAssertTrue(rewindButton.contains(".frame(width: 44, height: 42)"))
+        XCTAssertTrue(rewindButton.contains(".font(.system(size: 21, weight: .semibold))"))
+        XCTAssertTrue(rewindButton.contains(".frame(width: 35, height: 34)"))
         XCTAssertTrue(rewindButton.contains(".help(\"Rewind 15 seconds\")"))
     }
 
