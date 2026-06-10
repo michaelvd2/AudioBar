@@ -181,6 +181,27 @@
       padding: 32px 0;
     }
 
+    .product-shot {
+      margin: 18px 0 0;
+    }
+
+    .product-shot img {
+      display: block;
+      width: min(100%, 760px);
+      height: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 16px 46px rgb(0 0 0 / 14%);
+    }
+
+    .product-shot figcaption {
+      max-width: 720px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
     h2 {
       margin: 0 0 14px;
       font-size: 24px;
@@ -220,6 +241,7 @@
       .intro {
         font-size: 18px;
       }
+
     }
   </style>
 </head>
@@ -266,6 +288,14 @@
         <li>Applies a compact 10-band EQ to routed system audio on supported macOS versions.</li>
         <li>Lets you hide sources and restore them later from the left-click panel.</li>
       </ul>
+    </section>
+
+    <section>
+      <h2>How It Looks</h2>
+      <figure class="product-shot">
+        <img src="assets/audiobar-popover.png" width="860" height="966" alt="AudioBar menu bar popover showing source volume rows and the expanded EQ slider bank.">
+        <figcaption>The left-click panel shows source rows at the top and the expanded EQ controls below, matching the current AudioBar interface.</figcaption>
+      </figure>
     </section>
 
     <section>
