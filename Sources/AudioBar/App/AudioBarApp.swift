@@ -5,26 +5,24 @@ import SwiftUI
 @MainActor
 struct AudioBarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var store: AudioProcessStore
-
-    init() {
-        let store = AudioProcessStore()
-        _store = StateObject(wrappedValue: store)
-        Task { @MainActor in
-            store.startAutoRefresh()
-        }
-    }
 
     var body: some Scene {
-        MenuBarExtra("Audio", systemImage: "speaker.wave.2") {
-            AudioPopoverView(store: store)
+        Settings {
+            EmptyView()
         }
-        .menuBarExtraStyle(.window)
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var store: AudioProcessStore?
+    private var statusBarController: AudioBarStatusBarController?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+
+        let store = AudioProcessStore()
+        self.store = store
+        statusBarController = AudioBarStatusBarController(store: store)
+        store.startAutoRefresh()
     }
 }

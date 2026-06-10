@@ -20,6 +20,23 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(function.contains("updateEQEngine()"))
     }
 
+    func testEQEditsRecoverFailedRoutesInsteadOfOnlyUpdatingDeadProcessor() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let updateFunction = try XCTUnwrap(source.function(named: "updateEQEngine"))
+
+        XCTAssertTrue(updateFunction.contains("eqEngineStatus.isFailure"))
+        XCTAssertTrue(updateFunction.contains("startEQEngine()"))
+        XCTAssertTrue(updateFunction.contains("return"))
+    }
+
+    func testRefreshRetriesFailedEQRouteAfterSourceListChanges() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let refreshFunction = try XCTUnwrap(source.function(named: "refresh"))
+
+        XCTAssertTrue(refreshFunction.contains("recoverEQRouteIfNeeded()"))
+        XCTAssertTrue(source.contains("private func recoverEQRouteIfNeeded()"))
+    }
+
     func testStorePersistsAndAppliesSavedEQPresets() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
 

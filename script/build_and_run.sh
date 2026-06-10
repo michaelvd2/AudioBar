@@ -13,6 +13,7 @@ APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
+ENTITLEMENTS_PLIST="$ROOT_DIR/Resources/AudioBar.entitlements"
 
 cd "$ROOT_DIR"
 
@@ -51,7 +52,7 @@ cat >"$INFO_PLIST" <<PLIST
 </plist>
 PLIST
 
-/usr/bin/codesign --force --sign - "$APP_BUNDLE" >/dev/null 2>&1 || true
+/usr/bin/codesign --force --sign - --entitlements "$ENTITLEMENTS_PLIST" "$APP_BUNDLE" >/dev/null 2>&1 || true
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"

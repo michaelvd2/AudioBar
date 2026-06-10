@@ -20,6 +20,22 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(eqPanel.contains("store.startEQEngine()"))
     }
 
+    func testEQPanelCanCollapseFullSliderControlsWithCaret() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let eqPanel = try XCTUnwrap(source.slice(
+            from: "private struct EQPanelView",
+            to: "private struct AudioStreamMeter"
+        ))
+
+        XCTAssertTrue(eqPanel.contains("@State private var isExpanded = true"))
+        XCTAssertTrue(eqPanel.contains("DisclosureGroup("))
+        XCTAssertTrue(eqPanel.contains("isExpanded: $isExpanded"))
+        XCTAssertTrue(eqPanel.contains(".help(isExpanded ? \"Collapse EQ sliders\" : \"Expand EQ sliders\")"))
+        XCTAssertTrue(eqPanel.contains("PreampSlider(store: store)"))
+        XCTAssertTrue(eqPanel.contains("ForEach(EQBand.classic)"))
+        XCTAssertFalse(eqPanel.contains("isExpanded.toggle()"))
+    }
+
     func testSourceListAppearsBeforeEQPanel() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let body = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
@@ -27,6 +43,17 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         let eqIndex = try XCTUnwrap(body.range(of: "EQPanelView(store: store)")?.lowerBound)
 
         XCTAssertLessThan(contentIndex, eqIndex)
+    }
+
+    func testHiddenSourcesSettingsStayAtBottomOfLeftClickPanel() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let body = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
+        let eqIndex = try XCTUnwrap(body.range(of: "EQPanelView(store: store)")?.lowerBound)
+        let settingsIndex = try XCTUnwrap(body.range(of: "SourceSettingsView(store: store)")?.lowerBound)
+        let footerIndex = try XCTUnwrap(body.range(of: "footer")?.lowerBound)
+
+        XCTAssertLessThan(eqIndex, settingsIndex)
+        XCTAssertLessThan(settingsIndex, footerIndex)
     }
 
     func testOutputSourceListIsAlwaysAVisibleViewerWithVolumeSliders() throws {
@@ -55,6 +82,15 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("Text(\"Hidden Sources\")"))
         XCTAssertTrue(source.contains("ForEach(store.hiddenSources)"))
         XCTAssertTrue(source.contains("store.restoreHiddenSource(source.id)"))
+    }
+
+    func testFooterShowsHiddenSourceCountWhenBlacklistHasEntries() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let footer = try XCTUnwrap(source.slice(from: "private var footer", to: "private var footerText"))
+
+        XCTAssertTrue(footer.contains("if !store.hiddenSources.isEmpty"))
+        XCTAssertTrue(footer.contains("Text(\"Blacklisted \\(store.hiddenSources.count)\")"))
+        XCTAssertTrue(footer.contains(".help(\"Hidden sources can be restored above the footer\")"))
     }
 
     func testAudioProcessRowsUseTwoTextLinesOnly() throws {
@@ -91,6 +127,23 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(dragBar.contains("onPreview"))
         XCTAssertTrue(dragBar.contains("onCommit"))
         XCTAssertFalse(dragBar.contains("Slider("))
+    }
+
+    func testAudioProcessRowsRevealHideActionOnlyOnRowHover() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var volumeLabel"
+        ))
+
+        XCTAssertTrue(row.contains("@State private var isHovered = false"))
+        XCTAssertTrue(row.contains(".contentShape(Rectangle())"))
+        XCTAssertTrue(row.contains(".onHover { isHovered = $0 }"))
+        XCTAssertTrue(row.contains("Image(systemName: \"eye.slash\")"))
+        XCTAssertTrue(row.contains(".opacity(isHovered ? 1 : 0)"))
+        XCTAssertTrue(row.contains(".allowsHitTesting(isHovered)"))
+        XCTAssertTrue(row.contains(".frame(width: 148, height: 18, alignment: .trailing)"))
+        XCTAssertTrue(row.contains(".padding(.trailing, 30)"))
     }
 
     func testAudioProcessRowsDefaultMissingVolumeToFullVolume() throws {

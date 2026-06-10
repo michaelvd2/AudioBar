@@ -10,9 +10,9 @@ struct AudioPopoverView: View {
             header
             Divider()
             OutputSourceListView(store: store)
-            SourceSettingsView(store: store)
             Divider()
             EQPanelView(store: store)
+            SourceSettingsView(store: store)
             Divider()
             footer
         }
@@ -61,6 +61,14 @@ struct AudioPopoverView: View {
                 .lineLimit(1)
 
             Spacer()
+
+            if !store.hiddenSources.isEmpty {
+                Text("Blacklisted \(store.hiddenSources.count)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .help("Hidden sources can be restored above the footer")
+            }
 
             Button("Quit") {
                 NSApp.terminate(nil)
@@ -202,67 +210,79 @@ private struct SourceSettingsView: View {
 
 private struct EQPanelView: View {
     @ObservedObject var store: AudioProcessStore
+    @State private var isExpanded = true
     @State private var isSavingPreset = false
     @State private var presetName = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Label("EQ", systemImage: "slider.vertical.3")
-                    .font(.system(size: 13, weight: .semibold))
+            DisclosureGroup(
+                isExpanded: $isExpanded,
+                content: {
+                    VStack(alignment: .leading, spacing: 10) {
+                        AudioStreamMeter(snapshot: store.eqStreamSnapshot)
 
-                Spacer()
+                        HStack(alignment: .bottom, spacing: 8) {
+                            PreampSlider(store: store)
 
-                Toggle("On", isOn: Binding(
-                    get: { !store.eqSettings.isBypassed },
-                    set: { store.setEQBypassed(!$0) }
-                ))
-                .toggleStyle(.switch)
-                .font(.caption)
-                .frame(width: 76, alignment: .trailing)
+                            Divider()
+                                .frame(height: 118)
 
-                Menu("Preset") {
-                    ForEach(EQPreset.allCases, id: \.self) { preset in
-                        Button(preset.rawValue) {
-                            store.applyEQPreset(preset)
-                        }
-                    }
-
-                    if !store.savedEQPresets.isEmpty {
-                        Divider()
-                        ForEach(store.savedEQPresets) { preset in
-                            Button(preset.name) {
-                                store.applySavedEQPreset(preset)
+                            ForEach(EQBand.classic) { band in
+                                EQBandSlider(band: band, store: store)
                             }
                         }
                     }
+                    .padding(.top, 8)
+                },
+                label: {
+                    HStack(spacing: 10) {
+                        Label("EQ", systemImage: "slider.vertical.3")
+                            .font(.system(size: 13, weight: .semibold))
 
-                    Divider()
-                    Button("Save Current...") {
-                        presetName = store.nextSavedEQPresetName()
-                        isSavingPreset = true
+                        Spacer()
+
+                        Toggle("On", isOn: Binding(
+                            get: { !store.eqSettings.isBypassed },
+                            set: { store.setEQBypassed(!$0) }
+                        ))
+                        .toggleStyle(.switch)
+                        .font(.caption)
+                        .frame(width: 76, alignment: .trailing)
+
+                        Menu("Preset") {
+                            ForEach(EQPreset.allCases, id: \.self) { preset in
+                                Button(preset.rawValue) {
+                                    store.applyEQPreset(preset)
+                                }
+                            }
+
+                            if !store.savedEQPresets.isEmpty {
+                                Divider()
+                                ForEach(store.savedEQPresets) { preset in
+                                    Button(preset.name) {
+                                        store.applySavedEQPreset(preset)
+                                    }
+                                }
+                            }
+
+                            Divider()
+                            Button("Save Current...") {
+                                presetName = store.nextSavedEQPresetName()
+                                isSavingPreset = true
+                            }
+                        }
+                        .font(.caption)
+
+                        Button("Reset") {
+                            store.resetEQ()
+                        }
+                        .font(.caption)
                     }
                 }
-                .font(.caption)
-
-                Button("Reset") {
-                    store.resetEQ()
-                }
-                .font(.caption)
-            }
-
-            AudioStreamMeter(snapshot: store.eqStreamSnapshot)
-
-            HStack(alignment: .bottom, spacing: 8) {
-                PreampSlider(store: store)
-
-                Divider()
-                    .frame(height: 118)
-
-                ForEach(EQBand.classic) { band in
-                    EQBandSlider(band: band, store: store)
-                }
-            }
+            )
+            .disclosureGroupStyle(.automatic)
+            .help(isExpanded ? "Collapse EQ sliders" : "Expand EQ sliders")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -395,6 +415,7 @@ private struct AudioProcessRow: View {
     let process: AudioProcess
     @ObservedObject var store: AudioProcessStore
     @State private var draftVolume: Double?
+    @State private var isHovered = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -412,47 +433,54 @@ private struct AudioProcessRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 8) {
-                control
+            control
+        }
+        .contentShape(Rectangle())
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .onHover { isHovered = $0 }
+    }
+
+    @ViewBuilder
+    private var control: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            HStack(alignment: .center, spacing: 6) {
+                VolumeDragBar(
+                    value: displayedVolume,
+                    isEnabled: process.volumeCapability.isAdjustable,
+                    step: 1,
+                    onPreview: {
+                        draftVolume = $0
+                        store.previewVolume(for: process, to: $0)
+                    },
+                    onCommit: {
+                        draftVolume = $0
+                        store.setVolume(for: process, to: $0)
+                    }
+                )
+                .frame(width: 118)
+                .help(volumeHelpText)
 
                 Button {
                     store.hideSource(process)
                 } label: {
                     Image(systemName: "eye.slash")
                         .font(.system(size: 12, weight: .medium))
-                        .frame(width: 18, height: 18)
+                        .frame(width: 20, height: 18)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
+                .opacity(isHovered ? 1 : 0)
+                .allowsHitTesting(isHovered)
                 .help("Hide source")
             }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-    }
-
-    @ViewBuilder
-    private var control: some View {
-        VStack(alignment: .trailing, spacing: 4) {
-            VolumeDragBar(
-                value: displayedVolume,
-                isEnabled: process.volumeCapability.isAdjustable,
-                step: 1,
-                onPreview: {
-                    draftVolume = $0
-                    store.previewVolume(for: process, to: $0)
-                },
-                onCommit: {
-                    draftVolume = $0
-                    store.setVolume(for: process, to: $0)
-                }
-            )
-            .frame(width: 118)
-            .help(volumeHelpText)
+            .frame(width: 148, height: 18, alignment: .trailing)
 
             Text(volumeLabel)
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
+                .frame(width: 118, alignment: .center)
+                .padding(.trailing, 30)
         }
     }
 
