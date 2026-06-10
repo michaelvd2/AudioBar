@@ -80,9 +80,9 @@ final class ReleasePackagingScriptTests: XCTestCase {
         let script = try String(contentsOf: appStorePackageScriptURL(), encoding: .utf8)
 
         XCTAssertTrue(script.contains("CFBundleShortVersionString"))
-        XCTAssertTrue(script.contains("APP_VERSION=\"${APP_VERSION:-0.1.4}\""))
+        XCTAssertTrue(script.contains("APP_VERSION=\"${APP_VERSION:-0.1.7}\""))
         XCTAssertTrue(script.contains("CFBundleVersion"))
-        XCTAssertTrue(script.contains("APP_BUILD=\"${APP_BUILD:-5}\""))
+        XCTAssertTrue(script.contains("APP_BUILD=\"${APP_BUILD:-8}\""))
         XCTAssertTrue(script.contains("LSMinimumSystemVersion"))
         XCTAssertTrue(script.contains("MIN_SYSTEM_VERSION=\"14.2\""))
         XCTAssertTrue(script.contains("CFBundleDisplayName"))
@@ -144,8 +144,8 @@ final class ReleasePackagingScriptTests: XCTestCase {
         let script = try String(contentsOf: localAppStoreSmokeScriptURL(), encoding: .utf8)
 
         XCTAssertTrue(script.contains("-DAPP_STORE"))
-        XCTAssertTrue(script.contains("APP_VERSION=\"${APP_VERSION:-0.1.4}\""))
-        XCTAssertTrue(script.contains("APP_BUILD=\"${APP_BUILD:-5}\""))
+        XCTAssertTrue(script.contains("APP_VERSION=\"${APP_VERSION:-0.1.7}\""))
+        XCTAssertTrue(script.contains("APP_BUILD=\"${APP_BUILD:-8}\""))
         XCTAssertTrue(script.contains("MIN_SYSTEM_VERSION=\"14.2\""))
         XCTAssertTrue(script.contains("Resources/AudioBar-AppStore.entitlements"))
         XCTAssertTrue(script.contains("codesign --force --sign -"))
