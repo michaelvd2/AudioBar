@@ -31,8 +31,8 @@ final class ReleasePackagingScriptTests: XCTestCase {
     func testReleasePackagingCarriesCurrentBundleVersion() throws {
         let script = try String(contentsOf: packageReleaseScriptURL(), encoding: .utf8)
 
-        XCTAssertTrue(script.contains("APP_VERSION=\"0.1.5\""))
-        XCTAssertTrue(script.contains("BUILD_NUMBER=\"6\""))
+        XCTAssertTrue(script.contains("APP_VERSION=\"0.1.6\""))
+        XCTAssertTrue(script.contains("BUILD_NUMBER=\"7\""))
         XCTAssertTrue(script.contains("CFBundleShortVersionString"))
         XCTAssertTrue(script.contains("<string>$APP_VERSION</string>"))
         XCTAssertTrue(script.contains("CFBundleVersion"))
@@ -42,8 +42,8 @@ final class ReleasePackagingScriptTests: XCTestCase {
     func testDownloadPageLinksToCurrentRelease() throws {
         let page = try String(contentsOf: docsIndexURL(), encoding: .utf8)
 
-        XCTAssertTrue(page.contains("/releases/download/v0.1.5/AudioBar-notarized.zip"))
-        XCTAssertFalse(page.contains("/releases/download/v0.1.4/AudioBar-notarized.zip"))
+        XCTAssertTrue(page.contains("/releases/download/v0.1.6/AudioBar-notarized.zip"))
+        XCTAssertFalse(page.contains("/releases/download/v0.1.5/AudioBar-notarized.zip"))
     }
 
     func testRunScriptIncludesGuidedPermissionUsageDescriptions() throws {

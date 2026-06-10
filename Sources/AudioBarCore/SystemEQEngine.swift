@@ -53,10 +53,14 @@ public final class SystemEQEngine: @unchecked Sendable {
     private var ioProcID: AudioDeviceIOProcID?
     private var currentStreamSnapshot = SystemAudioStreamSnapshot.inactive
     private var didLogIOBufferLayout = false
+    private var defaultOutputDeviceChangeToken: AudioObjectPropertyListenerBlock?
 
-    public init() {}
+    public init() {
+        registerDefaultOutputDeviceListener()
+    }
 
     deinit {
+        unregisterDefaultOutputDeviceListener()
         stop()
     }
 
@@ -479,6 +483,19 @@ public final class SystemEQEngine: @unchecked Sendable {
         return start(settings: settings)
     }
 
+    private func restartAfterDefaultOutputDeviceChange() {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard status == .active else {
+            return
+        }
+
+        let settings = processor.currentSettings
+        systemEQLogger.info("Default output device changed; restarting system EQ route")
+        _ = restartLocked(settings: settings)
+    }
+
     private func failLocked(_ message: String) -> SystemEQEngineStatus {
         stopLocked(updateStatus: false)
         status = .failed(message: message)
@@ -547,6 +564,46 @@ public final class SystemEQEngine: @unchecked Sendable {
         )
         return status == noErr && deviceID != kAudioObjectUnknown ? deviceID : nil
     }
+
+    private func registerDefaultOutputDeviceListener() {
+        guard defaultOutputDeviceChangeToken == nil else {
+            return
+        }
+
+        var address = propertyAddress(kAudioHardwarePropertyDefaultOutputDevice)
+        let token: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            self?.restartAfterDefaultOutputDeviceChange()
+        }
+
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            DispatchQueue.main,
+            token
+        )
+
+        guard status == noErr else {
+            systemEQLogger.error("Default output listener failed: \(status)")
+            return
+        }
+        defaultOutputDeviceChangeToken = token
+    }
+
+    private func unregisterDefaultOutputDeviceListener() {
+        guard let defaultOutputDeviceChangeToken else {
+            return
+        }
+
+        var address = propertyAddress(kAudioHardwarePropertyDefaultOutputDevice)
+        AudioObjectRemovePropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            DispatchQueue.main,
+            defaultOutputDeviceChangeToken
+        )
+        self.defaultOutputDeviceChangeToken = nil
+    }
+
     private func readString(
         objectID: AudioObjectID,
         selector: AudioObjectPropertySelector

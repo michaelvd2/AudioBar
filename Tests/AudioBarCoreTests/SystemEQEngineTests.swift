@@ -120,6 +120,18 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertFalse(setSourceProcesses.contains("_ = start(settings: settings)"))
     }
 
+    func testActiveRouteRestartsWhenDefaultOutputDeviceChanges() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("kAudioHardwarePropertyDefaultOutputDevice"))
+        XCTAssertTrue(source.contains("AudioObjectAddPropertyListenerBlock"))
+        XCTAssertTrue(source.contains("restartAfterDefaultOutputDeviceChange"))
+
+        let restartFunction = try XCTUnwrap(source.function(named: "restartAfterDefaultOutputDeviceChange"))
+        XCTAssertTrue(restartFunction.contains("status == .active"))
+        XCTAssertTrue(restartFunction.contains("restartLocked(settings: settings)"))
+    }
+
     func testRetainedPausedSourcesStayInRouteToAvoidNotificationChurn() throws {
         let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
         let setSourceProcesses = try XCTUnwrap(source.function(named: "setSourceProcesses"))
