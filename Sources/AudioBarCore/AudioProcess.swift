@@ -17,6 +17,22 @@ public enum VolumeCapability: Equatable, Sendable {
     }
 }
 
+public enum PlaybackCapability: Equatable, Sendable {
+    case scripted
+    case webAppKeyboard
+    case safariMedia
+    case unavailable(reason: String)
+
+    public var isControllable: Bool {
+        switch self {
+        case .scripted, .webAppKeyboard, .safariMedia:
+            return true
+        case .unavailable:
+            return false
+        }
+    }
+}
+
 public struct AudioProcess: Equatable, Identifiable, Sendable {
     public let audioObjectID: UInt32
     public let pid: Int32
@@ -55,6 +71,22 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
         }
         return bundleID == "com.apple.Safari"
             || bundleID.hasPrefix("com.apple.Safari.WebApp.")
+    }
+
+    public var playbackCapability: PlaybackCapability {
+        switch volumeCapability {
+        case .scripted:
+            guard ScriptedAppPlaybackSupport.supports(bundleID) else {
+                return .unavailable(reason: ScriptedAppPlaybackSupport.unsupportedReason)
+            }
+            return .scripted
+        case .webAppKeyboard:
+            return .webAppKeyboard
+        case .safariMedia:
+            return .safariMedia
+        case .systemRoute, .unavailable:
+            return .unavailable(reason: ScriptedAppPlaybackSupport.unsupportedReason)
+        }
     }
 
     public init(

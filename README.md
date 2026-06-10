@@ -23,8 +23,10 @@ volume shortcuts.
 ./script/build_and_run.sh
 ```
 
-The first Music or Spotify control may trigger a macOS Automation permission prompt.
-The first YouTube Web App control may trigger Accessibility or Automation prompts.
+On first launch, AudioBar opens a setup panel. Click **Enable AudioBar** to walk
+through the System Audio capture, Input Monitoring, and Accessibility prompts
+before using EQ or web media controls. The first Music, Spotify, or Safari
+control may still trigger a macOS Automation prompt for that specific app.
 
 ## EQ
 
@@ -37,6 +39,6 @@ attempts to start a private CoreAudio system route: a global process tap feeds a
 private aggregate device, and the app renders the tapped audio back to the
 current output device through the EQ filters.
 
-The first live EQ start may trigger a macOS system audio recording permission
-prompt. If permission is granted after the first attempt, use the EQ panel's
-start icon or relaunch the app.
+The first setup run triggers the macOS system audio recording permission prompt.
+AudioBar keeps normal hardware playback unmuted while the route is active, so
+granting permission should not leave the laptop silent if setup is interrupted.

@@ -9,6 +9,10 @@ struct AudioPopoverView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
+            if store.needsFirstUseSetup {
+                FirstUseSetupView(store: store)
+                Divider()
+            }
             OutputSourceListView(store: store)
             Divider()
             EQPanelView(store: store)
@@ -85,6 +89,58 @@ struct AudioPopoverView: View {
             return "Refreshes every 3s"
         }
         return "Updated \(lastRefreshDate.formatted(date: .omitted, time: .shortened))"
+    }
+}
+
+private struct FirstUseSetupView: View {
+    @ObservedObject var store: AudioProcessStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "checkmark.shield")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("First Use Setup")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Enable System Audio capture, Input Monitoring, and Accessibility prompts before using EQ or web media controls.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: 8) {
+                PermissionPill(title: "System Audio")
+                PermissionPill(title: "Input Monitoring")
+                PermissionPill(title: "Accessibility")
+
+                Spacer()
+
+                Button("Enable AudioBar") {
+                    store.completeFirstUseSetup()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+}
+
+private struct PermissionPill: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(.tertiary.opacity(0.18), in: Capsule())
     }
 }
 
@@ -445,6 +501,8 @@ private struct AudioProcessRow: View {
     private var control: some View {
         VStack(alignment: .trailing, spacing: 4) {
             HStack(alignment: .center, spacing: 6) {
+                PlaybackControlButton(process: process, store: store)
+
                 VolumeDragBar(
                     value: displayedVolume,
                     isEnabled: process.volumeCapability.isAdjustable,
@@ -474,13 +532,13 @@ private struct AudioProcessRow: View {
                 .allowsHitTesting(isHovered)
                 .help("Hide source")
             }
-            .frame(width: 148, height: 18, alignment: .trailing)
+            .frame(width: 174, height: 18, alignment: .trailing)
 
             Text(volumeLabel)
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 118, alignment: .center)
-                .padding(.trailing, 30)
+                .padding(.trailing, 56)
         }
     }
 
@@ -500,6 +558,32 @@ private struct AudioProcessRow: View {
             return "macOS does not expose a public per-app volume control for this source"
         }
         return "Set source volume"
+    }
+}
+
+private struct PlaybackControlButton: View {
+    let process: AudioProcess
+    @ObservedObject var store: AudioProcessStore
+
+    var body: some View {
+        Button {
+            store.togglePlayback(for: process)
+        } label: {
+            Image(systemName: process.isActiveOutput ? "pause.fill" : "play.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .frame(width: 20, height: 18)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)
+        .disabled(!process.playbackCapability.isControllable)
+        .help(playbackHelpText)
+    }
+
+    private var playbackHelpText: String {
+        guard process.playbackCapability.isControllable else {
+            return "macOS does not expose playback control for this source"
+        }
+        return process.isActiveOutput ? "Pause source" : "Play source"
     }
 }
 

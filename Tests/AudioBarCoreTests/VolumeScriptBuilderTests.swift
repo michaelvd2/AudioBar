@@ -67,4 +67,28 @@ final class VolumeScriptBuilderTests: XCTestCase {
         XCTAssertTrue(script.contains("repeat 7 times"))
         XCTAssertTrue(script.contains("key code 126"))
     }
+
+    func testScriptedPlaybackToggleUsesApplicationID() {
+        let script = ScriptPlaybackCommandBuilder.togglePlaybackScript(bundleID: "com.spotify.client")
+
+        XCTAssertEqual(
+            script,
+            """
+            tell application id "com.spotify.client"
+                playpause
+            end tell
+            """
+        )
+    }
+
+    func testSafariPlaybackToggleScriptTogglesMediaElementsInFrontTab() {
+        let script = SafariMediaPlaybackCommandBuilder.togglePlaybackScript()
+
+        XCTAssertTrue(script.contains("tell application id \"com.apple.Safari\""))
+        XCTAssertTrue(script.contains("current tab of front window"))
+        XCTAssertTrue(script.contains("document.querySelectorAll('audio,video')"))
+        XCTAssertTrue(script.contains("target.pause()"))
+        XCTAssertTrue(script.contains("target.play()"))
+    }
+
 }

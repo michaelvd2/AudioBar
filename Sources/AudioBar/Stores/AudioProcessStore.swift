@@ -1,5 +1,7 @@
 import AudioBarCore
+import ApplicationServices
 import Combine
+import CoreGraphics
 import Foundation
 
 struct HiddenAudioSource: Equatable, Identifiable {
@@ -16,6 +18,7 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var eqSettings: EQSettings
     @Published private(set) var eqEngineStatus: SystemEQEngineStatus = .stopped
     @Published private(set) var eqStreamSnapshot: SystemAudioStreamSnapshot = .inactive
+    @Published private(set) var needsFirstUseSetup: Bool
     @Published private(set) var savedEQPresets: [SavedEQPreset]
     @Published private(set) var hiddenSources: [HiddenAudioSource]
 
@@ -23,6 +26,7 @@ final class AudioProcessStore: ObservableObject {
     private let volumeController: AppVolumeControlling
     private let webAppVolumeController: WebAppKeyboardVolumeController
     private let safariMediaVolumeController: SafariMediaVolumeController
+    private let playbackController: SourcePlaybackController
     private let eqEngine: SystemEQEngine
     private let userDefaults: UserDefaults
     private var timer: Timer?
@@ -31,6 +35,7 @@ final class AudioProcessStore: ObservableObject {
     private let savedEQPresetsKey = "AudioBar.savedEQPresets"
     private let sourceVolumesKey = "AudioBar.sourceVolumes"
     private let hiddenSourcesKey = "AudioBar.hiddenSources"
+    private let firstUseSetupCompletedKey = "AudioBar.firstUseSetupCompleted"
     private var processCache: AudioProcessListCache
     private var hiddenSourceNames: [String: String]
 
@@ -38,6 +43,7 @@ final class AudioProcessStore: ObservableObject {
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
         webAppVolumeController: WebAppKeyboardVolumeController = WebAppKeyboardVolumeController(),
         safariMediaVolumeController: SafariMediaVolumeController = SafariMediaVolumeController(),
+        playbackController: SourcePlaybackController = SourcePlaybackController(),
         provider: AudioProcessProviding? = nil,
         eqEngine: SystemEQEngine = SystemEQEngine(),
         userDefaults: UserDefaults = .standard
@@ -45,10 +51,12 @@ final class AudioProcessStore: ObservableObject {
         self.volumeController = volumeController
         self.webAppVolumeController = webAppVolumeController
         self.safariMediaVolumeController = safariMediaVolumeController
+        self.playbackController = playbackController
         self.provider = provider ?? CoreAudioProcessProvider(volumeController: volumeController)
         self.eqEngine = eqEngine
         self.userDefaults = userDefaults
         self.eqSettings = Self.loadEQSettings(from: userDefaults, key: eqSettingsKey)
+        self.needsFirstUseSetup = !userDefaults.bool(forKey: firstUseSetupCompletedKey)
         self.savedEQPresets = Self.loadSavedEQPresets(from: userDefaults, key: savedEQPresetsKey)
         self.hiddenSourceNames = Self.loadHiddenSources(from: userDefaults, key: hiddenSourcesKey)
         self.hiddenSources = Self.makeHiddenSources(from: hiddenSourceNames)
@@ -61,7 +69,9 @@ final class AudioProcessStore: ObservableObject {
         guard timer == nil else {
             return
         }
-        startEQEngine()
+        if !needsFirstUseSetup {
+            startEQEngine()
+        }
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -73,6 +83,14 @@ final class AudioProcessStore: ObservableObject {
                 self?.updateEQStreamSnapshot()
             }
         }
+    }
+
+    func completeFirstUseSetup() {
+        needsFirstUseSetup = false
+        userDefaults.set(true, forKey: firstUseSetupCompletedKey)
+        requestGuidedPermissions()
+        startEQEngine()
+        refresh()
     }
 
     func stopAutoRefresh() {
@@ -152,6 +170,15 @@ final class AudioProcessStore: ObservableObject {
         }
     }
 
+    func togglePlayback(for process: AudioProcess) {
+        guard process.playbackCapability.isControllable else {
+            return
+        }
+
+        _ = playbackController.togglePlayback(for: process)
+        refresh()
+    }
+
     func setEQGain(_ gain: Double, for frequencyHz: Int) {
         eqSettings.setGain(gain, for: frequencyHz)
         eqSettings.isBypassed = false
@@ -220,6 +247,11 @@ final class AudioProcessStore: ObservableObject {
     }
 
     func startEQEngine() {
+        guard !needsFirstUseSetup else {
+            eqEngineStatus = .stopped
+            updateEQStreamSnapshot()
+            return
+        }
         eqEngineStatus = .starting
         eqEngineStatus = eqEngine.start(settings: eqSettings)
         updateEQStreamSnapshot()
@@ -272,6 +304,15 @@ final class AudioProcessStore: ObservableObject {
 
     private func applyRouteVolume(_ volume: Int, for process: AudioProcess) {
         eqEngine.setSourceVolume(volume, for: process.audioObjectID)
+    }
+
+    private func requestGuidedPermissions() {
+        _ = CGRequestListenEventAccess()
+
+        let options = [
+            "AXTrustedCheckOptionPrompt": true
+        ] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
     }
 
     private func isHiddenSource(_ process: AudioProcess) -> Bool {

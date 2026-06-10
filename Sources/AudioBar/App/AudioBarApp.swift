@@ -24,5 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.store = store
         statusBarController = AudioBarStatusBarController(store: store)
         store.startAutoRefresh()
+        if store.needsFirstUseSetup {
+            statusBarController?.showFirstUseSetup()
+        }
     }
 }

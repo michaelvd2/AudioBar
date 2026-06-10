@@ -77,6 +77,14 @@ final class AudioBarStatusBarController: NSObject {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    func showFirstUseSetup() {
+        guard let button = statusItem.button else {
+            return
+        }
+
+        showSettings(relativeTo: button)
+    }
+
     @objc private func quitFromMenu() {
         NSApp.terminate(nil)
     }
