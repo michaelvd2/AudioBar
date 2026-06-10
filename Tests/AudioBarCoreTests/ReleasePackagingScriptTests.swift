@@ -23,14 +23,17 @@ final class ReleasePackagingScriptTests: XCTestCase {
 
         XCTAssertTrue(script.contains("NSAudioCaptureUsageDescription"))
         XCTAssertTrue(script.contains("NSInputMonitoringUsageDescription"))
+        XCTAssertTrue(script.contains("NSAppleEventsUsageDescription"))
         XCTAssertTrue(entitlements.contains("com.apple.security.device.audio-input"))
         XCTAssertTrue(entitlements.contains("<true/>"))
     }
 
-    func testRunScriptIncludesInputMonitoringUsageDescription() throws {
+    func testRunScriptIncludesGuidedPermissionUsageDescriptions() throws {
         let script = try String(contentsOf: buildRunScriptURL(), encoding: .utf8)
 
+        XCTAssertTrue(script.contains("NSAudioCaptureUsageDescription"))
         XCTAssertTrue(script.contains("NSInputMonitoringUsageDescription"))
+        XCTAssertTrue(script.contains("NSAppleEventsUsageDescription"))
         XCTAssertTrue(script.contains("play/pause media key"))
     }
 

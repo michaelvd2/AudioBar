@@ -45,6 +45,24 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertLessThan(contentIndex, eqIndex)
     }
 
+    func testFirstUseSetupAppearsBeforeAudioControls() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let body = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
+        let setupIndex = try XCTUnwrap(body.range(of: "FirstUseSetupView(store: store)")?.lowerBound)
+        let contentIndex = try XCTUnwrap(body.range(of: "OutputSourceListView(store: store)")?.lowerBound)
+        let setupView = try XCTUnwrap(source.slice(
+            from: "private struct FirstUseSetupView",
+            to: "private struct OutputSourceListView"
+        ))
+
+        XCTAssertLessThan(setupIndex, contentIndex)
+        XCTAssertTrue(body.contains("if store.needsFirstUseSetup"))
+        XCTAssertTrue(setupView.contains("Button(\"Enable AudioBar\")"))
+        XCTAssertTrue(setupView.contains("store.completeFirstUseSetup()"))
+        XCTAssertTrue(setupView.contains("System Audio"))
+        XCTAssertTrue(setupView.contains("Input Monitoring"))
+    }
+
     func testHiddenSourcesSettingsStayAtBottomOfLeftClickPanel() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let body = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))

@@ -37,6 +37,19 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("private func recoverEQRouteIfNeeded()"))
     }
 
+    func testFirstUseSetupGatesAutomaticEQStartupUntilPermissionsAreRequested() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let startAutoRefreshFunction = try XCTUnwrap(source.function(named: "startAutoRefresh"))
+        let completeSetupFunction = try XCTUnwrap(source.function(named: "completeFirstUseSetup"))
+
+        XCTAssertTrue(source.contains("@Published private(set) var needsFirstUseSetup"))
+        XCTAssertTrue(source.contains("private let firstUseSetupCompletedKey"))
+        XCTAssertTrue(startAutoRefreshFunction.contains("if !needsFirstUseSetup"))
+        XCTAssertTrue(completeSetupFunction.contains("requestGuidedPermissions()"))
+        XCTAssertTrue(completeSetupFunction.contains("userDefaults.set(true, forKey: firstUseSetupCompletedKey)"))
+        XCTAssertTrue(completeSetupFunction.contains("startEQEngine()"))
+    }
+
     func testStorePersistsAndAppliesSavedEQPresets() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
 

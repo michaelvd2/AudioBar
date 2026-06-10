@@ -9,6 +9,10 @@ struct AudioPopoverView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
+            if store.needsFirstUseSetup {
+                FirstUseSetupView(store: store)
+                Divider()
+            }
             OutputSourceListView(store: store)
             Divider()
             EQPanelView(store: store)
@@ -85,6 +89,58 @@ struct AudioPopoverView: View {
             return "Refreshes every 3s"
         }
         return "Updated \(lastRefreshDate.formatted(date: .omitted, time: .shortened))"
+    }
+}
+
+private struct FirstUseSetupView: View {
+    @ObservedObject var store: AudioProcessStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "checkmark.shield")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("First Use Setup")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Enable System Audio capture, Input Monitoring, and Accessibility prompts before using EQ or web media controls.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: 8) {
+                PermissionPill(title: "System Audio")
+                PermissionPill(title: "Input Monitoring")
+                PermissionPill(title: "Accessibility")
+
+                Spacer()
+
+                Button("Enable AudioBar") {
+                    store.completeFirstUseSetup()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+}
+
+private struct PermissionPill: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(.tertiary.opacity(0.18), in: Capsule())
     }
 }
 
