@@ -23,6 +23,7 @@ final class AudioProcessStore: ObservableObject {
     private let volumeController: AppVolumeControlling
     private let webAppVolumeController: WebAppKeyboardVolumeController
     private let safariMediaVolumeController: SafariMediaVolumeController
+    private let playbackController: SourcePlaybackController
     private let eqEngine: SystemEQEngine
     private let userDefaults: UserDefaults
     private var timer: Timer?
@@ -38,6 +39,7 @@ final class AudioProcessStore: ObservableObject {
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
         webAppVolumeController: WebAppKeyboardVolumeController = WebAppKeyboardVolumeController(),
         safariMediaVolumeController: SafariMediaVolumeController = SafariMediaVolumeController(),
+        playbackController: SourcePlaybackController = SourcePlaybackController(),
         provider: AudioProcessProviding? = nil,
         eqEngine: SystemEQEngine = SystemEQEngine(),
         userDefaults: UserDefaults = .standard
@@ -45,6 +47,7 @@ final class AudioProcessStore: ObservableObject {
         self.volumeController = volumeController
         self.webAppVolumeController = webAppVolumeController
         self.safariMediaVolumeController = safariMediaVolumeController
+        self.playbackController = playbackController
         self.provider = provider ?? CoreAudioProcessProvider(volumeController: volumeController)
         self.eqEngine = eqEngine
         self.userDefaults = userDefaults
@@ -150,6 +153,15 @@ final class AudioProcessStore: ObservableObject {
         if let index = processes.firstIndex(where: { $0.id == process.id }) {
             processes[index].currentVolume = min(100, max(0, volume))
         }
+    }
+
+    func togglePlayback(for process: AudioProcess) {
+        guard process.playbackCapability.isControllable else {
+            return
+        }
+
+        _ = playbackController.togglePlayback(for: process)
+        refresh()
     }
 
     func setEQGain(_ gain: Double, for frequencyHz: Int) {

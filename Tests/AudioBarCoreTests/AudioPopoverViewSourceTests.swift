@@ -70,6 +70,7 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("VolumeDragBar("))
         XCTAssertTrue(source.contains("store.setVolume(for: process, to: $0)"))
         XCTAssertTrue(source.contains("isEnabled: process.volumeCapability.isAdjustable"))
+        XCTAssertTrue(source.contains("PlaybackControlButton(process: process, store: store)"))
         XCTAssertTrue(source.contains("store.hideSource(process)"))
         XCTAssertFalse(source.contains("Image(systemName: \"lock\")"))
     }
@@ -142,8 +143,21 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(row.contains("Image(systemName: \"eye.slash\")"))
         XCTAssertTrue(row.contains(".opacity(isHovered ? 1 : 0)"))
         XCTAssertTrue(row.contains(".allowsHitTesting(isHovered)"))
-        XCTAssertTrue(row.contains(".frame(width: 148, height: 18, alignment: .trailing)"))
-        XCTAssertTrue(row.contains(".padding(.trailing, 30)"))
+        XCTAssertTrue(row.contains(".frame(width: 174, height: 18, alignment: .trailing)"))
+        XCTAssertTrue(row.contains(".padding(.trailing, 56)"))
+    }
+
+    func testAudioProcessRowsIncludePlaybackControlPerSource() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let playbackButton = try XCTUnwrap(source.slice(
+            from: "private struct PlaybackControlButton",
+            to: "private struct VolumeDragBar"
+        ))
+
+        XCTAssertTrue(playbackButton.contains("process.playbackCapability.isControllable"))
+        XCTAssertTrue(playbackButton.contains("store.togglePlayback(for: process)"))
+        XCTAssertTrue(playbackButton.contains("process.isActiveOutput ? \"pause.fill\" : \"play.fill\""))
+        XCTAssertTrue(playbackButton.contains(".help(playbackHelpText)"))
     }
 
     func testAudioProcessRowsDefaultMissingVolumeToFullVolume() throws {

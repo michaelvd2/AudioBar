@@ -123,6 +123,15 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(setVolumeFunction.contains("didSet = safariMediaVolumeController.setVolume(volume)"))
     }
 
+    func testStoreRoutesPlaybackToggleBySourceCapability() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let togglePlaybackFunction = try XCTUnwrap(source.function(named: "togglePlayback"))
+
+        XCTAssertTrue(source.contains("private let playbackController"))
+        XCTAssertTrue(togglePlaybackFunction.contains("guard process.playbackCapability.isControllable else"))
+        XCTAssertTrue(togglePlaybackFunction.contains("playbackController.togglePlayback(for: process)"))
+    }
+
     private func audioProcessStoreURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

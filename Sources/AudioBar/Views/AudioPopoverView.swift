@@ -445,6 +445,8 @@ private struct AudioProcessRow: View {
     private var control: some View {
         VStack(alignment: .trailing, spacing: 4) {
             HStack(alignment: .center, spacing: 6) {
+                PlaybackControlButton(process: process, store: store)
+
                 VolumeDragBar(
                     value: displayedVolume,
                     isEnabled: process.volumeCapability.isAdjustable,
@@ -474,13 +476,13 @@ private struct AudioProcessRow: View {
                 .allowsHitTesting(isHovered)
                 .help("Hide source")
             }
-            .frame(width: 148, height: 18, alignment: .trailing)
+            .frame(width: 174, height: 18, alignment: .trailing)
 
             Text(volumeLabel)
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 118, alignment: .center)
-                .padding(.trailing, 30)
+                .padding(.trailing, 56)
         }
     }
 
@@ -500,6 +502,32 @@ private struct AudioProcessRow: View {
             return "macOS does not expose a public per-app volume control for this source"
         }
         return "Set source volume"
+    }
+}
+
+private struct PlaybackControlButton: View {
+    let process: AudioProcess
+    @ObservedObject var store: AudioProcessStore
+
+    var body: some View {
+        Button {
+            store.togglePlayback(for: process)
+        } label: {
+            Image(systemName: process.isActiveOutput ? "pause.fill" : "play.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .frame(width: 20, height: 18)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)
+        .disabled(!process.playbackCapability.isControllable)
+        .help(playbackHelpText)
+    }
+
+    private var playbackHelpText: String {
+        guard process.playbackCapability.isControllable else {
+            return "macOS does not expose playback control for this source"
+        }
+        return process.isActiveOutput ? "Pause source" : "Play source"
     }
 }
 
