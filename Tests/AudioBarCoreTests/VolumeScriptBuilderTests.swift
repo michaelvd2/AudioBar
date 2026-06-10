@@ -91,12 +91,23 @@ final class VolumeScriptBuilderTests: XCTestCase {
         XCTAssertTrue(script.contains("target.play()"))
     }
 
-    func testWebAppPlaybackToggleActivatesAppAndPressesSpace() {
+    func testYouTubeWebAppPlaybackToggleUsesYouTubeShortcut() {
         let script = WebAppKeyboardPlaybackCommandBuilder.togglePlaybackScript(
-            bundleID: "com.apple.Safari.WebApp.example"
+            bundleID: "com.apple.Safari.WebApp.example",
+            appName: "YouTube"
         )
 
         XCTAssertTrue(script.contains("tell application id \"com.apple.Safari.WebApp.example\" to activate"))
+        XCTAssertTrue(script.contains("key code 40"))
+        XCTAssertFalse(script.contains("key code 49"))
+    }
+
+    func testGenericWebAppPlaybackToggleFallsBackToSpace() {
+        let script = WebAppKeyboardPlaybackCommandBuilder.togglePlaybackScript(
+            bundleID: "com.apple.Safari.WebApp.example",
+            appName: "Generic Player"
+        )
+
         XCTAssertTrue(script.contains("key code 49"))
     }
 }

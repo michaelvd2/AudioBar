@@ -49,13 +49,15 @@ public enum SafariMediaPlaybackCommandBuilder {
 }
 
 public enum WebAppKeyboardPlaybackCommandBuilder {
-    public static func togglePlaybackScript(bundleID: String) -> String {
-        """
+    public static func togglePlaybackScript(bundleID: String, appName: String) -> String {
+        let keyCode = appName.localizedCaseInsensitiveContains("youtube") ? 40 : 49
+
+        return """
         tell application id "\(bundleID)" to activate
         delay 0.08
         tell application "System Events"
             tell (first process whose bundle identifier is "\(bundleID)")
-                key code 49
+                key code \(keyCode)
             end tell
         end tell
         """
@@ -77,7 +79,10 @@ public final class SourcePlaybackController {
             guard let bundleID = process.volumeControlID else {
                 return false
             }
-            source = WebAppKeyboardPlaybackCommandBuilder.togglePlaybackScript(bundleID: bundleID)
+            source = WebAppKeyboardPlaybackCommandBuilder.togglePlaybackScript(
+                bundleID: bundleID,
+                appName: process.appName
+            )
         case .safariMedia:
             source = SafariMediaPlaybackCommandBuilder.togglePlaybackScript()
         case .unavailable:
