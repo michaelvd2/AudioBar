@@ -4,8 +4,8 @@ set -euo pipefail
 APP_NAME="AudioBar"
 BUNDLE_ID="com.michaelvandijk.AudioBar"
 MIN_SYSTEM_VERSION="14.0"
-APP_VERSION="0.1.6"
-BUILD_NUMBER="7"
+APP_VERSION="0.1.7"
+BUILD_NUMBER="8"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
