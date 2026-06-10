@@ -1,6 +1,7 @@
 import Foundation
 
 public enum WebAppKeyboardVolumeCommandBuilder {
+    #if !APP_STORE
     public static func setYouTubeVolumeScript(bundleID: String, volume: Int) -> String {
         let clamped = min(100, max(0, volume))
         let steps = clamped / 5
@@ -22,6 +23,7 @@ public enum WebAppKeyboardVolumeCommandBuilder {
         end tell
         """
     }
+    #endif
 }
 
 public final class WebAppKeyboardVolumeController {
@@ -32,6 +34,9 @@ public final class WebAppKeyboardVolumeController {
             return false
         }
 
+        #if APP_STORE
+        return false
+        #else
         let script = WebAppKeyboardVolumeCommandBuilder.setYouTubeVolumeScript(
             bundleID: bundleID,
             volume: volume
@@ -43,5 +48,6 @@ public final class WebAppKeyboardVolumeController {
         var error: NSDictionary?
         _ = appleScript.executeAndReturnError(&error)
         return error == nil
+        #endif
     }
 }

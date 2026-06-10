@@ -89,6 +89,27 @@ public enum SafariMediaPlaybackCommandBuilder {
     }
 }
 
+#if APP_STORE
+public final class SystemMediaKeyPlaybackController {
+    public init() {}
+
+    public func togglePlayPause() -> Bool {
+        false
+    }
+}
+
+public final class NowPlayingPlaybackController {
+    public init() {}
+
+    public func togglePlayPause() -> Bool {
+        false
+    }
+
+    public func rewind15Seconds() -> Bool {
+        false
+    }
+}
+#else
 public final class SystemMediaKeyPlaybackController {
     public init() {}
 
@@ -161,6 +182,7 @@ public final class NowPlayingPlaybackController {
         return true
     }
 }
+#endif
 
 public final class SourcePlaybackController {
     private let mediaKeyController: SystemMediaKeyPlaybackController
@@ -183,10 +205,14 @@ public final class SourcePlaybackController {
             }
             source = ScriptPlaybackCommandBuilder.togglePlaybackScript(bundleID: bundleID)
         case .webAppKeyboard:
+            #if APP_STORE
+            return false
+            #else
             if nowPlayingController.togglePlayPause() {
                 return true
             }
             return mediaKeyController.togglePlayPause()
+            #endif
         case .safariMedia:
             source = SafariMediaPlaybackCommandBuilder.togglePlaybackScript()
         case .unavailable:
@@ -210,7 +236,11 @@ public final class SourcePlaybackController {
             }
             source = ScriptPlaybackCommandBuilder.rewind15SecondsScript(bundleID: bundleID)
         case .webAppKeyboard:
+            #if APP_STORE
+            return false
+            #else
             return nowPlayingController.rewind15Seconds()
+            #endif
         case .safariMedia:
             source = SafariMediaPlaybackCommandBuilder.rewind15SecondsScript()
         case .unavailable:

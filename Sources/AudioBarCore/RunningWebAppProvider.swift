@@ -23,6 +23,9 @@ public struct RunningWebAppProvider {
     }
 
     private func windowTitle(forPID pid: pid_t) -> String? {
+        #if APP_STORE
+        return nil
+        #else
         let script = """
         tell application "System Events"
             tell (first process whose unix id is \(pid))
@@ -40,6 +43,7 @@ public struct RunningWebAppProvider {
             return nil
         }
         return descriptor.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+        #endif
     }
 }
 
