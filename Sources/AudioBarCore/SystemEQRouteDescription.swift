@@ -25,6 +25,7 @@ enum SystemEQRouteDescription {
             kAudioAggregateDeviceMainSubDeviceKey: outputDeviceUID,
             kAudioAggregateDeviceClockDeviceKey: outputDeviceUID,
             kAudioAggregateDeviceIsPrivateKey: true,
+            kAudioAggregateDeviceIsStackedKey: false,
             kAudioAggregateDeviceTapAutoStartKey: false,
             kAudioAggregateDeviceSubDeviceListKey: [[
                 kAudioSubDeviceUIDKey: outputDeviceUID,

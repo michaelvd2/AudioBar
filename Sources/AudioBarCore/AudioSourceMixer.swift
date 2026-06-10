@@ -54,4 +54,55 @@ enum AudioSourceMixer {
         }
     }
 
+    static func mixInterleaved(
+        sources: [(pointer: UnsafePointer<Float32>, frameCount: Int, channelCount: Int, gain: Float32)],
+        output: UnsafeMutablePointer<Float32>,
+        frameCount: Int,
+        channelCount: Int
+    ) {
+        let channelCount = max(1, channelCount)
+        let sampleCount = frameCount * channelCount
+        guard sampleCount > 0 else {
+            return
+        }
+
+        for index in 0..<sampleCount {
+            output[index] = 0
+        }
+
+        for source in sources {
+            let sourceChannelCount = max(1, source.channelCount)
+            let sourceFrameCount = min(frameCount, source.frameCount)
+            guard sourceFrameCount > 0 else {
+                continue
+            }
+
+            let gain = max(0, min(1, source.gain))
+            if gain == 0 {
+                continue
+            }
+
+            for frame in 0..<sourceFrameCount {
+                let sourceFrameOffset = frame * sourceChannelCount
+                let outputFrameOffset = frame * channelCount
+
+                if channelCount == 1, sourceChannelCount > 1 {
+                    var monoSample: Float32 = 0
+                    for sourceChannel in 0..<sourceChannelCount {
+                        monoSample += source.pointer[sourceFrameOffset + sourceChannel]
+                    }
+                    output[outputFrameOffset] += (monoSample / Float32(sourceChannelCount)) * gain
+                } else {
+                    for outputChannel in 0..<channelCount {
+                        if outputChannel < sourceChannelCount {
+                            output[outputFrameOffset + outputChannel] += source.pointer[sourceFrameOffset + outputChannel] * gain
+                        } else if sourceChannelCount == 1 {
+                            output[outputFrameOffset + outputChannel] += source.pointer[sourceFrameOffset] * gain
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }

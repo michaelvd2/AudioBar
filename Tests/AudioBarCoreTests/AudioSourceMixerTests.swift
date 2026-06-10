@@ -32,4 +32,112 @@ final class AudioSourceMixerTests: XCTestCase {
 
         XCTAssertEqual(output, [1, 1])
     }
+
+    func testChannelAwareMixerPreservesStereoTapChannelsForSplitSpeakerOutput() {
+        let source: [Float32] = [
+            0.1, 0.9,
+            0.2, 0.8,
+            0.3, 0.7
+        ]
+        var output = Array<Float32>(repeating: 0, count: source.count)
+
+        source.withUnsafeBufferPointer { sourceBuffer in
+            output.withUnsafeMutableBufferPointer { outputBuffer in
+                AudioSourceMixer.mixInterleaved(
+                    sources: [(
+                        pointer: sourceBuffer.baseAddress!,
+                        frameCount: 3,
+                        channelCount: 2,
+                        gain: 1
+                    )],
+                    output: outputBuffer.baseAddress!,
+                    frameCount: 3,
+                    channelCount: 2
+                )
+            }
+        }
+
+        XCTAssertEqual(output, source)
+    }
+
+    func testChannelAwareMixerDownmixesStereoTapForMonoOutputBuffer() {
+        let source: [Float32] = [
+            0.1, 0.9,
+            0.2, 0.8,
+            0.3, 0.7
+        ]
+        var output = Array<Float32>(repeating: 0, count: 3)
+
+        source.withUnsafeBufferPointer { sourceBuffer in
+            output.withUnsafeMutableBufferPointer { outputBuffer in
+                AudioSourceMixer.mixInterleaved(
+                    sources: [(
+                        pointer: sourceBuffer.baseAddress!,
+                        frameCount: 3,
+                        channelCount: 2,
+                        gain: 1
+                    )],
+                    output: outputBuffer.baseAddress!,
+                    frameCount: 3,
+                    channelCount: 1
+                )
+            }
+        }
+
+        XCTAssertEqual(output[0], 0.5, accuracy: 0.0001)
+        XCTAssertEqual(output[1], 0.5, accuracy: 0.0001)
+        XCTAssertEqual(output[2], 0.5, accuracy: 0.0001)
+    }
+
+    func testChannelAwareMixerLeavesExtraMultichannelOutputsSilentForStereoTap() {
+        let source: [Float32] = [
+            0.1, 0.9,
+            0.2, 0.8
+        ]
+        var output = Array<Float32>(repeating: -1, count: 8)
+
+        source.withUnsafeBufferPointer { sourceBuffer in
+            output.withUnsafeMutableBufferPointer { outputBuffer in
+                AudioSourceMixer.mixInterleaved(
+                    sources: [(
+                        pointer: sourceBuffer.baseAddress!,
+                        frameCount: 2,
+                        channelCount: 2,
+                        gain: 1
+                    )],
+                    output: outputBuffer.baseAddress!,
+                    frameCount: 2,
+                    channelCount: 4
+                )
+            }
+        }
+
+        XCTAssertEqual(output, [
+            0.1, 0.9, 0, 0,
+            0.2, 0.8, 0, 0
+        ])
+    }
+
+    func testChannelAwareMixerFansMonoSourceOutToStereoOutput() {
+        let source: [Float32] = [0.25, 0.5]
+        var output = Array<Float32>(repeating: 0, count: 4)
+
+        source.withUnsafeBufferPointer { sourceBuffer in
+            output.withUnsafeMutableBufferPointer { outputBuffer in
+                AudioSourceMixer.mixInterleaved(
+                    sources: [(
+                        pointer: sourceBuffer.baseAddress!,
+                        frameCount: 2,
+                        channelCount: 1,
+                        gain: 1
+                    )],
+                    output: outputBuffer.baseAddress!,
+                    frameCount: 2,
+                    channelCount: 2
+                )
+            }
+        }
+
+        XCTAssertEqual(output, [0.25, 0.25, 0.5, 0.5])
+    }
 }

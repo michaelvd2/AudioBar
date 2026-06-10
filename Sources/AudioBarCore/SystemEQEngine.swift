@@ -52,6 +52,7 @@ public final class SystemEQEngine: @unchecked Sendable {
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
     private var ioProcID: AudioDeviceIOProcID?
     private var currentStreamSnapshot = SystemAudioStreamSnapshot.inactive
+    private var didLogIOBufferLayout = false
 
     public init() {}
 
@@ -180,7 +181,7 @@ public final class SystemEQEngine: @unchecked Sendable {
         }
 
         status = .active
-        systemEQLogger.info("System EQ route active; output-clocked with zero extra latency")
+        systemEQLogger.info("System EQ route active; outputDevice=\(outputDeviceUID, privacy: .public) tapCount=\(tapUIDs.count) tapFormat=\(self.formatSummary(tapFormat), privacy: .public)")
         return status
     }
 
@@ -264,62 +265,184 @@ public final class SystemEQEngine: @unchecked Sendable {
 
         let inputBuffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: inputData))
         let outputBuffers = UnsafeMutableAudioBufferListPointer(outputData)
+        logIOBufferLayoutOnce(inputBuffers: inputBuffers, outputBuffers: outputBuffers)
 
-        for outputIndex in 0..<outputBuffers.count {
-            guard let outputPointer = outputBuffers[outputIndex].mData?.assumingMemoryBound(to: Float32.self) else {
-                if let outputData = outputBuffers[outputIndex].mData {
-                    memset(outputData, 0, Int(outputBuffers[outputIndex].mDataByteSize))
-                }
+        let outputChannelCount = renderedOutputChannelCount(outputBuffers: outputBuffers)
+        let frameCount = renderedFrameCount(outputBuffers: outputBuffers, channelCount: outputChannelCount)
+        guard frameCount > 0 else {
+            clearOutputBuffers(outputBuffers)
+            return
+        }
+
+        var sources: [(pointer: UnsafePointer<Float32>, frameCount: Int, channelCount: Int, gain: Float32)] = []
+        for inputIndex in 0..<inputBuffers.count {
+            guard let inputPointer = inputBuffers[inputIndex].mData?.assumingMemoryBound(to: Float32.self) else {
                 continue
             }
-
-            let channelCount = max(1, Int(outputBuffers[outputIndex].mNumberChannels))
-            let outputByteCount = outputBuffers[outputIndex].mDataByteSize
-            let frameCount = Int(outputByteCount) / (MemoryLayout<Float32>.stride * channelCount)
-            let sampleCount = frameCount * channelCount
-            guard sampleCount > 0 else {
-                outputBuffers[outputIndex].mDataByteSize = 0
+            let inputChannelCount = max(1, Int(inputBuffers[inputIndex].mNumberChannels))
+            let inputSampleCount = Int(inputBuffers[inputIndex].mDataByteSize) / MemoryLayout<Float32>.stride
+            let inputFrameCount = inputSampleCount / inputChannelCount
+            guard inputFrameCount > 0 else {
                 continue
             }
+            let gain = gainForInputBuffer(at: inputIndex, inputBufferCount: inputBuffers.count)
+            sources.append((
+                pointer: UnsafePointer(inputPointer),
+                frameCount: inputFrameCount,
+                channelCount: inputChannelCount,
+                gain: gain
+            ))
+        }
 
-            var sources: [(pointer: UnsafePointer<Float32>, sampleCount: Int, gain: Float32)] = []
-            for inputIndex in 0..<inputBuffers.count {
-                guard let inputPointer = inputBuffers[inputIndex].mData?.assumingMemoryBound(to: Float32.self) else {
-                    continue
-                }
-                let inputChannelCount = max(1, Int(inputBuffers[inputIndex].mNumberChannels))
-                guard inputChannelCount == channelCount else {
-                    continue
-                }
-                let inputSampleCount = Int(inputBuffers[inputIndex].mDataByteSize) / MemoryLayout<Float32>.stride
-                let gain = gainForInputBuffer(at: inputIndex, inputBufferCount: inputBuffers.count)
-                sources.append((pointer: UnsafePointer(inputPointer), sampleCount: inputSampleCount, gain: gain))
-            }
-
-            withUnsafeTemporaryAllocation(of: Float32.self, capacity: sampleCount) { mixedBuffer in
-                guard let mixedBase = mixedBuffer.baseAddress else {
+        let sampleCount = frameCount * outputChannelCount
+        withUnsafeTemporaryAllocation(of: Float32.self, capacity: sampleCount) { mixedBuffer in
+            withUnsafeTemporaryAllocation(of: Float32.self, capacity: sampleCount) { processedBuffer in
+                guard let mixedBase = mixedBuffer.baseAddress,
+                      let processedBase = processedBuffer.baseAddress
+                else {
                     return
                 }
                 AudioSourceMixer.mixInterleaved(
                     sources: sources,
                     output: mixedBase,
-                    sampleCount: sampleCount
+                    frameCount: frameCount,
+                    channelCount: outputChannelCount
                 )
                 let inputLevelDB = levelDB(samples: mixedBase, count: sampleCount)
 
                 processor.processInterleaved(
                     input: mixedBase,
-                    output: outputPointer,
+                    output: processedBase,
                     frameCount: frameCount,
-                    channelCount: channelCount
+                    channelCount: outputChannelCount
                 )
-                let outputLevelDB = levelDB(samples: outputPointer, count: sampleCount)
+                writeInterleaved(processedBase, frameCount: frameCount, channelCount: outputChannelCount, to: outputBuffers)
+                let outputLevelDB = levelDB(samples: processedBase, count: sampleCount)
                 updateStreamLevels(inputLevelDB: inputLevelDB, outputLevelDB: outputLevelDB)
             }
-            outputBuffers[outputIndex].mDataByteSize = UInt32(
-                frameCount * channelCount * MemoryLayout<Float32>.stride
-            )
         }
+    }
+
+    private func renderedOutputChannelCount(outputBuffers: UnsafeMutableAudioBufferListPointer) -> Int {
+        guard outputBuffers.count > 0 else {
+            return 1
+        }
+
+        if outputBuffers.count == 1 {
+            return max(1, Int(outputBuffers[0].mNumberChannels))
+        }
+
+        let totalChannels = outputBuffers.reduce(0) { $0 + max(1, Int($1.mNumberChannels)) }
+        return max(1, totalChannels)
+    }
+
+    private func renderedFrameCount(
+        outputBuffers: UnsafeMutableAudioBufferListPointer,
+        channelCount: Int
+    ) -> Int {
+        guard outputBuffers.count > 0 else {
+            return 0
+        }
+
+        if outputBuffers.count == 1 {
+            let outputChannelCount = max(1, Int(outputBuffers[0].mNumberChannels))
+            return Int(outputBuffers[0].mDataByteSize) / (MemoryLayout<Float32>.stride * outputChannelCount)
+        }
+
+        return outputBuffers.map { buffer in
+            Int(buffer.mDataByteSize) / (MemoryLayout<Float32>.stride * max(1, Int(buffer.mNumberChannels)))
+        }.min() ?? 0
+    }
+
+    private func clearOutputBuffers(_ outputBuffers: UnsafeMutableAudioBufferListPointer) {
+        for outputIndex in 0..<outputBuffers.count {
+            if let outputData = outputBuffers[outputIndex].mData {
+                memset(outputData, 0, Int(outputBuffers[outputIndex].mDataByteSize))
+            }
+            outputBuffers[outputIndex].mDataByteSize = 0
+        }
+    }
+
+    private func writeInterleaved(
+        _ source: UnsafePointer<Float32>,
+        frameCount: Int,
+        channelCount: Int,
+        to outputBuffers: UnsafeMutableAudioBufferListPointer
+    ) {
+        let channelCount = max(1, channelCount)
+        guard frameCount > 0 else {
+            clearOutputBuffers(outputBuffers)
+            return
+        }
+
+        if outputBuffers.count == 1 {
+            let outputChannelCount = max(1, Int(outputBuffers[0].mNumberChannels))
+            let outputFrameCount = min(
+                frameCount,
+                Int(outputBuffers[0].mDataByteSize) / (MemoryLayout<Float32>.stride * outputChannelCount)
+            )
+            if let outputPointer = outputBuffers[0].mData?.assumingMemoryBound(to: Float32.self) {
+                for frame in 0..<outputFrameCount {
+                    for outputChannel in 0..<outputChannelCount {
+                        let sourceChannel = min(outputChannel, channelCount - 1)
+                        outputPointer[frame * outputChannelCount + outputChannel] = source[frame * channelCount + sourceChannel]
+                    }
+                }
+                outputBuffers[0].mDataByteSize = UInt32(
+                    outputFrameCount * outputChannelCount * MemoryLayout<Float32>.stride
+                )
+            }
+            return
+        }
+
+        var outputChannelOffset = 0
+        for outputIndex in 0..<outputBuffers.count {
+            let outputChannelCount = max(1, Int(outputBuffers[outputIndex].mNumberChannels))
+            let outputFrameCount = min(
+                frameCount,
+                Int(outputBuffers[outputIndex].mDataByteSize) / (MemoryLayout<Float32>.stride * outputChannelCount)
+            )
+
+            guard let outputPointer = outputBuffers[outputIndex].mData?.assumingMemoryBound(to: Float32.self) else {
+                outputChannelOffset += outputChannelCount
+                continue
+            }
+
+            for frame in 0..<outputFrameCount {
+                for localChannel in 0..<outputChannelCount {
+                    let sourceChannel = min(outputChannelOffset + localChannel, channelCount - 1)
+                    outputPointer[frame * outputChannelCount + localChannel] = source[frame * channelCount + sourceChannel]
+                }
+            }
+            outputBuffers[outputIndex].mDataByteSize = UInt32(
+                outputFrameCount * outputChannelCount * MemoryLayout<Float32>.stride
+            )
+            outputChannelOffset += outputChannelCount
+        }
+    }
+
+    private func logIOBufferLayoutOnce(
+        inputBuffers: UnsafeMutableAudioBufferListPointer,
+        outputBuffers: UnsafeMutableAudioBufferListPointer
+    ) {
+        guard lock.try() else {
+            return
+        }
+        defer { lock.unlock() }
+
+        guard !didLogIOBufferLayout else {
+            return
+        }
+        didLogIOBufferLayout = true
+
+        let inputLayout = (0..<inputBuffers.count)
+            .map { "\(inputBuffers[$0].mNumberChannels)ch/\(inputBuffers[$0].mDataByteSize)b" }
+            .joined(separator: ",")
+        let outputLayout = (0..<outputBuffers.count)
+            .map { "\(outputBuffers[$0].mNumberChannels)ch/\(outputBuffers[$0].mDataByteSize)b" }
+            .joined(separator: ",")
+
+        systemEQLogger.info("System EQ IO layout input=[\(inputLayout, privacy: .public)] output=[\(outputLayout, privacy: .public)]")
     }
 
     private func gainForInputBuffer(at inputIndex: Int, inputBufferCount: Int) -> Float32 {
@@ -384,6 +507,7 @@ public final class SystemEQEngine: @unchecked Sendable {
         }
         tapIDs = []
         inputBufferProcessObjectIDs = []
+        didLogIOBufferLayout = false
 
         if updateStatus {
             status = .stopped

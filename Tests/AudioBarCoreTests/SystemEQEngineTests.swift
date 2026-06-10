@@ -59,6 +59,7 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertEqual(description[kAudioAggregateDeviceMainSubDeviceKey] as? String, "output")
         XCTAssertEqual(description[kAudioAggregateDeviceClockDeviceKey] as? String, "output")
         XCTAssertEqual(description[kAudioAggregateDeviceTapAutoStartKey] as? Bool, false)
+        XCTAssertEqual(description[kAudioAggregateDeviceIsStackedKey] as? Bool, false)
 
         let subDevices = description[kAudioAggregateDeviceSubDeviceListKey] as? [[String: Any]]
         XCTAssertEqual(subDevices?.first?[kAudioSubDeviceUIDKey] as? String, "output")
