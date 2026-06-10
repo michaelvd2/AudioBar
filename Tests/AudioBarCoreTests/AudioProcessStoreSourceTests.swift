@@ -148,6 +148,10 @@ final class AudioProcessStoreSourceTests: XCTestCase {
     func testWebAppPlaybackUsesBackgroundMediaKeyInsteadOfActivatingWebApp() throws {
         let source = try String(contentsOf: sourcePlaybackControllerURL(), encoding: .utf8)
 
+        XCTAssertTrue(source.contains("private let nowPlayingController"))
+        XCTAssertTrue(source.contains("nowPlayingController.togglePlayPause()"))
+        XCTAssertTrue(source.contains("MRMediaRemoteSendCommand"))
+        XCTAssertTrue(source.contains("let togglePlayPauseCommand: Int32 = 2"))
         XCTAssertTrue(source.contains("private let mediaKeyController"))
         XCTAssertTrue(source.contains("mediaKeyController.togglePlayPause()"))
         XCTAssertTrue(source.contains("CGPreflightListenEventAccess()"))

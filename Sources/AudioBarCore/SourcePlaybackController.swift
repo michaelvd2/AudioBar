@@ -95,11 +95,41 @@ public final class SystemMediaKeyPlaybackController {
     }
 }
 
+public final class NowPlayingPlaybackController {
+    private typealias SendCommand = @convention(c) (Int32, CFDictionary?) -> Void
+
+    private let frameworkPath = "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote"
+    private let togglePlayPauseCommand: Int32 = 2
+
+    public init() {}
+
+    public func togglePlayPause() -> Bool {
+        guard
+            let handle = dlopen(frameworkPath, RTLD_NOW),
+            let symbol = dlsym(handle, "MRMediaRemoteSendCommand")
+        else {
+            playbackLogger.info("MediaRemote unavailable for Now Playing command")
+            return false
+        }
+        defer { dlclose(handle) }
+
+        let sendCommand = unsafeBitCast(symbol, to: SendCommand.self)
+        sendCommand(togglePlayPauseCommand, nil)
+        playbackLogger.info("Sent Now Playing toggle through MediaRemote")
+        return true
+    }
+}
+
 public final class SourcePlaybackController {
     private let mediaKeyController: SystemMediaKeyPlaybackController
+    private let nowPlayingController: NowPlayingPlaybackController
 
-    public init(mediaKeyController: SystemMediaKeyPlaybackController = SystemMediaKeyPlaybackController()) {
+    public init(
+        mediaKeyController: SystemMediaKeyPlaybackController = SystemMediaKeyPlaybackController(),
+        nowPlayingController: NowPlayingPlaybackController = NowPlayingPlaybackController()
+    ) {
         self.mediaKeyController = mediaKeyController
+        self.nowPlayingController = nowPlayingController
     }
 
     public func togglePlayback(for process: AudioProcess) -> Bool {
@@ -111,6 +141,9 @@ public final class SourcePlaybackController {
             }
             source = ScriptPlaybackCommandBuilder.togglePlaybackScript(bundleID: bundleID)
         case .webAppKeyboard:
+            if nowPlayingController.togglePlayPause() {
+                return true
+            }
             return mediaKeyController.togglePlayPause()
         case .safariMedia:
             source = SafariMediaPlaybackCommandBuilder.togglePlaybackScript()
