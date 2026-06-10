@@ -28,6 +28,24 @@ final class ReleasePackagingScriptTests: XCTestCase {
         XCTAssertTrue(entitlements.contains("<true/>"))
     }
 
+    func testReleasePackagingCarriesCurrentBundleVersion() throws {
+        let script = try String(contentsOf: packageReleaseScriptURL(), encoding: .utf8)
+
+        XCTAssertTrue(script.contains("APP_VERSION=\"0.1.1\""))
+        XCTAssertTrue(script.contains("BUILD_NUMBER=\"2\""))
+        XCTAssertTrue(script.contains("CFBundleShortVersionString"))
+        XCTAssertTrue(script.contains("<string>$APP_VERSION</string>"))
+        XCTAssertTrue(script.contains("CFBundleVersion"))
+        XCTAssertTrue(script.contains("<string>$BUILD_NUMBER</string>"))
+    }
+
+    func testDownloadPageLinksToCurrentRelease() throws {
+        let page = try String(contentsOf: docsIndexURL(), encoding: .utf8)
+
+        XCTAssertTrue(page.contains("/releases/download/v0.1.1/AudioBar-notarized.zip"))
+        XCTAssertFalse(page.contains("/releases/download/v0.1.0/AudioBar-notarized.zip"))
+    }
+
     func testRunScriptIncludesGuidedPermissionUsageDescriptions() throws {
         let script = try String(contentsOf: buildRunScriptURL(), encoding: .utf8)
 
@@ -51,6 +69,14 @@ final class ReleasePackagingScriptTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("script/build_and_run.sh")
+    }
+
+    private func docsIndexURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("docs/index.html")
     }
 
     private func entitlementsURL() -> URL {

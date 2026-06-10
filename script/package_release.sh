@@ -4,6 +4,8 @@ set -euo pipefail
 APP_NAME="AudioBar"
 BUNDLE_ID="com.michaelvandijk.AudioBar"
 MIN_SYSTEM_VERSION="14.0"
+APP_VERSION="0.1.1"
+BUILD_NUMBER="2"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -75,6 +77,10 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$BUNDLE_ID</string>
   <key>CFBundleName</key>
   <string>$APP_NAME</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$APP_VERSION</string>
+  <key>CFBundleVersion</key>
+  <string>$BUILD_NUMBER</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>LSMinimumSystemVersion</key>
