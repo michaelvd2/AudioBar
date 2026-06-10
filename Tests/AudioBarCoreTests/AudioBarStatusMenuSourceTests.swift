@@ -28,6 +28,15 @@ final class AudioBarStatusMenuSourceTests: XCTestCase {
         XCTAssertFalse(source.contains("popover.behavior = .transient"))
     }
 
+    func testPopoverClosesWhenAppMovesToBackground() throws {
+        let source = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("NSApplication.didResignActiveNotification"))
+        XCTAssertTrue(source.contains("#selector(closePopoverWhenAppResignsActive)"))
+        XCTAssertTrue(source.contains("@objc private func closePopoverWhenAppResignsActive"))
+        XCTAssertTrue(source.contains("popover.performClose(nil)"))
+    }
+
     private func audioBarAppURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

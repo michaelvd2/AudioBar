@@ -13,6 +13,11 @@ final class AudioBarStatusBarController: NSObject {
         super.init()
         configureButton()
         configurePopover()
+        observeAppDeactivation()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     private func configureButton() {
@@ -31,6 +36,15 @@ final class AudioBarStatusBarController: NSObject {
         popover.behavior = .applicationDefined
         popover.contentSize = NSSize(width: 430, height: 560)
         popover.contentViewController = NSHostingController(rootView: AudioPopoverView(store: store))
+    }
+
+    private func observeAppDeactivation() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(closePopoverWhenAppResignsActive),
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
     }
 
     @objc private func handleStatusButtonAction(_ sender: NSStatusBarButton) {
@@ -87,5 +101,9 @@ final class AudioBarStatusBarController: NSObject {
 
     @objc private func quitFromMenu() {
         NSApp.terminate(nil)
+    }
+
+    @objc private func closePopoverWhenAppResignsActive() {
+        popover.performClose(nil)
     }
 }
