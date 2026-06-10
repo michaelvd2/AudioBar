@@ -1,5 +1,12 @@
 import AppKit
+import CoreGraphics
 import Foundation
+import OSLog
+
+private let playbackLogger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.michaelvandijk.AudioBar",
+    category: "Playback"
+)
 
 public enum ScriptedAppPlaybackSupport {
     public static let unsupportedReason = "No public per-source playback control"
@@ -53,9 +60,19 @@ public final class SystemMediaKeyPlaybackController {
     public init() {}
 
     public func togglePlayPause() -> Bool {
+        guard hasInputMonitoringAccess() else {
+            playbackLogger.info("Requesting Input Monitoring access for system play/pause media key")
+            return CGRequestListenEventAccess()
+        }
+
+        playbackLogger.info("Posting system play/pause media key; inputMonitoringTrusted=true")
         postMediaKey(NX_KEYTYPE_PLAY, state: NX_KEYDOWN)
         postMediaKey(NX_KEYTYPE_PLAY, state: NX_KEYUP)
         return true
+    }
+
+    private func hasInputMonitoringAccess() -> Bool {
+        CGPreflightListenEventAccess()
     }
 
     private func postMediaKey(_ key: Int32, state: Int32) {

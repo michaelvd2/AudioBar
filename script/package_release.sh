@@ -85,6 +85,8 @@ cat >"$INFO_PLIST" <<PLIST
   <string>NSApplication</string>
   <key>NSAudioCaptureUsageDescription</key>
   <string>AudioBar captures system audio so the menu bar EQ can process it.</string>
+  <key>NSInputMonitoringUsageDescription</key>
+  <string>AudioBar sends the system play/pause media key so web audio can be paused without switching apps.</string>
 </dict>
 </plist>
 PLIST

@@ -137,6 +137,8 @@ final class AudioProcessStoreSourceTests: XCTestCase {
 
         XCTAssertTrue(source.contains("private let mediaKeyController"))
         XCTAssertTrue(source.contains("mediaKeyController.togglePlayPause()"))
+        XCTAssertTrue(source.contains("CGPreflightListenEventAccess()"))
+        XCTAssertTrue(source.contains("CGRequestListenEventAccess()"))
         XCTAssertFalse(source.contains("WebAppKeyboardPlaybackCommandBuilder"))
         XCTAssertFalse(source.contains("to activate"))
         XCTAssertFalse(source.contains("key code 40"))

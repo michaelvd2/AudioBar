@@ -22,8 +22,16 @@ final class ReleasePackagingScriptTests: XCTestCase {
         let entitlements = try String(contentsOf: entitlementsURL(), encoding: .utf8)
 
         XCTAssertTrue(script.contains("NSAudioCaptureUsageDescription"))
+        XCTAssertTrue(script.contains("NSInputMonitoringUsageDescription"))
         XCTAssertTrue(entitlements.contains("com.apple.security.device.audio-input"))
         XCTAssertTrue(entitlements.contains("<true/>"))
+    }
+
+    func testRunScriptIncludesInputMonitoringUsageDescription() throws {
+        let script = try String(contentsOf: buildRunScriptURL(), encoding: .utf8)
+
+        XCTAssertTrue(script.contains("NSInputMonitoringUsageDescription"))
+        XCTAssertTrue(script.contains("play/pause media key"))
     }
 
     private func packageReleaseScriptURL() -> URL {
@@ -32,6 +40,14 @@ final class ReleasePackagingScriptTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("script/package_release.sh")
+    }
+
+    private func buildRunScriptURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("script/build_and_run.sh")
     }
 
     private func entitlementsURL() -> URL {
