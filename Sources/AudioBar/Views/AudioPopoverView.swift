@@ -21,6 +21,7 @@ struct AudioPopoverView: View {
             footer
         }
         .frame(width: 430)
+        .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             store.startAutoRefresh()
         }

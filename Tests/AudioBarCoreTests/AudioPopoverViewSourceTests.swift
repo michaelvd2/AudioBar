@@ -2,6 +2,13 @@ import Foundation
 import XCTest
 
 final class AudioPopoverViewSourceTests: XCTestCase {
+    func testPopoverRootUsesOpaqueSystemBackgroundForReadableContrast() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let body = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
+
+        XCTAssertTrue(body.contains(".background(Color(nsColor: .windowBackgroundColor))"))
+    }
+
     func testEQPanelKeepsOneSwitchControl() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let eqPanel = try XCTUnwrap(source.slice(
