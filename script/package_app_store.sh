@@ -25,6 +25,7 @@ APP_STORE_APP_SIGN_IDENTITY="${APP_STORE_APP_SIGN_IDENTITY:-}"
 APP_STORE_INSTALLER_SIGN_IDENTITY="${APP_STORE_INSTALLER_SIGN_IDENTITY:-}"
 APP_STORE_CONNECT_USERNAME="${APP_STORE_CONNECT_USERNAME:-}"
 APP_STORE_CONNECT_PASSWORD="${APP_STORE_CONNECT_PASSWORD:-}"
+APP_STORE_CONNECT_PROVIDER_PUBLIC_ID="${APP_STORE_CONNECT_PROVIDER_PUBLIC_ID:-}"
 
 cd "$ROOT_DIR"
 
@@ -126,6 +127,8 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$APP_BUILD</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.utilities</string>
   <key>LSUIElement</key>
   <true/>
   <key>NSAppleEventsUsageDescription</key>
@@ -152,13 +155,23 @@ productbuild \
   "$PKG_PATH"
 
 if [[ -n "$APP_STORE_CONNECT_USERNAME" && -n "$APP_STORE_CONNECT_PASSWORD" ]]; then
-  xcrun altool --validate-app "$PKG_PATH" \
-    --username "$APP_STORE_CONNECT_USERNAME" \
-    --password "$APP_STORE_CONNECT_PASSWORD"
+  VALIDATE_ARGS=(
+    --validate-app
+    --file "$PKG_PATH"
+    --type macos
+    --username "$APP_STORE_CONNECT_USERNAME"
+    --app-password "$APP_STORE_CONNECT_PASSWORD"
+  )
+
+  if [[ -n "$APP_STORE_CONNECT_PROVIDER_PUBLIC_ID" ]]; then
+    VALIDATE_ARGS+=(--provider-public-id "$APP_STORE_CONNECT_PROVIDER_PUBLIC_ID")
+  fi
+
+  xcrun altool "${VALIDATE_ARGS[@]}"
 else
   echo "Skipping App Store validation because App Store Connect credentials were not provided."
   echo "Run validation with:"
-  echo "  APP_STORE_CONNECT_USERNAME=<apple-id> APP_STORE_CONNECT_PASSWORD=<app-specific-password-or-keychain-ref> $0"
+  echo "  APP_STORE_CONNECT_USERNAME=<apple-id> APP_STORE_CONNECT_PASSWORD=<app-specific-password-or-keychain-ref> APP_STORE_CONNECT_PROVIDER_PUBLIC_ID=<provider-public-id> $0"
 fi
 
 echo "Created App Store candidate package:"
