@@ -27,7 +27,7 @@ check_fail() {
 if [[ -z "$APP_STORE_APP_SIGN_IDENTITY" ]]; then
   APP_STORE_APP_SIGN_IDENTITY="$(
     security find-identity -v -p codesigning |
-      sed -n 's/.*"\(3rd Party Mac Developer Application: [^"]*\)".*/\1/p; s/.*"\(Apple Distribution: [^"]*\)".*/\1/p' |
+      sed -n 's/.*"\(Mac App Distribution: [^"]*\)".*/\1/p; s/.*"\(3rd Party Mac Developer Application: [^"]*\)".*/\1/p; s/.*"\(Apple Distribution: [^"]*\)".*/\1/p' |
       head -n 1
   )"
 fi
@@ -41,7 +41,7 @@ fi
 if [[ -z "$APP_STORE_INSTALLER_SIGN_IDENTITY" ]]; then
   APP_STORE_INSTALLER_SIGN_IDENTITY="$(
     security find-identity -v -p basic |
-      sed -n 's/.*"\(3rd Party Mac Developer Installer: [^"]*\)".*/\1/p; s/.*"\(Mac Installer Distribution: [^"]*\)".*/\1/p' |
+      sed -n 's/.*"\(Mac Installer Distribution: [^"]*\)".*/\1/p; s/.*"\(3rd Party Mac Developer Installer: [^"]*\)".*/\1/p' |
       head -n 1
   )"
 fi

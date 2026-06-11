@@ -31,7 +31,7 @@ cd "$ROOT_DIR"
 if [[ -z "$APP_STORE_APP_SIGN_IDENTITY" ]]; then
   APP_STORE_APP_SIGN_IDENTITY="$(
     security find-identity -v -p codesigning |
-      sed -n 's/.*"\(3rd Party Mac Developer Application: [^"]*\)".*/\1/p; s/.*"\(Apple Distribution: [^"]*\)".*/\1/p' |
+      sed -n 's/.*"\(Mac App Distribution: [^"]*\)".*/\1/p; s/.*"\(3rd Party Mac Developer Application: [^"]*\)".*/\1/p; s/.*"\(Apple Distribution: [^"]*\)".*/\1/p' |
       head -n 1
   )"
 fi
@@ -39,7 +39,7 @@ fi
 if [[ -z "$APP_STORE_INSTALLER_SIGN_IDENTITY" ]]; then
   APP_STORE_INSTALLER_SIGN_IDENTITY="$(
     security find-identity -v -p basic |
-      sed -n 's/.*"\(3rd Party Mac Developer Installer: [^"]*\)".*/\1/p; s/.*"\(Mac Installer Distribution: [^"]*\)".*/\1/p' |
+      sed -n 's/.*"\(Mac Installer Distribution: [^"]*\)".*/\1/p; s/.*"\(3rd Party Mac Developer Installer: [^"]*\)".*/\1/p' |
       head -n 1
   )"
 fi
@@ -49,7 +49,7 @@ if [[ -z "$APP_STORE_APP_SIGN_IDENTITY" ]]; then
 Missing App Store application signing identity.
 
 Install a Mac App Store application distribution certificate, or pass:
-  APP_STORE_APP_SIGN_IDENTITY="3rd Party Mac Developer Application: Your Name (TEAMID)" $0
+  APP_STORE_APP_SIGN_IDENTITY="Mac App Distribution: Your Name (TEAMID)" $0
 ERROR
   exit 2
 fi
@@ -59,7 +59,7 @@ if [[ -z "$APP_STORE_INSTALLER_SIGN_IDENTITY" ]]; then
 Missing App Store installer signing identity.
 
 Install a Mac App Store installer distribution certificate, or pass:
-  APP_STORE_INSTALLER_SIGN_IDENTITY="3rd Party Mac Developer Installer: Your Name (TEAMID)" $0
+  APP_STORE_INSTALLER_SIGN_IDENTITY="Mac Installer Distribution: Your Name (TEAMID)" $0
 ERROR
   exit 2
 fi
