@@ -5,7 +5,7 @@ APP_NAME="AudioBar"
 BUNDLE_ID="com.michaelvandijk.AudioBar"
 MIN_SYSTEM_VERSION="14.2"
 APP_VERSION="${APP_VERSION:-0.1.7}"
-APP_BUILD="${APP_BUILD:-8}"
+APP_BUILD="${APP_BUILD:-9}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -140,6 +140,12 @@ cat >"$INFO_PLIST" <<PLIST
 </dict>
 </plist>
 PLIST
+
+xattr -cr "$APP_BUNDLE"
+if xattr -lr "$APP_BUNDLE" | grep -q 'com.apple.quarantine'; then
+  echo "App bundle still contains com.apple.quarantine extended attributes." >&2
+  exit 2
+fi
 
 codesign \
   --force \
