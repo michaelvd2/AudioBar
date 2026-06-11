@@ -8,6 +8,7 @@ final class AudioBarStatusBarController: NSObject {
     private let popover = NSPopover()
     private var outsideClickMonitor: Any?
     private var localClickMonitor: Any?
+    private var suppressResignActiveCloseUntil: Date?
 
     init(store: AudioProcessStore) {
         self.store = store
@@ -16,6 +17,7 @@ final class AudioBarStatusBarController: NSObject {
         configureButton()
         configurePopover()
         observeAppDeactivation()
+        observeVolumeCommandRetention()
     }
 
     deinit {
@@ -49,6 +51,15 @@ final class AudioBarStatusBarController: NSObject {
             selector: #selector(closePopoverWhenAppResignsActive),
             name: NSApplication.didResignActiveNotification,
             object: nil
+        )
+    }
+
+    private func observeVolumeCommandRetention() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(retainPopoverForExternalVolumeCommand),
+            name: Notification.Name.audioBarWillRunExternalVolumeCommand,
+            object: store
         )
     }
 
@@ -110,7 +121,26 @@ final class AudioBarStatusBarController: NSObject {
     }
 
     @objc private func closePopoverWhenAppResignsActive() {
+        if shouldSuppressResignActiveClose() {
+            return
+        }
+
         closePopover()
+    }
+
+    @objc private func retainPopoverForExternalVolumeCommand() {
+        suppressResignActiveCloseUntil = Date().addingTimeInterval(1.2)
+    }
+
+    private func shouldSuppressResignActiveClose() -> Bool {
+        guard let suppressResignActiveCloseUntil else {
+            return false
+        }
+        if suppressResignActiveCloseUntil > Date() {
+            return true
+        }
+        self.suppressResignActiveCloseUntil = nil
+        return false
     }
 
     private func closePopover() {

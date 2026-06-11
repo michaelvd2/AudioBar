@@ -81,6 +81,28 @@ final class VolumeScriptBuilderTests: XCTestCase {
         )
     }
 
+    func testScriptedTrackNavigationUsesApplicationID() {
+        let previousScript = ScriptPlaybackCommandBuilder.previousTrackScript(bundleID: "com.spotify.client")
+        let nextScript = ScriptPlaybackCommandBuilder.nextTrackScript(bundleID: "com.spotify.client")
+
+        XCTAssertEqual(
+            previousScript,
+            """
+            tell application id "com.spotify.client"
+                previous track
+            end tell
+            """
+        )
+        XCTAssertEqual(
+            nextScript,
+            """
+            tell application id "com.spotify.client"
+                next track
+            end tell
+            """
+        )
+    }
+
     func testScriptedPlaybackRewindUsesApplicationIDAndPlayerPosition() {
         let script = ScriptPlaybackCommandBuilder.rewind15SecondsScript(bundleID: "com.spotify.client")
 

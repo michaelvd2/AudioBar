@@ -175,12 +175,16 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(row.contains("Image(systemName: \"eye.slash\")"))
         XCTAssertTrue(row.contains(".opacity(isHovered ? 1 : 0)"))
         XCTAssertTrue(row.contains(".allowsHitTesting(isHovered)"))
-        XCTAssertTrue(row.contains(".frame(width: 234, height: 42, alignment: .trailing)"))
-        XCTAssertTrue(row.contains(".padding(.trailing, 56)"))
+        XCTAssertTrue(row.contains(".frame(width: 258, height: 42, alignment: .trailing)"))
+        XCTAssertTrue(row.contains(".padding(.trailing, 26)"))
     }
 
     func testAudioProcessRowsIncludePlaybackControlPerSource() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var volumeLabel"
+        ))
         let playbackButton = try XCTUnwrap(source.slice(
             from: "private struct PlaybackControlButton",
             to: "private struct RewindPlaybackButton"
@@ -189,17 +193,35 @@ final class AudioPopoverViewSourceTests: XCTestCase {
             from: "private struct RewindPlaybackButton",
             to: "private struct VolumeDragBar"
         ))
+        let previousButton = try XCTUnwrap(source.slice(
+            from: "private struct PreviousTrackButton",
+            to: "private struct PlaybackControlButton"
+        ))
+        let nextButton = try XCTUnwrap(source.slice(
+            from: "private struct NextTrackButton",
+            to: "private struct RewindPlaybackButton"
+        ))
 
+        XCTAssertTrue(row.contains("PreviousTrackButton(process: process, store: store)"))
         XCTAssertTrue(playbackButton.contains("process.playbackCapability.isControllable"))
         XCTAssertTrue(playbackButton.contains("store.togglePlayback(for: process)"))
         XCTAssertTrue(playbackButton.contains("store.isPlaybackPlaying(process) ? \"pause.fill\" : \"play.fill\""))
-        XCTAssertTrue(playbackButton.contains(".font(.system(size: 19, weight: .semibold))"))
-        XCTAssertTrue(playbackButton.contains(".frame(width: 32, height: 31)"))
+        XCTAssertTrue(playbackButton.contains(".font(.system(size: 16, weight: .semibold))"))
+        XCTAssertTrue(playbackButton.contains(".frame(width: 26, height: 28)"))
         XCTAssertTrue(playbackButton.contains(".help(playbackHelpText)"))
+        XCTAssertTrue(row.contains("NextTrackButton(process: process, store: store)"))
+        XCTAssertTrue(previousButton.contains("Image(systemName: \"backward.end.fill\")"))
+        XCTAssertTrue(previousButton.contains("store.previousTrack(for: process)"))
+        XCTAssertTrue(previousButton.contains("process.playbackCapability.isControllable"))
+        XCTAssertTrue(previousButton.contains(".disabled(!process.playbackCapability.isControllable)"))
+        XCTAssertTrue(nextButton.contains("Image(systemName: \"forward.end.fill\")"))
+        XCTAssertTrue(nextButton.contains("store.nextTrack(for: process)"))
+        XCTAssertTrue(nextButton.contains("process.playbackCapability.isControllable"))
+        XCTAssertTrue(nextButton.contains(".disabled(!process.playbackCapability.isControllable)"))
         XCTAssertTrue(rewindButton.contains("Image(systemName: \"gobackward.15\")"))
         XCTAssertTrue(rewindButton.contains("store.rewindPlayback(for: process)"))
-        XCTAssertTrue(rewindButton.contains(".font(.system(size: 19, weight: .semibold))"))
-        XCTAssertTrue(rewindButton.contains(".frame(width: 32, height: 31)"))
+        XCTAssertTrue(rewindButton.contains(".font(.system(size: 16, weight: .semibold))"))
+        XCTAssertTrue(rewindButton.contains(".frame(width: 26, height: 28)"))
         XCTAssertTrue(rewindButton.contains(".help(\"Rewind 15 seconds\")"))
     }
 

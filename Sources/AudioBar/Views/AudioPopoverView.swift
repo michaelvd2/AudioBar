@@ -524,8 +524,10 @@ private struct AudioProcessRow: View {
     @ViewBuilder
     private var control: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            HStack(alignment: .center, spacing: 8) {
+            HStack(alignment: .center, spacing: 6) {
+                PreviousTrackButton(process: process, store: store)
                 PlaybackControlButton(process: process, store: store)
+                NextTrackButton(process: process, store: store)
                 RewindPlaybackButton(process: process, store: store)
 
                 VolumeDragBar(
@@ -541,7 +543,7 @@ private struct AudioProcessRow: View {
                         store.setVolume(for: process, to: $0)
                     }
                 )
-                .frame(width: 118)
+                .frame(width: 104)
                 .help(volumeHelpText)
 
                 Button {
@@ -557,13 +559,13 @@ private struct AudioProcessRow: View {
                 .allowsHitTesting(isHovered)
                 .help("Hide source")
             }
-            .frame(width: 234, height: 42, alignment: .trailing)
+            .frame(width: 258, height: 42, alignment: .trailing)
 
             Text(volumeLabel)
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
-                .frame(width: 118, alignment: .center)
-                .padding(.trailing, 56)
+                .frame(width: 104, alignment: .center)
+                .padding(.trailing, 26)
         }
     }
 
@@ -586,6 +588,25 @@ private struct AudioProcessRow: View {
     }
 }
 
+private struct PreviousTrackButton: View {
+    let process: AudioProcess
+    @ObservedObject var store: AudioProcessStore
+
+    var body: some View {
+        Button {
+            store.previousTrack(for: process)
+        } label: {
+            Image(systemName: "backward.end.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 26, height: 28)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)
+        .disabled(!process.playbackCapability.isControllable)
+        .help("Previous track")
+    }
+}
+
 private struct PlaybackControlButton: View {
     let process: AudioProcess
     @ObservedObject var store: AudioProcessStore
@@ -595,8 +616,8 @@ private struct PlaybackControlButton: View {
             store.togglePlayback(for: process)
         } label: {
             Image(systemName: store.isPlaybackPlaying(process) ? "pause.fill" : "play.fill")
-                .font(.system(size: 19, weight: .semibold))
-                .frame(width: 32, height: 31)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 26, height: 28)
         }
         .buttonStyle(.plain)
         .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)
@@ -612,6 +633,25 @@ private struct PlaybackControlButton: View {
     }
 }
 
+private struct NextTrackButton: View {
+    let process: AudioProcess
+    @ObservedObject var store: AudioProcessStore
+
+    var body: some View {
+        Button {
+            store.nextTrack(for: process)
+        } label: {
+            Image(systemName: "forward.end.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 26, height: 28)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)
+        .disabled(!process.playbackCapability.isControllable)
+        .help("Next track")
+    }
+}
+
 private struct RewindPlaybackButton: View {
     let process: AudioProcess
     @ObservedObject var store: AudioProcessStore
@@ -621,8 +661,8 @@ private struct RewindPlaybackButton: View {
             store.rewindPlayback(for: process)
         } label: {
             Image(systemName: "gobackward.15")
-                .font(.system(size: 19, weight: .semibold))
-                .frame(width: 32, height: 31)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 26, height: 28)
         }
         .buttonStyle(.plain)
         .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)

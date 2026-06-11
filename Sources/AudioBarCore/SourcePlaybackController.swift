@@ -33,6 +33,22 @@ public enum ScriptPlaybackCommandBuilder {
         """
     }
 
+    public static func previousTrackScript(bundleID: String) -> String {
+        """
+        tell application id "\(bundleID)"
+            previous track
+        end tell
+        """
+    }
+
+    public static func nextTrackScript(bundleID: String) -> String {
+        """
+        tell application id "\(bundleID)"
+            next track
+        end tell
+        """
+    }
+
     public static func rewind15SecondsScript(bundleID: String) -> String {
         """
         tell application id "\(bundleID)"
@@ -96,12 +112,28 @@ public final class SystemMediaKeyPlaybackController {
     public func togglePlayPause() -> Bool {
         false
     }
+
+    public func previousTrack() -> Bool {
+        false
+    }
+
+    public func nextTrack() -> Bool {
+        false
+    }
 }
 
 public final class NowPlayingPlaybackController {
     public init() {}
 
     public func togglePlayPause() -> Bool {
+        false
+    }
+
+    public func previousTrack() -> Bool {
+        false
+    }
+
+    public func nextTrack() -> Bool {
         false
     }
 
@@ -114,14 +146,26 @@ public final class SystemMediaKeyPlaybackController {
     public init() {}
 
     public func togglePlayPause() -> Bool {
+        postMediaCommand(NX_KEYTYPE_PLAY, label: "play/pause")
+    }
+
+    public func previousTrack() -> Bool {
+        postMediaCommand(NX_KEYTYPE_PREVIOUS, label: "previous track")
+    }
+
+    public func nextTrack() -> Bool {
+        postMediaCommand(NX_KEYTYPE_NEXT, label: "next track")
+    }
+
+    private func postMediaCommand(_ key: Int32, label: StaticString) -> Bool {
         guard hasInputMonitoringAccess() else {
-            playbackLogger.info("Requesting Input Monitoring access for system play/pause media key")
+            playbackLogger.info("Requesting Input Monitoring access for system media key")
             return CGRequestListenEventAccess()
         }
 
-        playbackLogger.info("Posting system play/pause media key; inputMonitoringTrusted=true")
-        postMediaKey(NX_KEYTYPE_PLAY, state: NX_KEYDOWN)
-        postMediaKey(NX_KEYTYPE_PLAY, state: NX_KEYUP)
+        playbackLogger.info("Posting system \(label) media key; inputMonitoringTrusted=true")
+        postMediaKey(key, state: NX_KEYDOWN)
+        postMediaKey(key, state: NX_KEYUP)
         return true
     }
 
@@ -154,12 +198,22 @@ public final class NowPlayingPlaybackController {
 
     private let frameworkPath = "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote"
     private let togglePlayPauseCommand: Int32 = 2
+    private let nextTrackCommand: Int32 = 4
+    private let previousTrackCommand: Int32 = 5
     private let goBackFifteenSecondsCommand: Int32 = 12
 
     public init() {}
 
     public func togglePlayPause() -> Bool {
         sendCommand(togglePlayPauseCommand, logMessage: "Sent Now Playing toggle through MediaRemote")
+    }
+
+    public func previousTrack() -> Bool {
+        sendCommand(previousTrackCommand, logMessage: "Sent Now Playing previous track through MediaRemote")
+    }
+
+    public func nextTrack() -> Bool {
+        sendCommand(nextTrackCommand, logMessage: "Sent Now Playing next track through MediaRemote")
     }
 
     public func rewind15Seconds() -> Bool {
@@ -215,6 +269,64 @@ public final class SourcePlaybackController {
             #endif
         case .safariMedia:
             source = SafariMediaPlaybackCommandBuilder.togglePlaybackScript()
+        case .unavailable:
+            source = nil
+        }
+
+        guard let source, let script = NSAppleScript(source: source) else {
+            return false
+        }
+        var error: NSDictionary?
+        _ = script.executeAndReturnError(&error)
+        return error == nil
+    }
+
+    public func previousTrack(for process: AudioProcess) -> Bool {
+        let source: String?
+        switch process.playbackCapability {
+        case .scripted:
+            guard let bundleID = process.bundleID else {
+                return false
+            }
+            source = ScriptPlaybackCommandBuilder.previousTrackScript(bundleID: bundleID)
+        case .webAppKeyboard, .safariMedia:
+            #if APP_STORE
+            return false
+            #else
+            if nowPlayingController.previousTrack() {
+                return true
+            }
+            return mediaKeyController.previousTrack()
+            #endif
+        case .unavailable:
+            source = nil
+        }
+
+        guard let source, let script = NSAppleScript(source: source) else {
+            return false
+        }
+        var error: NSDictionary?
+        _ = script.executeAndReturnError(&error)
+        return error == nil
+    }
+
+    public func nextTrack(for process: AudioProcess) -> Bool {
+        let source: String?
+        switch process.playbackCapability {
+        case .scripted:
+            guard let bundleID = process.bundleID else {
+                return false
+            }
+            source = ScriptPlaybackCommandBuilder.nextTrackScript(bundleID: bundleID)
+        case .webAppKeyboard, .safariMedia:
+            #if APP_STORE
+            return false
+            #else
+            if nowPlayingController.nextTrack() {
+                return true
+            }
+            return mediaKeyController.nextTrack()
+            #endif
         case .unavailable:
             source = nil
         }

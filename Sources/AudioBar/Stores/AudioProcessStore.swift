@@ -4,6 +4,10 @@ import Combine
 import CoreGraphics
 import Foundation
 
+extension Notification.Name {
+    static let audioBarWillRunExternalVolumeCommand = Notification.Name("AudioBarWillRunExternalVolumeCommand")
+}
+
 struct HiddenAudioSource: Equatable, Identifiable {
     let id: String
     let name: String
@@ -147,10 +151,13 @@ final class AudioProcessStore: ObservableObject {
         case .systemRoute:
             didSet = true
         case .scripted:
+            notifyExternalVolumeCommandIfNeeded(for: process)
             didSet = volumeController.setVolume(volume, for: process.bundleID)
         case .webAppKeyboard:
+            notifyExternalVolumeCommandIfNeeded(for: process)
             didSet = webAppVolumeController.setVolume(volume, for: process.volumeControlID)
         case .safariMedia:
+            notifyExternalVolumeCommandIfNeeded(for: process)
             didSet = safariMediaVolumeController.setVolume(volume)
         case .unavailable:
             didSet = false
@@ -195,6 +202,22 @@ final class AudioProcessStore: ObservableObject {
         }
 
         _ = playbackController.rewind15Seconds(for: process)
+    }
+
+    func previousTrack(for process: AudioProcess) {
+        guard process.playbackCapability.isControllable else {
+            return
+        }
+
+        _ = playbackController.previousTrack(for: process)
+    }
+
+    func nextTrack(for process: AudioProcess) {
+        guard process.playbackCapability.isControllable else {
+            return
+        }
+
+        _ = playbackController.nextTrack(for: process)
     }
 
     func isPlaybackPlaying(_ process: AudioProcess) -> Bool {
@@ -331,6 +354,15 @@ final class AudioProcessStore: ObservableObject {
 
     private func applyRouteVolume(_ volume: Int, for process: AudioProcess) {
         eqEngine.setSourceVolume(volume, for: process.audioObjectID)
+    }
+
+    private func notifyExternalVolumeCommandIfNeeded(for process: AudioProcess) {
+        switch process.volumeCapability {
+        case .scripted, .webAppKeyboard, .safariMedia:
+            NotificationCenter.default.post(name: .audioBarWillRunExternalVolumeCommand, object: self)
+        case .systemRoute, .unavailable:
+            break
+        }
     }
 
     private func requestGuidedPermissions() {
