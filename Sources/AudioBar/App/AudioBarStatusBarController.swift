@@ -58,7 +58,7 @@ final class AudioBarStatusBarController: NSObject {
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(retainPopoverForExternalVolumeCommand),
-            name: Notification.Name.audioBarWillRunExternalVolumeCommand,
+            name: Notification.Name.audioBarWillRunExternalFocusCommand,
             object: store
         )
     }

@@ -105,6 +105,31 @@ public enum SafariMediaPlaybackCommandBuilder {
     }
 }
 
+public enum WebAppKeyboardPlaybackCommandBuilder {
+    #if !APP_STORE
+    public static func previousTrackScript(bundleID: String) -> String {
+        trackShortcutScript(bundleID: bundleID, key: "p")
+    }
+
+    public static func nextTrackScript(bundleID: String) -> String {
+        trackShortcutScript(bundleID: bundleID, key: "n")
+    }
+
+    private static func trackShortcutScript(bundleID: String, key: String) -> String {
+        """
+        tell application id "\(bundleID)" to activate
+        delay 0.08
+        tell application "System Events"
+            tell (first process whose bundle identifier is "\(bundleID)")
+                keystroke "\(key)" using {shift down}
+                return true
+            end tell
+        end tell
+        """
+    }
+    #endif
+}
+
 #if APP_STORE
 public final class SystemMediaKeyPlaybackController {
     public init() {}
@@ -289,7 +314,16 @@ public final class SourcePlaybackController {
                 return false
             }
             source = ScriptPlaybackCommandBuilder.previousTrackScript(bundleID: bundleID)
-        case .webAppKeyboard, .safariMedia:
+        case .webAppKeyboard:
+            #if APP_STORE
+            return false
+            #else
+            guard let bundleID = process.volumeControlID ?? process.bundleID else {
+                return false
+            }
+            source = WebAppKeyboardPlaybackCommandBuilder.previousTrackScript(bundleID: bundleID)
+            #endif
+        case .safariMedia:
             #if APP_STORE
             return false
             #else
@@ -318,7 +352,16 @@ public final class SourcePlaybackController {
                 return false
             }
             source = ScriptPlaybackCommandBuilder.nextTrackScript(bundleID: bundleID)
-        case .webAppKeyboard, .safariMedia:
+        case .webAppKeyboard:
+            #if APP_STORE
+            return false
+            #else
+            guard let bundleID = process.volumeControlID ?? process.bundleID else {
+                return false
+            }
+            source = WebAppKeyboardPlaybackCommandBuilder.nextTrackScript(bundleID: bundleID)
+            #endif
+        case .safariMedia:
             #if APP_STORE
             return false
             #else

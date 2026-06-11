@@ -40,7 +40,7 @@ final class AudioBarStatusMenuSourceTests: XCTestCase {
     func testPopoverDoesNotCloseWhenAudioBarVolumeCommandMovesFocus() throws {
         let source = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
 
-        XCTAssertTrue(source.contains("Notification.Name.audioBarWillRunExternalVolumeCommand"))
+        XCTAssertTrue(source.contains("Notification.Name.audioBarWillRunExternalFocusCommand"))
         XCTAssertTrue(source.contains("#selector(retainPopoverForExternalVolumeCommand)"))
         XCTAssertTrue(source.contains("private var suppressResignActiveCloseUntil"))
         XCTAssertTrue(source.contains("@objc private func retainPopoverForExternalVolumeCommand"))

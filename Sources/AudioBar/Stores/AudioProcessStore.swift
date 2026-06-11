@@ -5,7 +5,7 @@ import CoreGraphics
 import Foundation
 
 extension Notification.Name {
-    static let audioBarWillRunExternalVolumeCommand = Notification.Name("AudioBarWillRunExternalVolumeCommand")
+    static let audioBarWillRunExternalFocusCommand = Notification.Name("AudioBarWillRunExternalFocusCommand")
 }
 
 struct HiddenAudioSource: Equatable, Identifiable {
@@ -151,13 +151,13 @@ final class AudioProcessStore: ObservableObject {
         case .systemRoute:
             didSet = true
         case .scripted:
-            notifyExternalVolumeCommandIfNeeded(for: process)
+            notifyExternalFocusCommandIfNeeded(for: process)
             didSet = volumeController.setVolume(volume, for: process.bundleID)
         case .webAppKeyboard:
-            notifyExternalVolumeCommandIfNeeded(for: process)
+            notifyExternalFocusCommandIfNeeded(for: process)
             didSet = webAppVolumeController.setVolume(volume, for: process.volumeControlID)
         case .safariMedia:
-            notifyExternalVolumeCommandIfNeeded(for: process)
+            notifyExternalFocusCommandIfNeeded(for: process)
             didSet = safariMediaVolumeController.setVolume(volume)
         case .unavailable:
             didSet = false
@@ -209,6 +209,7 @@ final class AudioProcessStore: ObservableObject {
             return
         }
 
+        notifyExternalFocusCommandIfNeeded(for: process)
         _ = playbackController.previousTrack(for: process)
     }
 
@@ -217,6 +218,7 @@ final class AudioProcessStore: ObservableObject {
             return
         }
 
+        notifyExternalFocusCommandIfNeeded(for: process)
         _ = playbackController.nextTrack(for: process)
     }
 
@@ -356,10 +358,10 @@ final class AudioProcessStore: ObservableObject {
         eqEngine.setSourceVolume(volume, for: process.audioObjectID)
     }
 
-    private func notifyExternalVolumeCommandIfNeeded(for process: AudioProcess) {
+    private func notifyExternalFocusCommandIfNeeded(for process: AudioProcess) {
         switch process.volumeCapability {
         case .scripted, .webAppKeyboard, .safariMedia:
-            NotificationCenter.default.post(name: .audioBarWillRunExternalVolumeCommand, object: self)
+            NotificationCenter.default.post(name: .audioBarWillRunExternalFocusCommand, object: self)
         case .systemRoute, .unavailable:
             break
         }

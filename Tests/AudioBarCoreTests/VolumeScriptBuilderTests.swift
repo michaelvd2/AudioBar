@@ -68,6 +68,20 @@ final class VolumeScriptBuilderTests: XCTestCase {
         XCTAssertTrue(script.contains("key code 126"))
     }
 
+    func testYouTubeWebAppKeyboardTrackScriptsUseStandardShortcuts() {
+        let previousScript = WebAppKeyboardPlaybackCommandBuilder.previousTrackScript(
+            bundleID: "com.apple.Safari.WebApp.example"
+        )
+        let nextScript = WebAppKeyboardPlaybackCommandBuilder.nextTrackScript(
+            bundleID: "com.apple.Safari.WebApp.example"
+        )
+
+        XCTAssertTrue(previousScript.contains("tell application id \"com.apple.Safari.WebApp.example\" to activate"))
+        XCTAssertTrue(previousScript.contains("keystroke \"p\" using {shift down}"))
+        XCTAssertTrue(nextScript.contains("tell application id \"com.apple.Safari.WebApp.example\" to activate"))
+        XCTAssertTrue(nextScript.contains("keystroke \"n\" using {shift down}"))
+    }
+
     func testScriptedPlaybackToggleUsesApplicationID() {
         let script = ScriptPlaybackCommandBuilder.togglePlaybackScript(bundleID: "com.spotify.client")
 
