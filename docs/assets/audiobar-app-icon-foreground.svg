@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#75f7d3"/>
+      <stop offset="0.55" stop-color="#28d3aa"/>
+      <stop offset="1" stop-color="#0e9a86"/>
+    </linearGradient>
+    <linearGradient id="knob" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fffdf3"/>
+      <stop offset="0.55" stop-color="#e8e1d2"/>
+      <stop offset="1" stop-color="#b7afa0"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="20" stdDeviation="18" flood-color="#00110f" flood-opacity="0.32"/>
+    </filter>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="15" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#shadow)">
+    <g opacity="0.24" stroke="url(#teal)" stroke-width="16" filter="url(#glow)">
+      <path d="M262 244h500"/>
+      <path d="M262 384h500"/>
+      <path d="M262 524h500"/>
+    </g>
+
+    <g stroke="#101719" stroke-width="34" opacity="0.9">
+      <path d="M246 244h532"/>
+      <path d="M246 384h532"/>
+      <path d="M246 524h532"/>
+    </g>
+
+    <g stroke="url(#teal)" stroke-width="22" opacity="0.96">
+      <path d="M268 244h488"/>
+      <path d="M268 384h488"/>
+      <path d="M268 524h488"/>
+    </g>
+
+    <g>
+      <rect x="346" y="194" width="118" height="100" rx="34" fill="url(#knob)"/>
+      <rect x="346" y="194" width="118" height="100" rx="34" fill="none" stroke="#fff9eb" stroke-width="6" opacity="0.94"/>
+      <path d="M405 219v50" stroke="#686157" stroke-width="7"/>
+
+      <rect x="554" y="334" width="118" height="100" rx="34" fill="url(#knob)"/>
+      <rect x="554" y="334" width="118" height="100" rx="34" fill="none" stroke="#fff9eb" stroke-width="6" opacity="0.94"/>
+      <path d="M613 359v50" stroke="#686157" stroke-width="7"/>
+
+      <rect x="432" y="474" width="118" height="100" rx="34" fill="url(#knob)"/>
+      <rect x="432" y="474" width="118" height="100" rx="34" fill="none" stroke="#fff9eb" stroke-width="6" opacity="0.94"/>
+      <path d="M491 499v50" stroke="#686157" stroke-width="7"/>
+    </g>
+
+    <g opacity="0.95">
+      <path d="M294 710v-42" stroke="#2fe1b4" stroke-width="20"/>
+      <path d="M362 710v-84" stroke="#2fe1b4" stroke-width="20"/>
+      <path d="M430 710v-58" stroke="#2fe1b4" stroke-width="20"/>
+      <path d="M498 710v-118" stroke="#2fe1b4" stroke-width="20"/>
+      <path d="M566 710v-74" stroke="#2fe1b4" stroke-width="20"/>
+      <path d="M634 710v-98" stroke="#2fe1b4" stroke-width="20"/>
+      <path d="M702 710v-50" stroke="#2fe1b4" stroke-width="20"/>
+    </g>
+
+    <g stroke="#fff9eb" stroke-width="5" opacity="0.96">
+      <circle cx="294" cy="710" r="21" fill="#101719"/>
+      <circle cx="498" cy="710" r="21" fill="#101719"/>
+      <circle cx="702" cy="710" r="21" fill="#101719"/>
+    </g>
+  </g>
+</svg>

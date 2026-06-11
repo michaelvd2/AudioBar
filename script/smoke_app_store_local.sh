@@ -18,7 +18,7 @@ APP_BINARY="$APP_MACOS/$APP_NAME"
 APP_ICON="$APP_RESOURCES/$APP_NAME.icns"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 ENTITLEMENTS_PLIST="$ROOT_DIR/Resources/AudioBar-AppStore.entitlements"
-ICON_SOURCE="$ROOT_DIR/docs/assets/audiobar-popover-eq-expanded.png"
+ICON_SOURCE="$ROOT_DIR/docs/assets/audiobar-app-icon.png"
 
 cd "$ROOT_DIR"
 
