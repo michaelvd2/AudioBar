@@ -2,6 +2,8 @@
 
 Small macOS menu-bar app for seeing active audio-output processes.
 
+Website and download: https://michaelvd2.github.io/AudioBar/
+
 ## What It Can Control
 
 macOS public APIs expose active CoreAudio output processes, but not universal per-app volume sliders. AudioBar therefore lists all active output processes and exposes sliders only for known scriptable apps:
