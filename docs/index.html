@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AudioBar - macOS menu bar volume mixer and 10-band EQ</title>
-  <meta name="description" content="AudioBar is a macOS menu bar app for per-source volume control, supported Music, Spotify, and Safari Web App channel sliders, and a compact 10-band system EQ.">
+  <title>AudioBar - macOS per-app volume mixer and 11-band EQ</title>
+  <meta name="description" content="AudioBar is a macOS menu bar app for per-app volume control, source volume mixing, Music, Spotify, and Safari Web App audio controls, and a compact 11-band system EQ.">
   <meta name="robots" content="index,follow">
   <meta name="theme-color" content="#1f6f5b">
   <link rel="canonical" href="https://michaelvd2.github.io/AudioBar/">
@@ -12,14 +12,14 @@
   <link rel="icon" href="assets/audiobar-app-icon.png">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="AudioBar">
-  <meta property="og:title" content="AudioBar - macOS menu bar volume mixer">
-  <meta property="og:description" content="A macOS menu bar app for per-source volume control and a compact 10-band system EQ.">
+  <meta property="og:title" content="AudioBar - macOS per-app volume mixer">
+  <meta property="og:description" content="A macOS menu bar app for per-app volume control, source volume mixing, and a compact 11-band system EQ.">
   <meta property="og:url" content="https://michaelvd2.github.io/AudioBar/">
-  <meta property="og:image" content="https://michaelvd2.github.io/AudioBar/assets/audiobar-popover-eq-expanded.png">
+  <meta property="og:image" content="https://michaelvd2.github.io/AudioBar/assets/app-store/03-overview.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="AudioBar - macOS menu bar volume mixer">
-  <meta name="twitter:description" content="A macOS menu bar app for per-source volume control and a compact 10-band system EQ.">
-  <meta name="twitter:image" content="https://michaelvd2.github.io/AudioBar/assets/audiobar-popover-eq-expanded.png">
+  <meta name="twitter:title" content="AudioBar - macOS per-app volume mixer">
+  <meta name="twitter:description" content="A macOS menu bar app for per-app volume control, source volume mixing, and a compact 11-band system EQ.">
+  <meta name="twitter:image" content="https://michaelvd2.github.io/AudioBar/assets/app-store/03-overview.png">
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -27,11 +27,11 @@
       "name": "AudioBar",
       "applicationCategory": "MultimediaApplication",
       "operatingSystem": "macOS 14.2 or newer",
-      "description": "AudioBar is a macOS menu bar app for per-source volume control, supported Music, Spotify, and Safari Web App channel sliders, and a compact 10-band system EQ.",
+      "description": "AudioBar is a macOS menu bar app for per-app volume control, source volume mixing, Music, Spotify, and Safari Web App audio controls, and a compact 11-band system EQ.",
       "url": "https://michaelvd2.github.io/AudioBar/",
       "downloadUrl": "https://github.com/michaelvd2/AudioBar/releases/download/v0.1.7/AudioBar-notarized.zip",
       "softwareVersion": "0.1.7",
-      "image": "https://michaelvd2.github.io/AudioBar/assets/audiobar-popover-eq-expanded.png",
+      "image": "https://michaelvd2.github.io/AudioBar/assets/app-store/03-overview.png",
       "author": {
         "@type": "Person",
         "name": "Michael van Dijk"
@@ -175,7 +175,7 @@
 
     .row {
       display: grid;
-      grid-template-columns: 1fr 112px;
+      grid-template-columns: 1fr 132px;
       gap: 16px;
       padding: 16px;
       border-bottom: 1px solid var(--line);
@@ -216,8 +216,8 @@
 
     .mini-eq {
       display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 8px;
+      grid-template-columns: repeat(11, 1fr);
+      gap: 4px;
       align-items: end;
       height: 58px;
     }
@@ -253,9 +253,15 @@
       margin: 18px 0 0;
     }
 
+    .product-gallery {
+      display: grid;
+      gap: 18px;
+      margin-top: 18px;
+    }
+
     .product-shot img {
       display: block;
-      width: min(100%, 760px);
+      width: 100%;
       height: auto;
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -284,6 +290,12 @@
 
     li + li {
       margin-top: 8px;
+    }
+
+    @media (min-width: 820px) {
+      .product-gallery {
+        grid-template-columns: repeat(3, 1fr);
+      }
     }
 
     code {
@@ -320,9 +332,10 @@
         <p class="eyebrow">The channel mixer macOS forgot</p>
         <h1>AudioBar</h1>
         <p class="intro">
-          Control the volume of different audio sources from your menu bar.
-          AudioBar gives macOS the per-channel mixer it should already have,
-          then adds a compact 10-band EQ for shaping the routed system sound.
+          Control app volume, web audio, and system sound from your menu bar.
+          AudioBar gives macOS a per-app volume mixer for Music, Spotify, Safari,
+          and web app audio, then adds a compact 11-band EQ for shaping routed
+          system sound.
         </p>
         <div class="actions">
           <a class="button" href="https://github.com/michaelvd2/AudioBar/releases/download/v0.1.7/AudioBar-notarized.zip">Download for macOS</a>
@@ -341,7 +354,7 @@
           <div class="bar" style="--value: 62%"></div>
         </div>
         <div class="row">
-          <div><strong>EQ Route</strong><span>10-band system tune</span></div>
+          <div><strong>EQ Route</strong><span>11-band system tune</span></div>
           <div class="mini-eq" aria-hidden="true">
             <span style="--knob: 24%"></span>
             <span style="--knob: 16%"></span>
@@ -350,6 +363,10 @@
             <span style="--knob: 46%"></span>
             <span style="--knob: 30%"></span>
             <span style="--knob: 40%"></span>
+            <span style="--knob: 38%"></span>
+            <span style="--knob: 28%"></span>
+            <span style="--knob: 35%"></span>
+            <span style="--knob: 22%"></span>
           </div>
         </div>
       </div>
@@ -358,20 +375,30 @@
     <section>
       <h2>What It Does</h2>
       <ul>
-        <li>Adds a practical menu bar mixer for separate audio channels, so one loud app does not force you to change the whole Mac volume.</li>
-        <li>Controls supported sources such as Music, Spotify, and Safari Web App media with direct channel volume sliders.</li>
-        <li>Shows active CoreAudio output sources and lets you hide rows you do not want to manage.</li>
-        <li>Applies a compact 10-band EQ to routed system audio on supported macOS versions.</li>
-        <li>Lets you hide sources and restore them later from the left-click panel.</li>
+        <li>Adds a practical macOS per-app volume mixer, so one loud app does not force you to change the whole Mac volume.</li>
+        <li>Controls supported audio sources such as Music, Spotify, Safari, and Safari Web App media with direct source volume sliders.</li>
+        <li>Shows active CoreAudio output sources for app audio monitoring and lets you hide rows you do not want to manage.</li>
+        <li>Applies a compact 11-band system audio EQ to routed Mac sound on supported macOS versions.</li>
+        <li>Works as a focused menu bar audio control panel for source volume, playback controls, hidden sources, and EQ presets.</li>
       </ul>
     </section>
 
     <section>
       <h2>How It Looks</h2>
-      <figure class="product-shot">
-        <img src="assets/audiobar-popover-eq-expanded.png" width="864" height="1058" alt="AudioBar menu bar popover showing separate Spotify, System Sounds, and YouTube volume sliders plus the expanded EQ controls.">
-        <figcaption>The left-click panel shows separate source volume sliders first, with the expanded EQ controls directly below.</figcaption>
-      </figure>
+      <div class="product-gallery">
+        <figure class="product-shot">
+          <img src="assets/app-store/01-volume-mixer.png" width="2880" height="1800" alt="AudioBar volume mixer screenshot showing active YouTube and Safari sources with separate channel volume sliders.">
+          <figcaption>Balance active sources, pause noisy apps, and keep hidden system audio available when you need it.</figcaption>
+        </figure>
+        <figure class="product-shot">
+          <img src="assets/app-store/02-eq-controls.png" width="2880" height="1800" alt="AudioBar screenshot highlighting the 11-band EQ controls inside the menu bar panel.">
+          <figcaption>Tune routed system sound with presets, reset controls, preamp, and per-band adjustment.</figcaption>
+        </figure>
+        <figure class="product-shot">
+          <img src="assets/app-store/03-overview.png" width="2880" height="1800" alt="AudioBar overview screenshot showing the volume mixer and expanded EQ in one menu bar panel.">
+          <figcaption>The focused menu bar panel keeps source volume and EQ controls in one place.</figcaption>
+        </figure>
+      </div>
     </section>
 
     <section>

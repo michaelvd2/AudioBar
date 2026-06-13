@@ -3,7 +3,7 @@
 ## App Review Notes
 
 AudioBar is a macOS menu bar utility that lets users control supported audio
-sources and apply a local 10-band EQ to routed system audio.
+sources and apply a local 11-band EQ to routed system audio.
 
 AudioBar's audio processing is local-only. The app requests system audio capture
 permission so the EQ route can process the Mac's current system audio. AudioBar
@@ -45,4 +45,3 @@ not available in the App Store build.
 - Mac App Store installer signing identity.
 - App Store provisioning profile.
 - Current Apple Developer Program terms accepted in App Store Connect.
-
