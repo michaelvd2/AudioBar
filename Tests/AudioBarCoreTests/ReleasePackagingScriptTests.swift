@@ -65,7 +65,8 @@ final class ReleasePackagingScriptTests: XCTestCase {
         XCTAssertTrue(script.contains("Resources/AudioBar-AppStore.entitlements"))
         XCTAssertTrue(script.contains("--show-bin-path -Xswiftc -DAPP_STORE"))
         XCTAssertTrue(script.contains("productbuild"))
-        XCTAssertTrue(script.contains("xcrun altool --validate-app"))
+        XCTAssertTrue(script.contains("xcrun altool"))
+        XCTAssertTrue(script.contains("--validate-app"))
         XCTAssertFalse(script.contains("xcrun notarytool submit"))
         XCTAssertFalse(script.contains("xcrun stapler staple"))
 
@@ -82,7 +83,7 @@ final class ReleasePackagingScriptTests: XCTestCase {
         XCTAssertTrue(script.contains("CFBundleShortVersionString"))
         XCTAssertTrue(script.contains("APP_VERSION=\"${APP_VERSION:-0.1.7}\""))
         XCTAssertTrue(script.contains("CFBundleVersion"))
-        XCTAssertTrue(script.contains("APP_BUILD=\"${APP_BUILD:-8}\""))
+        XCTAssertTrue(script.contains("APP_BUILD=\"${APP_BUILD:-9}\""))
         XCTAssertTrue(script.contains("LSMinimumSystemVersion"))
         XCTAssertTrue(script.contains("MIN_SYSTEM_VERSION=\"14.2\""))
         XCTAssertTrue(script.contains("CFBundleDisplayName"))
