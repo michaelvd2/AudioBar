@@ -518,6 +518,14 @@ private struct AudioProcessRow: View {
     @State private var draftVolume: Double?
     @State private var draftBalance: Double?
 
+    private static let sideMarkerWidth: CGFloat = 12
+    private static let sliderTrackWidth: CGFloat = 104
+    private static let valueColumnWidth: CGFloat = 34
+    private static let rowSpacing: CGFloat = 6
+    private static var sliderRowWidth: CGFloat {
+        sideMarkerWidth * 2 + sliderTrackWidth + valueColumnWidth + rowSpacing * 3
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
@@ -555,58 +563,75 @@ private struct AudioProcessRow: View {
                 NextTrackButton(process: process, store: store)
                 RewindPlaybackButton(process: process, store: store)
 
-                VolumeDragBar(
-                    value: displayedVolume,
-                    isEnabled: process.volumeCapability.isAdjustable,
-                    step: 1,
-                    onPreview: {
-                        draftVolume = $0
-                        store.previewVolume(for: process, to: $0)
-                    },
-                    onCommit: {
-                        draftVolume = $0
-                        store.setVolume(for: process, to: $0)
-                    }
-                )
-                .frame(width: 104)
-                .help(volumeHelpText)
-
-                Text(volumeLabel)
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 34, alignment: .trailing)
+                volumeSliderRow
             }
-            .frame(width: 266, height: 24, alignment: .trailing)
+            .frame(width: 296, height: 24, alignment: .trailing)
 
-            HStack(spacing: 6) {
-                Text("L")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 12)
-
-                BalanceDragBar(
-                    value: displayedBalance,
-                    isEnabled: process.volumeCapability.isAdjustable,
-                    onChange: {
-                        draftBalance = $0
-                        store.setBalance(for: process, to: $0)
-                    }
-                )
-                .frame(width: 104)
-                .help("Set left/right balance")
-
-                Text("R")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 12)
-
-                Text(balanceLabel)
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 34, alignment: .trailing)
-            }
-            .frame(width: 168, height: 18, alignment: .trailing)
+            balanceSliderRow
         }
+    }
+
+    private var volumeSliderRow: some View {
+        HStack(spacing: Self.rowSpacing) {
+            Color.clear
+                .frame(width: Self.sideMarkerWidth)
+
+            VolumeDragBar(
+                value: displayedVolume,
+                isEnabled: process.volumeCapability.isAdjustable,
+                step: 1,
+                onPreview: {
+                    draftVolume = $0
+                    store.previewVolume(for: process, to: $0)
+                },
+                onCommit: {
+                    draftVolume = $0
+                    store.setVolume(for: process, to: $0)
+                }
+            )
+            .frame(width: Self.sliderTrackWidth)
+            .help(volumeHelpText)
+
+            Color.clear
+                .frame(width: Self.sideMarkerWidth)
+
+            Text(volumeLabel)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: Self.valueColumnWidth, alignment: .trailing)
+        }
+        .frame(width: Self.sliderRowWidth, height: 18, alignment: .trailing)
+    }
+
+    private var balanceSliderRow: some View {
+        HStack(spacing: Self.rowSpacing) {
+            Text("L")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(width: Self.sideMarkerWidth)
+
+            BalanceDragBar(
+                value: displayedBalance,
+                isEnabled: process.volumeCapability.isAdjustable,
+                onChange: {
+                    draftBalance = $0
+                    store.setBalance(for: process, to: $0)
+                }
+            )
+            .frame(width: Self.sliderTrackWidth)
+            .help("Set left/right balance")
+
+            Text("R")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(width: Self.sideMarkerWidth)
+
+            Text(balanceLabel)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: Self.valueColumnWidth, alignment: .trailing)
+        }
+        .frame(width: Self.sliderRowWidth, height: 18, alignment: .trailing)
     }
 
     private var volumeLabel: String {
@@ -824,15 +849,15 @@ private struct VolumeDragBar: View {
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(.tertiary.opacity(isEnabled ? 0.28 : 0.14))
-                    .frame(height: 6)
+                    .frame(height: 5)
 
                 Capsule()
                     .fill(.secondary.opacity(isEnabled ? 0.58 : 0.22))
-                    .frame(width: max(0, proxy.size.width * fraction), height: 6)
+                    .frame(width: max(0, proxy.size.width * fraction), height: 5)
 
                 Circle()
                     .fill(isEnabled ? Color.primary.opacity(0.92) : Color.secondary.opacity(0.42))
-                    .frame(width: 18, height: 18)
+                    .frame(width: 14, height: 14)
                     .offset(x: knobOffset(for: proxy.size.width))
                     .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
             }
@@ -857,12 +882,12 @@ private struct VolumeDragBar: View {
                     }
             )
         }
-        .frame(height: 18)
+        .frame(height: 16)
         .opacity(isEnabled ? 1 : 0.62)
     }
 
     private func knobOffset(for width: Double) -> Double {
-        let knobWidth = 18.0
+        let knobWidth = 14.0
         return max(0, min(width - knobWidth, width * (visibleValue / 100) - knobWidth / 2))
     }
 

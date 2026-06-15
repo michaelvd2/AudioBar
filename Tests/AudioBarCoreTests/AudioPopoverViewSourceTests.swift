@@ -208,10 +208,17 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(row.contains("Text(volumeLabel)"))
         XCTAssertTrue(row.contains("BalanceDragBar("))
         XCTAssertTrue(row.contains("value: displayedBalance"))
+        XCTAssertTrue(row.contains("Self.sliderTrackWidth"))
+        XCTAssertTrue(row.contains("Self.sideMarkerWidth"))
+        XCTAssertTrue(row.contains("Self.valueColumnWidth"))
+        XCTAssertTrue(row.contains("Color.clear"))
         XCTAssertTrue(source.contains("store.balance(for: process)"))
         XCTAssertTrue(row.contains("store.setBalance(for: process, to: $0)"))
         XCTAssertTrue(row.contains("Text(\"L\")"))
         XCTAssertTrue(row.contains("Text(\"R\")"))
+        XCTAssertTrue(source.contains("private static let sliderTrackWidth"))
+        XCTAssertTrue(source.contains("private static let sideMarkerWidth"))
+        XCTAssertTrue(source.contains("private static let valueColumnWidth"))
         XCTAssertFalse(row.contains(".padding(.trailing, 26)"))
     }
 
