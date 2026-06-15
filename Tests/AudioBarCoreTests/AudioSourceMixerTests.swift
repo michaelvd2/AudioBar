@@ -60,6 +60,36 @@ final class AudioSourceMixerTests: XCTestCase {
         XCTAssertEqual(output, source)
     }
 
+    func testChannelAwareMixerAppliesPerSourceStereoBalance() {
+        let source: [Float32] = [
+            0.1, 0.9,
+            0.2, 0.8
+        ]
+        var output = Array<Float32>(repeating: 0, count: source.count)
+
+        source.withUnsafeBufferPointer { sourceBuffer in
+            output.withUnsafeMutableBufferPointer { outputBuffer in
+                AudioSourceMixer.mixInterleaved(
+                    sources: [(
+                        pointer: sourceBuffer.baseAddress!,
+                        frameCount: 2,
+                        channelCount: 2,
+                        gain: 1,
+                        balance: -1
+                    )],
+                    output: outputBuffer.baseAddress!,
+                    frameCount: 2,
+                    channelCount: 2
+                )
+            }
+        }
+
+        XCTAssertEqual(output, [
+            0.1, 0,
+            0.2, 0
+        ])
+    }
+
     func testChannelAwareMixerDownmixesStereoTapForMonoOutputBuffer() {
         let source: [Float32] = [
             0.1, 0.9,

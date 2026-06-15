@@ -107,6 +107,8 @@ final class SystemEQEngineTests: XCTestCase {
 
         XCTAssertTrue(source.contains("private var sourceProcessObjectIDs"))
         XCTAssertTrue(source.contains("private var sourceVolumeByProcessObjectID"))
+        XCTAssertTrue(source.contains("private var sourceBalanceByProcessObjectID"))
+        XCTAssertTrue(source.contains("public func setSourceBalance"))
         XCTAssertTrue(source.contains("CATapDescription(stereoMixdownOfProcesses: [processObjectID])"))
         XCTAssertTrue(source.contains("AudioSourceMixer.mixInterleaved"))
         XCTAssertTrue(source.contains("processor.processInterleaved"))

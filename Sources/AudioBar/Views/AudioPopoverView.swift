@@ -516,7 +516,7 @@ private struct AudioProcessRow: View {
     let process: AudioProcess
     @ObservedObject var store: AudioProcessStore
     @State private var draftVolume: Double?
-    @State private var isHovered = false
+    @State private var draftBalance: Double?
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -539,12 +539,16 @@ private struct AudioProcessRow: View {
         .contentShape(Rectangle())
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .onHover { isHovered = $0 }
+        .contextMenu {
+            Button("Hide Source") {
+                store.hideSource(process)
+            }
+        }
     }
 
     @ViewBuilder
     private var control: some View {
-        VStack(alignment: .trailing, spacing: 4) {
+        VStack(alignment: .trailing, spacing: 6) {
             HStack(alignment: .center, spacing: 6) {
                 PreviousTrackButton(process: process, store: store)
                 PlaybackControlButton(process: process, store: store)
@@ -567,26 +571,41 @@ private struct AudioProcessRow: View {
                 .frame(width: 104)
                 .help(volumeHelpText)
 
-                Button {
-                    store.hideSource(process)
-                } label: {
-                    Image(systemName: "eye.slash")
-                        .font(.system(size: 12, weight: .medium))
-                        .frame(width: 20, height: 18)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .opacity(isHovered ? 1 : 0)
-                .allowsHitTesting(isHovered)
-                .help("Hide source")
+                Text(volumeLabel)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 34, alignment: .trailing)
             }
-            .frame(width: 258, height: 42, alignment: .trailing)
+            .frame(width: 266, height: 24, alignment: .trailing)
 
-            Text(volumeLabel)
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 104, alignment: .center)
-                .padding(.trailing, 26)
+            HStack(spacing: 6) {
+                Text("L")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 12)
+
+                BalanceDragBar(
+                    value: displayedBalance,
+                    isEnabled: process.volumeCapability.isAdjustable,
+                    onChange: {
+                        draftBalance = $0
+                        store.setBalance(for: process, to: $0)
+                    }
+                )
+                .frame(width: 104)
+                .help("Set left/right balance")
+
+                Text("R")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 12)
+
+                Text(balanceLabel)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 34, alignment: .trailing)
+            }
+            .frame(width: 168, height: 18, alignment: .trailing)
         }
     }
 
@@ -601,11 +620,104 @@ private struct AudioProcessRow: View {
         min(100, max(0, draftVolume ?? Double(process.currentVolume ?? 100)))
     }
 
+    private var displayedBalance: Double {
+        min(100, max(-100, draftBalance ?? Double(store.balance(for: process))))
+    }
+
+    private var balanceLabel: String {
+        let balance = Int(displayedBalance.rounded())
+        if balance < 0 {
+            return "L\(abs(balance))"
+        }
+        if balance > 0 {
+            return "R\(balance)"
+        }
+        return "C"
+    }
+
     private var volumeHelpText: String {
         guard process.volumeCapability.isAdjustable else {
             return "macOS does not expose a public per-app volume control for this source"
         }
         return "Set source volume"
+    }
+}
+
+private struct BalanceDragBar: View {
+    let value: Double
+    let isEnabled: Bool
+    let onChange: (Double) -> Void
+
+    @State private var draftValue: Double?
+
+    private var visibleValue: Double {
+        min(100, max(-100, draftValue ?? value))
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let midpoint = proxy.size.width / 2
+            let fraction = visibleValue / 100
+            let fillWidth = abs(fraction) * midpoint
+            let fillOffset = fraction < 0 ? midpoint - fillWidth : midpoint
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(.tertiary.opacity(isEnabled ? 0.24 : 0.12))
+                    .frame(height: 5)
+
+                Capsule()
+                    .fill(.secondary.opacity(isEnabled ? 0.5 : 0.2))
+                    .frame(width: fillWidth, height: 5)
+                    .offset(x: fillOffset)
+
+                Rectangle()
+                    .fill(.secondary.opacity(0.45))
+                    .frame(width: 1, height: 12)
+                    .offset(x: midpoint)
+
+                Circle()
+                    .fill(isEnabled ? Color.primary.opacity(0.9) : Color.secondary.opacity(0.42))
+                    .frame(width: 14, height: 14)
+                    .offset(x: knobOffset(for: proxy.size.width))
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { gesture in
+                        guard isEnabled else {
+                            return
+                        }
+                        let nextValue = snappedValue(for: gesture.location.x, width: proxy.size.width)
+                        draftValue = nextValue
+                        onChange(nextValue)
+                    }
+                    .onEnded { gesture in
+                        guard isEnabled else {
+                            return
+                        }
+                        let nextValue = snappedValue(for: gesture.location.x, width: proxy.size.width)
+                        draftValue = nextValue
+                        onChange(nextValue)
+                    }
+            )
+        }
+        .frame(height: 16)
+        .opacity(isEnabled ? 1 : 0.62)
+    }
+
+    private func knobOffset(for width: Double) -> Double {
+        let knobWidth = 14.0
+        let position = ((visibleValue + 100) / 200) * width
+        return max(0, min(width - knobWidth, position - knobWidth / 2))
+    }
+
+    private func snappedValue(for locationX: Double, width: Double) -> Double {
+        guard width > 0 else {
+            return visibleValue
+        }
+        let fraction = min(1, max(0, locationX / width))
+        return ((fraction * 200) - 100).rounded()
     }
 }
 

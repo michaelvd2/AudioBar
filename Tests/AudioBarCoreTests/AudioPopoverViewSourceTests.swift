@@ -181,21 +181,38 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(dragBar.contains("Slider("))
     }
 
-    func testAudioProcessRowsRevealHideActionOnlyOnRowHover() throws {
+    func testAudioProcessRowsExposeHideOnlyThroughContextMenu() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let row = try XCTUnwrap(source.slice(
             from: "private struct AudioProcessRow",
             to: "private var volumeLabel"
         ))
 
-        XCTAssertTrue(row.contains("@State private var isHovered = false"))
         XCTAssertTrue(row.contains(".contentShape(Rectangle())"))
-        XCTAssertTrue(row.contains(".onHover { isHovered = $0 }"))
-        XCTAssertTrue(row.contains("Image(systemName: \"eye.slash\")"))
-        XCTAssertTrue(row.contains(".opacity(isHovered ? 1 : 0)"))
-        XCTAssertTrue(row.contains(".allowsHitTesting(isHovered)"))
-        XCTAssertTrue(row.contains(".frame(width: 258, height: 42, alignment: .trailing)"))
-        XCTAssertTrue(row.contains(".padding(.trailing, 26)"))
+        XCTAssertTrue(row.contains(".contextMenu"))
+        XCTAssertTrue(row.contains("Button(\"Hide Source\")"))
+        XCTAssertTrue(row.contains("store.hideSource(process)"))
+        XCTAssertFalse(row.contains("Image(systemName: \"eye.slash\")"))
+        XCTAssertFalse(row.contains("@State private var isHovered"))
+        XCTAssertFalse(row.contains(".onHover"))
+    }
+
+    func testAudioProcessRowsPutVolumeValueRightOfVolumeAndBalanceBelow() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var volumeLabel"
+        ))
+
+        XCTAssertTrue(row.contains("VolumeDragBar("))
+        XCTAssertTrue(row.contains("Text(volumeLabel)"))
+        XCTAssertTrue(row.contains("BalanceDragBar("))
+        XCTAssertTrue(row.contains("value: displayedBalance"))
+        XCTAssertTrue(source.contains("store.balance(for: process)"))
+        XCTAssertTrue(row.contains("store.setBalance(for: process, to: $0)"))
+        XCTAssertTrue(row.contains("Text(\"L\")"))
+        XCTAssertTrue(row.contains("Text(\"R\")"))
+        XCTAssertFalse(row.contains(".padding(.trailing, 26)"))
     }
 
     func testAudioProcessRowsIncludePlaybackControlPerSource() throws {

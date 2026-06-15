@@ -122,6 +122,20 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(setVolumeFunction.contains("processes[index].currentVolume = min(100, max(0, volume))"))
     }
 
+    func testStorePersistsAndAppliesSourceBalance() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let setBalanceFunction = try XCTUnwrap(source.function(named: "setBalance"))
+        let updateRouteFunction = try XCTUnwrap(source.function(named: "updateEQSourceProcesses"))
+
+        XCTAssertTrue(source.contains("@Published private(set) var sourceBalances"))
+        XCTAssertTrue(source.contains("private let sourceBalancesKey"))
+        XCTAssertTrue(source.contains("func balance(for process: AudioProcess) -> Int"))
+        XCTAssertTrue(setBalanceFunction.contains("sourceBalances[process.stableSourceID] = balance"))
+        XCTAssertTrue(setBalanceFunction.contains("eqEngine.setSourceBalance(balance, for: process.audioObjectID)"))
+        XCTAssertTrue(setBalanceFunction.contains("saveSourceBalances()"))
+        XCTAssertTrue(updateRouteFunction.contains("eqEngine.setSourceBalance(balance(for: process), for: process.audioObjectID)"))
+    }
+
     func testStorePersistsSourceVolumeMapInUserDefaults() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
 

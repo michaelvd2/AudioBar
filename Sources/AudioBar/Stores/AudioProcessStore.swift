@@ -26,6 +26,7 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var isLaunchAtLoginEnabled: Bool
     @Published private(set) var savedEQPresets: [SavedEQPreset]
     @Published private(set) var hiddenSources: [HiddenAudioSource]
+    @Published private(set) var sourceBalances: [String: Int]
 
     private let provider: AudioProcessProviding
     private let volumeController: AppVolumeControlling
@@ -40,6 +41,7 @@ final class AudioProcessStore: ObservableObject {
     private let eqSettingsKey = "AudioBar.eqSettings"
     private let savedEQPresetsKey = "AudioBar.savedEQPresets"
     private let sourceVolumesKey = "AudioBar.sourceVolumes"
+    private let sourceBalancesKey = "AudioBar.sourceBalances"
     private let hiddenSourcesKey = "AudioBar.hiddenSources"
     private let firstUseSetupCompletedKey = "AudioBar.firstUseSetupCompleted"
     private var processCache: AudioProcessListCache
@@ -68,6 +70,7 @@ final class AudioProcessStore: ObservableObject {
         self.needsFirstUseSetup = !userDefaults.bool(forKey: firstUseSetupCompletedKey)
         self.isLaunchAtLoginEnabled = loginItemController.isEnabled
         self.savedEQPresets = Self.loadSavedEQPresets(from: userDefaults, key: savedEQPresetsKey)
+        self.sourceBalances = Self.loadSourceBalances(from: userDefaults, key: sourceBalancesKey)
         self.hiddenSourceNames = Self.loadHiddenSources(from: userDefaults, key: hiddenSourcesKey)
         self.hiddenSources = Self.makeHiddenSources(from: hiddenSourceNames)
         self.processCache = AudioProcessListCache(
@@ -180,6 +183,17 @@ final class AudioProcessStore: ObservableObject {
         if let index = processes.firstIndex(where: { $0.id == process.id }) {
             processes[index].currentVolume = min(100, max(0, volume))
         }
+    }
+
+    func balance(for process: AudioProcess) -> Int {
+        sourceBalances[process.stableSourceID] ?? 0
+    }
+
+    func setBalance(for process: AudioProcess, to value: Double) {
+        let balance = Self.clampBalance(Int(value.rounded()))
+        sourceBalances[process.stableSourceID] = balance
+        eqEngine.setSourceBalance(balance, for: process.audioObjectID)
+        saveSourceBalances()
     }
 
     func togglePlayback(for process: AudioProcess) {
@@ -321,6 +335,9 @@ final class AudioProcessStore: ObservableObject {
 
     private func updateEQSourceProcesses(_ processes: [AudioProcess]) {
         eqEngine.setSourceProcesses(processes)
+        for process in processes {
+            eqEngine.setSourceBalance(balance(for: process), for: process.audioObjectID)
+        }
         eqEngineStatus = eqEngine.status
         recoverEQRouteIfNeeded()
         updateEQStreamSnapshot()
@@ -411,6 +428,13 @@ final class AudioProcessStore: ObservableObject {
         userDefaults.set(data, forKey: sourceVolumesKey)
     }
 
+    private func saveSourceBalances() {
+        guard let data = try? JSONEncoder().encode(sourceBalances) else {
+            return
+        }
+        userDefaults.set(data, forKey: sourceBalancesKey)
+    }
+
     private func saveHiddenSources() {
         guard let data = try? JSONEncoder().encode(hiddenSourceNames) else {
             return
@@ -447,6 +471,19 @@ final class AudioProcessStore: ObservableObject {
             return [:]
         }
         return volumes.mapValues { min(100, max(0, $0)) }
+    }
+
+    private static func loadSourceBalances(from userDefaults: UserDefaults, key: String) -> [String: Int] {
+        guard let data = userDefaults.data(forKey: key),
+              let balances = try? JSONDecoder().decode([String: Int].self, from: data)
+        else {
+            return [:]
+        }
+        return balances.mapValues(clampBalance)
+    }
+
+    private static func clampBalance(_ balance: Int) -> Int {
+        min(100, max(-100, balance))
     }
 
     private static func loadHiddenSources(from userDefaults: UserDefaults, key: String) -> [String: String] {

@@ -48,6 +48,7 @@ public final class SystemEQEngine: @unchecked Sendable {
     private var tapIDs: [AudioObjectID] = []
     private var sourceProcessObjectIDs: [AudioObjectID] = []
     private var sourceVolumeByProcessObjectID: [AudioObjectID: Float32] = [:]
+    private var sourceBalanceByProcessObjectID: [AudioObjectID: Float32] = [:]
     private var inputBufferProcessObjectIDs: [AudioObjectID?] = []
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
     private var ioProcID: AudioDeviceIOProcID?
@@ -209,6 +210,7 @@ public final class SystemEQEngine: @unchecked Sendable {
 
         sourceProcessObjectIDs = nextIDs
         sourceVolumeByProcessObjectID = sourceVolumeByProcessObjectID.filter { nextIDs.contains($0.key) }
+        sourceBalanceByProcessObjectID = sourceBalanceByProcessObjectID.filter { nextIDs.contains($0.key) }
 
         if status == .active {
             let settings = processor.currentSettings
@@ -222,6 +224,14 @@ public final class SystemEQEngine: @unchecked Sendable {
 
         let clamped = max(0, min(100, volume))
         sourceVolumeByProcessObjectID[processObjectID] = Float32(clamped) / 100
+    }
+
+    public func setSourceBalance(_ balance: Int, for processObjectID: UInt32) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let clamped = max(-100, min(100, balance))
+        sourceBalanceByProcessObjectID[AudioObjectID(processObjectID)] = Float32(clamped) / 100
     }
 
     public func stop() {
@@ -278,7 +288,7 @@ public final class SystemEQEngine: @unchecked Sendable {
             return
         }
 
-        var sources: [(pointer: UnsafePointer<Float32>, frameCount: Int, channelCount: Int, gain: Float32)] = []
+        var sources: [(pointer: UnsafePointer<Float32>, frameCount: Int, channelCount: Int, gain: Float32, balance: Float32)] = []
         for inputIndex in 0..<inputBuffers.count {
             guard let inputPointer = inputBuffers[inputIndex].mData?.assumingMemoryBound(to: Float32.self) else {
                 continue
@@ -289,12 +299,13 @@ public final class SystemEQEngine: @unchecked Sendable {
             guard inputFrameCount > 0 else {
                 continue
             }
-            let gain = gainForInputBuffer(at: inputIndex, inputBufferCount: inputBuffers.count)
+            let controls = controlsForInputBuffer(at: inputIndex, inputBufferCount: inputBuffers.count)
             sources.append((
                 pointer: UnsafePointer(inputPointer),
                 frameCount: inputFrameCount,
                 channelCount: inputChannelCount,
-                gain: gain
+                gain: controls.gain,
+                balance: controls.balance
             ))
         }
 
@@ -449,9 +460,9 @@ public final class SystemEQEngine: @unchecked Sendable {
         systemEQLogger.info("System EQ IO layout input=[\(inputLayout, privacy: .public)] output=[\(outputLayout, privacy: .public)]")
     }
 
-    private func gainForInputBuffer(at inputIndex: Int, inputBufferCount: Int) -> Float32 {
+    private func controlsForInputBuffer(at inputIndex: Int, inputBufferCount: Int) -> (gain: Float32, balance: Float32) {
         guard lock.try() else {
-            return 1
+            return (1, 0)
         }
         defer { lock.unlock() }
 
@@ -461,9 +472,12 @@ public final class SystemEQEngine: @unchecked Sendable {
             tapProcessObjectIDs: inputBufferProcessObjectIDs
         )
         else {
-            return 1
+            return (1, 0)
         }
-        return sourceVolumeByProcessObjectID[processObjectID] ?? 1
+        return (
+            sourceVolumeByProcessObjectID[processObjectID] ?? 1,
+            sourceBalanceByProcessObjectID[processObjectID] ?? 0
+        )
     }
 
     @available(macOS 14.2, *)
