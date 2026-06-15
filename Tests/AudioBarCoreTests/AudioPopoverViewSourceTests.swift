@@ -133,6 +133,18 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(footer.contains(".help(\"Hidden sources can be restored above the footer\")"))
     }
 
+    func testFooterExposesRestartBeforeQuit() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let footer = try XCTUnwrap(source.slice(from: "private var footer", to: "private var footerText"))
+
+        let restartIndex = try XCTUnwrap(footer.range(of: "Button(\"Restart\")")?.lowerBound)
+        let quitIndex = try XCTUnwrap(footer.range(of: "Button(\"Quit\")")?.lowerBound)
+        XCTAssertLessThan(restartIndex, quitIndex)
+        XCTAssertTrue(footer.contains("restartAudioBar()"))
+        XCTAssertTrue(source.contains("private func restartAudioBar()"))
+        XCTAssertTrue(source.contains("/usr/bin/open"))
+    }
+
     func testAudioProcessRowsUseTwoTextLinesOnly() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let row = try XCTUnwrap(source.slice(

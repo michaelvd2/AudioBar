@@ -75,6 +75,13 @@ struct AudioPopoverView: View {
                     .help("Hidden sources can be restored above the footer")
             }
 
+            Button("Restart") {
+                restartAudioBar()
+            }
+            .buttonStyle(.plain)
+            .font(.caption)
+            .help("Restart AudioBar")
+
             Button("Quit") {
                 NSApp.terminate(nil)
             }
@@ -90,6 +97,19 @@ struct AudioPopoverView: View {
             return "Refreshes every 3s"
         }
         return "Updated \(lastRefreshDate.formatted(date: .omitted, time: .shortened))"
+    }
+
+    private func restartAudioBar() {
+        let bundlePath = Bundle.main.bundleURL.path
+        let escapedBundlePath = bundlePath.replacingOccurrences(of: "'", with: "'\\''")
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = [
+            "-c",
+            "sleep 0.4; /usr/bin/open -n '\(escapedBundlePath)'"
+        ]
+        try? task.run()
+        NSApp.terminate(nil)
     }
 }
 
