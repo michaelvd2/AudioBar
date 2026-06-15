@@ -117,12 +117,12 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertTrue(source.contains("processor.processInterleaved"))
     }
 
-    func testActiveRouteRestartsWhenSourceProcessesChange() throws {
+    func testActiveRouteRestartsWhenDedicatedSourceProcessesChange() throws {
         let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
-        let setSourceProcesses = try XCTUnwrap(source.function(named: "setSourceProcesses"))
+        let updateDedicatedSources = try XCTUnwrap(source.function(named: "updateDedicatedSourceProcessesLocked"))
 
-        XCTAssertTrue(setSourceProcesses.contains("restartLocked(settings: settings)"))
-        XCTAssertFalse(setSourceProcesses.contains("_ = start(settings: settings)"))
+        XCTAssertTrue(updateDedicatedSources.contains("restartLocked(settings: settings)"))
+        XCTAssertFalse(updateDedicatedSources.contains("_ = start(settings: settings)"))
     }
 
     func testActiveRouteRestartsWhenDefaultOutputDeviceChanges() throws {
@@ -143,6 +143,40 @@ final class SystemEQEngineTests: XCTestCase {
 
         XCTAssertTrue(setSourceProcesses.contains("$0.isActiveOutput || $0.shouldRemainVisibleWhenPaused"))
         XCTAssertFalse(setSourceProcesses.contains(".filter(\\.isActiveOutput)"))
+    }
+
+    func testEngineOnlyCreatesSourceTapsForSourcesWithNonDefaultControls() {
+        let engine = SystemEQEngine()
+        let process = AudioProcess(
+            audioObjectID: 42,
+            pid: 420,
+            bundleID: "com.example.Player",
+            appName: "Player",
+            trackTitle: nil,
+            currentVolume: 100,
+            volumeCapability: .systemRoute
+        )
+
+        engine.setSourceProcesses([process])
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [])
+
+        engine.setSourceBalance(40, for: process.audioObjectID)
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [AudioObjectID(process.audioObjectID)])
+
+        engine.setSourceBalance(0, for: process.audioObjectID)
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [])
+
+        engine.setSourceMono(true, for: process.audioObjectID)
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [AudioObjectID(process.audioObjectID)])
+
+        engine.setSourceMono(false, for: process.audioObjectID)
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [])
+
+        engine.setSourceVolume(80, for: process.audioObjectID)
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [AudioObjectID(process.audioObjectID)])
+
+        engine.setSourceVolume(100, for: process.audioObjectID)
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [])
     }
 
     func testInputBufferMapAlignsTapMetadataAfterExtraDeviceBuffers() {
@@ -172,6 +206,10 @@ final class SystemEQEngineTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/AudioBarCore/SystemEQEngine.swift")
+    }
+
+    private func sourceProcessObjectIDs(in engine: SystemEQEngine) -> [AudioObjectID] {
+        Mirror(reflecting: engine).children.first { $0.label == "sourceProcessObjectIDs" }?.value as? [AudioObjectID] ?? []
     }
 }
 

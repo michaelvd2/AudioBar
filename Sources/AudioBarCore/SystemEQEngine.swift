@@ -46,6 +46,7 @@ public final class SystemEQEngine: @unchecked Sendable {
     private let lock = NSRecursiveLock()
     private let processor = EQProcessor(sampleRate: 48_000, channelCount: 2)
     private var tapIDs: [AudioObjectID] = []
+    private var availableSourceProcessObjectIDs: [AudioObjectID] = []
     private var sourceProcessObjectIDs: [AudioObjectID] = []
     private var sourceVolumeByProcessObjectID: [AudioObjectID: Float32] = [:]
     private var sourceBalanceByProcessObjectID: [AudioObjectID: Float32] = [:]
@@ -199,25 +200,17 @@ public final class SystemEQEngine: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        let nextIDs = Array(Set(processes
+        let nextAvailableIDs = Array(Set(processes
             .filter { $0.isActiveOutput || $0.shouldRemainVisibleWhenPaused }
             .map { AudioObjectID($0.audioObjectID) }
             .filter { $0 != kAudioObjectUnknown }
         )).sorted()
 
-        guard nextIDs != sourceProcessObjectIDs else {
-            return
-        }
-
-        sourceProcessObjectIDs = nextIDs
-        sourceVolumeByProcessObjectID = sourceVolumeByProcessObjectID.filter { nextIDs.contains($0.key) }
-        sourceBalanceByProcessObjectID = sourceBalanceByProcessObjectID.filter { nextIDs.contains($0.key) }
-        sourceMonoByProcessObjectID = Set(sourceMonoByProcessObjectID.filter { nextIDs.contains($0) })
-
-        if status == .active {
-            let settings = processor.currentSettings
-            _ = restartLocked(settings: settings)
-        }
+        availableSourceProcessObjectIDs = nextAvailableIDs
+        sourceVolumeByProcessObjectID = sourceVolumeByProcessObjectID.filter { nextAvailableIDs.contains($0.key) }
+        sourceBalanceByProcessObjectID = sourceBalanceByProcessObjectID.filter { nextAvailableIDs.contains($0.key) }
+        sourceMonoByProcessObjectID = Set(sourceMonoByProcessObjectID.filter { nextAvailableIDs.contains($0) })
+        updateDedicatedSourceProcessesLocked()
     }
 
     public func setSourceVolume(_ volume: Int, for processObjectID: AudioObjectID) {
@@ -225,7 +218,12 @@ public final class SystemEQEngine: @unchecked Sendable {
         defer { lock.unlock() }
 
         let clamped = max(0, min(100, volume))
-        sourceVolumeByProcessObjectID[processObjectID] = Float32(clamped) / 100
+        if clamped >= 99 {
+            sourceVolumeByProcessObjectID.removeValue(forKey: processObjectID)
+        } else {
+            sourceVolumeByProcessObjectID[processObjectID] = Float32(clamped) / 100
+        }
+        updateDedicatedSourceProcessesLocked()
     }
 
     public func setSourceBalance(_ balance: Int, for processObjectID: UInt32) {
@@ -233,7 +231,13 @@ public final class SystemEQEngine: @unchecked Sendable {
         defer { lock.unlock() }
 
         let clamped = max(-100, min(100, balance))
-        sourceBalanceByProcessObjectID[AudioObjectID(processObjectID)] = Float32(clamped) / 100
+        let processObjectID = AudioObjectID(processObjectID)
+        if abs(clamped) <= 8 {
+            sourceBalanceByProcessObjectID.removeValue(forKey: processObjectID)
+        } else {
+            sourceBalanceByProcessObjectID[processObjectID] = Float32(clamped) / 100
+        }
+        updateDedicatedSourceProcessesLocked()
     }
 
     public func setSourceMono(_ isMono: Bool, for processObjectID: UInt32) {
@@ -246,6 +250,7 @@ public final class SystemEQEngine: @unchecked Sendable {
         } else {
             sourceMonoByProcessObjectID.remove(processObjectID)
         }
+        updateDedicatedSourceProcessesLocked()
     }
 
     public func stop() {
@@ -494,6 +499,29 @@ public final class SystemEQEngine: @unchecked Sendable {
             sourceBalanceByProcessObjectID[processObjectID] ?? 0,
             sourceMonoByProcessObjectID.contains(processObjectID)
         )
+    }
+
+    private func updateDedicatedSourceProcessesLocked() {
+        let nextIDs = availableSourceProcessObjectIDs.filter { sourceNeedsDedicatedTap($0) }
+        guard nextIDs != sourceProcessObjectIDs else {
+            return
+        }
+
+        sourceProcessObjectIDs = nextIDs
+        if status == .active {
+            let settings = processor.currentSettings
+            _ = restartLocked(settings: settings)
+        }
+    }
+
+    private func sourceNeedsDedicatedTap(_ processObjectID: AudioObjectID) -> Bool {
+        if let volume = sourceVolumeByProcessObjectID[processObjectID], volume < 0.99 {
+            return true
+        }
+        if let balance = sourceBalanceByProcessObjectID[processObjectID], abs(balance) > 0.08 {
+            return true
+        }
+        return sourceMonoByProcessObjectID.contains(processObjectID)
     }
 
     @available(macOS 14.2, *)
