@@ -113,17 +113,17 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertTrue(bluetoothDetectionFunction.contains("kAudioDeviceTransportTypeBluetoothLE"))
     }
 
-    func testBluetoothRoutesPauseSystemEQBeforeCreatingTaps() throws {
+    func testBluetoothRoutesUseMutedReplacementRouteInsteadOfUnmutedPassthrough() throws {
         let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
         let startFunction = try XCTUnwrap(source.function(named: "start"))
+        let muteBehaviorFunction = try XCTUnwrap(source.function(named: "tapMuteBehavior"))
 
-        let bluetoothCheck = try XCTUnwrap(startFunction.range(of: "isBluetoothOutputDevice(outputDeviceID)")?.lowerBound)
-        let firstTapCreation = try XCTUnwrap(startFunction.range(of: "CATapDescription(")?.lowerBound)
-
-        XCTAssertLessThan(bluetoothCheck, firstTapCreation)
-        XCTAssertTrue(startFunction.contains("return pauseLocked(\"EQ paused for Bluetooth output\")"))
-        XCTAssertTrue(source.contains("private func pauseLocked"))
-        XCTAssertTrue(source.contains("currentStreamSnapshot = .inactive"))
+        XCTAssertTrue(startFunction.contains("let muteBehavior = tapMuteBehavior(forOutputDeviceID: outputDeviceID)"))
+        XCTAssertFalse(startFunction.contains("return pauseLocked(\"EQ paused for Bluetooth output\")"))
+        XCTAssertTrue(muteBehaviorFunction.contains("isBluetoothOutputDevice(outputDeviceID)"))
+        XCTAssertTrue(muteBehaviorFunction.contains("Bluetooth output detected; using muted replacement route"))
+        XCTAssertTrue(muteBehaviorFunction.contains("CATapMuteBehavior(rawValue: 2)"))
+        XCTAssertFalse(muteBehaviorFunction.contains("CATapMuteBehavior(rawValue: 0)"))
     }
 
     func testEngineKeepsSourceTapGainStateForRouteMixer() throws {

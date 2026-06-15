@@ -112,11 +112,6 @@ public final class SystemEQEngine: @unchecked Sendable {
             return failLocked("Output device unavailable")
         }
 
-        if isBluetoothOutputDevice(outputDeviceID) {
-            processor.update(settings: settings)
-            return pauseLocked("EQ paused for Bluetooth output")
-        }
-
         let muteBehavior = tapMuteBehavior(forOutputDeviceID: outputDeviceID)
         var processObjectIDsForInputBuffers: [AudioObjectID?] = []
         let excludedProcesses = Array(Set((currentProcessObjectID().map { [$0] } ?? []) + sourceProcessObjectIDs))
@@ -542,10 +537,9 @@ public final class SystemEQEngine: @unchecked Sendable {
 
     private func tapMuteBehavior(forOutputDeviceID outputDeviceID: AudioObjectID) -> CATapMuteBehavior {
         if isBluetoothOutputDevice(outputDeviceID) {
-            systemEQLogger.info("Bluetooth output detected; leaving tapped hardware playback unmuted")
-            return CATapMuteBehavior(rawValue: 0) ?? CATapMuteBehavior(rawValue: 2)!
+            systemEQLogger.info("Bluetooth output detected; using muted replacement route")
         }
-        return CATapMuteBehavior(rawValue: 2) ?? CATapMuteBehavior(rawValue: 0)!
+        return CATapMuteBehavior(rawValue: 2) ?? CATapMuteBehavior(rawValue: 1)!
     }
 
     private func isBluetoothOutputDevice(_ outputDeviceID: AudioObjectID) -> Bool {
