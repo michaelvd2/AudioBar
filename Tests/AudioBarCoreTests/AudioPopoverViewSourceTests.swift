@@ -211,6 +211,8 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(row.contains("Self.sliderTrackWidth"))
         XCTAssertTrue(row.contains("Self.sideMarkerWidth"))
         XCTAssertTrue(row.contains("Self.valueColumnWidth"))
+        XCTAssertTrue(row.contains(".frame(width: Self.valueColumnWidth, alignment: .leading)"))
+        XCTAssertFalse(row.contains(".frame(width: Self.valueColumnWidth, alignment: .trailing)"))
         XCTAssertTrue(row.contains("Color.clear"))
         XCTAssertTrue(source.contains("store.balance(for: process)"))
         XCTAssertTrue(row.contains("store.setBalance(for: process, to: $0)"))

@@ -598,7 +598,7 @@ private struct AudioProcessRow: View {
             Text(volumeLabel)
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
-                .frame(width: Self.valueColumnWidth, alignment: .trailing)
+                .frame(width: Self.valueColumnWidth, alignment: .leading)
         }
         .frame(width: Self.sliderRowWidth, height: 18, alignment: .trailing)
     }
@@ -629,7 +629,7 @@ private struct AudioProcessRow: View {
             Text(balanceLabel)
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
-                .frame(width: Self.valueColumnWidth, alignment: .trailing)
+                .frame(width: Self.valueColumnWidth, alignment: .leading)
         }
         .frame(width: Self.sliderRowWidth, height: 18, alignment: .trailing)
     }
