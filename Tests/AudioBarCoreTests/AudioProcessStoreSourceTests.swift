@@ -31,10 +31,24 @@ final class AudioProcessStoreSourceTests: XCTestCase {
 
     func testRefreshRetriesFailedEQRouteAfterSourceListChanges() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let routeUpdateFunction = try XCTUnwrap(source.function(named: "updateEQSourceProcesses"))
+
+        XCTAssertTrue(routeUpdateFunction.contains("recoverEQRouteIfNeeded()"))
+        XCTAssertTrue(source.contains("private func recoverEQRouteIfNeeded()"))
+    }
+
+    func testRefreshSyncsEQStatusAfterSourceRouteChangesBeforeRecovering() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let refreshFunction = try XCTUnwrap(source.function(named: "refresh"))
 
-        XCTAssertTrue(refreshFunction.contains("recoverEQRouteIfNeeded()"))
-        XCTAssertTrue(source.contains("private func recoverEQRouteIfNeeded()"))
+        let routeUpdateIndex = try XCTUnwrap(refreshFunction.range(of: "updateEQSourceProcesses(nextProcesses)")?.lowerBound)
+        let publishIndex = try XCTUnwrap(refreshFunction.range(of: "processes = nextProcesses")?.lowerBound)
+
+        XCTAssertLessThan(routeUpdateIndex, publishIndex)
+        XCTAssertTrue(source.contains("private func updateEQSourceProcesses"))
+        XCTAssertTrue(source.contains("eqEngineStatus = eqEngine.status"))
+        XCTAssertTrue(source.contains("recoverEQRouteIfNeeded()"))
+        XCTAssertTrue(source.contains("updateEQStreamSnapshot()"))
     }
 
     func testFirstUseSetupGatesAutomaticEQStartupUntilPermissionsAreRequested() throws {
@@ -90,7 +104,9 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("persistedVolumes: Self.loadSourceVolumes"))
 
         let refreshFunction = try XCTUnwrap(source.function(named: "refresh"))
-        XCTAssertTrue(refreshFunction.contains("eqEngine.setSourceProcesses(nextProcesses)"))
+        let routeUpdateFunction = try XCTUnwrap(source.function(named: "updateEQSourceProcesses"))
+        XCTAssertTrue(refreshFunction.contains("updateEQSourceProcesses(nextProcesses)"))
+        XCTAssertTrue(routeUpdateFunction.contains("eqEngine.setSourceProcesses(processes)"))
         XCTAssertTrue(refreshFunction.contains("processCache.merge(activeProcesses: activeProcesses)"))
         XCTAssertTrue(refreshFunction.contains("activeProcesses.count"))
     }
@@ -127,6 +143,8 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(refreshFunction.contains("filter { !isHiddenSource($0) }"))
         XCTAssertTrue(hideFunction.contains("hiddenSourceNames[process.stableSourceID] = process.displayTitle"))
         XCTAssertTrue(hideFunction.contains("saveHiddenSources()"))
+        XCTAssertTrue(hideFunction.contains("updateEQSourceProcesses(processes)"))
+        XCTAssertFalse(hideFunction.contains("eqEngine.setSourceProcesses(processes)"))
         XCTAssertTrue(restoreFunction.contains("hiddenSourceNames.removeValue(forKey: sourceID)"))
         XCTAssertTrue(restoreFunction.contains("refresh()"))
     }

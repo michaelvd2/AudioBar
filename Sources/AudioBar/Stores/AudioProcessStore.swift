@@ -115,8 +115,7 @@ final class AudioProcessStore: ObservableObject {
         let activeProcesses = provider.activeOutputProcesses()
         let nextProcesses = processCache.merge(activeProcesses: activeProcesses)
             .filter { !isHiddenSource($0) }
-        eqEngine.setSourceProcesses(nextProcesses)
-        recoverEQRouteIfNeeded()
+        updateEQSourceProcesses(nextProcesses)
         processes = nextProcesses
         lastRefreshDate = Date()
         statusMessage = activeProcesses.isEmpty ? "No active output detected" : "\(activeProcesses.count) active"
@@ -128,7 +127,7 @@ final class AudioProcessStore: ObservableObject {
         updateHiddenSources()
         saveHiddenSources()
         processes.removeAll { isHiddenSource($0) }
-        eqEngine.setSourceProcesses(processes)
+        updateEQSourceProcesses(processes)
     }
 
     func restoreHiddenSource(_ sourceID: String) {
@@ -318,6 +317,13 @@ final class AudioProcessStore: ObservableObject {
     private func restartEQEngine() {
         eqEngine.stop()
         startEQEngine()
+    }
+
+    private func updateEQSourceProcesses(_ processes: [AudioProcess]) {
+        eqEngine.setSourceProcesses(processes)
+        eqEngineStatus = eqEngine.status
+        recoverEQRouteIfNeeded()
+        updateEQStreamSnapshot()
     }
 
     private func updateEQEngine() {
