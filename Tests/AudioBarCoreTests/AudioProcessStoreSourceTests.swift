@@ -37,6 +37,17 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("private func recoverEQRouteIfNeeded()"))
     }
 
+    func testUnavailableEQRoutesAreNotRetriedAsFailures() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let updateFunction = try XCTUnwrap(source.function(named: "updateEQEngine"))
+        let recoverFunction = try XCTUnwrap(source.function(named: "recoverEQRouteIfNeeded"))
+
+        XCTAssertTrue(updateFunction.contains("eqEngineStatus.isFailure"))
+        XCTAssertFalse(updateFunction.contains("isUnavailable"))
+        XCTAssertTrue(recoverFunction.contains("eqEngineStatus.isFailure"))
+        XCTAssertFalse(recoverFunction.contains("isUnavailable"))
+    }
+
     func testRefreshSyncsEQStatusAfterSourceRouteChangesBeforeRecovering() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let refreshFunction = try XCTUnwrap(source.function(named: "refresh"))

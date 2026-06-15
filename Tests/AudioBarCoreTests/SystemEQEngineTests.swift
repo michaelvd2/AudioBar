@@ -10,6 +10,9 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertEqual(SystemEQEngineStatus.ready.displayText, "System tap ready")
         XCTAssertEqual(SystemEQEngineStatus.active.displayText, "EQ active")
         XCTAssertEqual(SystemEQEngineStatus.failed(message: "Tap unavailable").displayText, "Tap unavailable")
+        XCTAssertEqual(SystemEQEngineStatus.unavailable(message: "EQ paused for Bluetooth output").displayText, "EQ paused for Bluetooth output")
+        XCTAssertFalse(SystemEQEngineStatus.unavailable(message: "EQ paused for Bluetooth output").isFailure)
+        XCTAssertTrue(SystemEQEngineStatus.unavailable(message: "EQ paused for Bluetooth output").isUnavailable)
     }
 
     func testNewEngineStartsStoppedAndSettingsUpdateDoesNotActivateRoute() {
@@ -101,14 +104,26 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertTrue(muteBehaviorFunction.contains("CATapMuteBehavior(rawValue: 2)"))
     }
 
-    func testBluetoothRoutesLeaveOriginalHardwarePlaybackAudible() throws {
+    func testBluetoothRouteDetectionIncludesClassicAndLETransports() throws {
         let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
-        let muteBehaviorFunction = try XCTUnwrap(source.function(named: "tapMuteBehavior"))
+        let bluetoothDetectionFunction = try XCTUnwrap(source.function(named: "isBluetoothOutputDevice"))
 
-        XCTAssertTrue(source.contains("readUInt32(objectID: outputDeviceID, selector: kAudioDevicePropertyTransportType)"))
-        XCTAssertTrue(muteBehaviorFunction.contains("kAudioDeviceTransportTypeBluetooth"))
-        XCTAssertTrue(muteBehaviorFunction.contains("kAudioDeviceTransportTypeBluetoothLE"))
-        XCTAssertTrue(muteBehaviorFunction.contains("CATapMuteBehavior(rawValue: 0)"))
+        XCTAssertTrue(bluetoothDetectionFunction.contains("readUInt32(objectID: outputDeviceID, selector: kAudioDevicePropertyTransportType)"))
+        XCTAssertTrue(bluetoothDetectionFunction.contains("kAudioDeviceTransportTypeBluetooth"))
+        XCTAssertTrue(bluetoothDetectionFunction.contains("kAudioDeviceTransportTypeBluetoothLE"))
+    }
+
+    func testBluetoothRoutesPauseSystemEQBeforeCreatingTaps() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let startFunction = try XCTUnwrap(source.function(named: "start"))
+
+        let bluetoothCheck = try XCTUnwrap(startFunction.range(of: "isBluetoothOutputDevice(outputDeviceID)")?.lowerBound)
+        let firstTapCreation = try XCTUnwrap(startFunction.range(of: "CATapDescription(")?.lowerBound)
+
+        XCTAssertLessThan(bluetoothCheck, firstTapCreation)
+        XCTAssertTrue(startFunction.contains("return pauseLocked(\"EQ paused for Bluetooth output\")"))
+        XCTAssertTrue(source.contains("private func pauseLocked"))
+        XCTAssertTrue(source.contains("currentStreamSnapshot = .inactive"))
     }
 
     func testEngineKeepsSourceTapGainStateForRouteMixer() throws {
@@ -142,7 +157,7 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertTrue(source.contains("restartAfterDefaultOutputDeviceChange"))
 
         let restartFunction = try XCTUnwrap(source.function(named: "restartAfterDefaultOutputDeviceChange"))
-        XCTAssertTrue(restartFunction.contains("status == .active"))
+        XCTAssertTrue(restartFunction.contains("case .active, .unavailable"))
         XCTAssertTrue(restartFunction.contains("restartLocked(settings: settings)"))
     }
 

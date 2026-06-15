@@ -13,6 +13,7 @@ public enum SystemEQEngineStatus: Equatable, Sendable {
     case probing
     case ready
     case active
+    case unavailable(message: String)
     case failed(message: String)
 
     public var displayText: String {
@@ -27,6 +28,8 @@ public enum SystemEQEngineStatus: Equatable, Sendable {
             return "System tap ready"
         case .active:
             return "EQ active"
+        case let .unavailable(message):
+            return message
         case let .failed(message):
             return message
         }
@@ -34,6 +37,13 @@ public enum SystemEQEngineStatus: Equatable, Sendable {
 
     public var isFailure: Bool {
         if case .failed = self {
+            return true
+        }
+        return false
+    }
+
+    public var isUnavailable: Bool {
+        if case .unavailable = self {
             return true
         }
         return false
@@ -100,6 +110,11 @@ public final class SystemEQEngine: @unchecked Sendable {
               let outputDeviceUID = readString(objectID: outputDeviceID, selector: kAudioDevicePropertyDeviceUID)
         else {
             return failLocked("Output device unavailable")
+        }
+
+        if isBluetoothOutputDevice(outputDeviceID) {
+            processor.update(settings: settings)
+            return pauseLocked("EQ paused for Bluetooth output")
         }
 
         let muteBehavior = tapMuteBehavior(forOutputDeviceID: outputDeviceID)
@@ -526,12 +541,17 @@ public final class SystemEQEngine: @unchecked Sendable {
     }
 
     private func tapMuteBehavior(forOutputDeviceID outputDeviceID: AudioObjectID) -> CATapMuteBehavior {
-        let transportType = readUInt32(objectID: outputDeviceID, selector: kAudioDevicePropertyTransportType)
-        if transportType == kAudioDeviceTransportTypeBluetooth || transportType == kAudioDeviceTransportTypeBluetoothLE {
+        if isBluetoothOutputDevice(outputDeviceID) {
             systemEQLogger.info("Bluetooth output detected; leaving tapped hardware playback unmuted")
             return CATapMuteBehavior(rawValue: 0) ?? CATapMuteBehavior(rawValue: 2)!
         }
         return CATapMuteBehavior(rawValue: 2) ?? CATapMuteBehavior(rawValue: 0)!
+    }
+
+    private func isBluetoothOutputDevice(_ outputDeviceID: AudioObjectID) -> Bool {
+        let transportType = readUInt32(objectID: outputDeviceID, selector: kAudioDevicePropertyTransportType)
+        return transportType == kAudioDeviceTransportTypeBluetooth
+            || transportType == kAudioDeviceTransportTypeBluetoothLE
     }
 
     @available(macOS 14.2, *)
@@ -555,7 +575,10 @@ public final class SystemEQEngine: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        guard status == .active else {
+        switch status {
+        case .active, .unavailable:
+            break
+        default:
             return
         }
 
@@ -568,6 +591,14 @@ public final class SystemEQEngine: @unchecked Sendable {
         stopLocked(updateStatus: false)
         status = .failed(message: message)
         systemEQLogger.error("System EQ route failed: \(message, privacy: .public)")
+        return status
+    }
+
+    private func pauseLocked(_ message: String) -> SystemEQEngineStatus {
+        stopLocked(updateStatus: false)
+        status = .unavailable(message: message)
+        currentStreamSnapshot = .inactive
+        systemEQLogger.info("System EQ route paused: \(message, privacy: .public)")
         return status
     }
 
