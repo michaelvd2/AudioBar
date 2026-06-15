@@ -82,6 +82,29 @@ enum AudioSourceMixer {
         frameCount: Int,
         channelCount: Int
     ) {
+        mixInterleaved(
+            sources: sources.map {
+                (
+                    pointer: $0.pointer,
+                    frameCount: $0.frameCount,
+                    channelCount: $0.channelCount,
+                    gain: $0.gain,
+                    balance: $0.balance,
+                    isMono: false
+                )
+            },
+            output: output,
+            frameCount: frameCount,
+            channelCount: channelCount
+        )
+    }
+
+    static func mixInterleaved(
+        sources: [(pointer: UnsafePointer<Float32>, frameCount: Int, channelCount: Int, gain: Float32, balance: Float32, isMono: Bool)],
+        output: UnsafeMutablePointer<Float32>,
+        frameCount: Int,
+        channelCount: Int
+    ) {
         let channelCount = max(1, channelCount)
         let sampleCount = frameCount * channelCount
         guard sampleCount > 0 else {
@@ -111,12 +134,30 @@ enum AudioSourceMixer {
                 let sourceFrameOffset = frame * sourceChannelCount
                 let outputFrameOffset = frame * channelCount
 
-                if channelCount == 1, sourceChannelCount > 1 {
+                if source.isMono || (channelCount == 1 && sourceChannelCount > 1) {
                     var monoSample: Float32 = 0
                     for sourceChannel in 0..<sourceChannelCount {
                         monoSample += source.pointer[sourceFrameOffset + sourceChannel]
                     }
-                    output[outputFrameOffset] += (monoSample / Float32(sourceChannelCount)) * gain
+                    monoSample /= Float32(sourceChannelCount)
+
+                    if channelCount == 1 {
+                        output[outputFrameOffset] += monoSample * gain
+                    } else {
+                        for outputChannel in 0..<channelCount {
+                            let channelGain: Float32
+                            if outputChannel == 0 {
+                                channelGain = leftGain
+                            } else if outputChannel == 1 {
+                                channelGain = rightGain
+                            } else if sourceChannelCount == 1 {
+                                channelGain = gain
+                            } else {
+                                continue
+                            }
+                            output[outputFrameOffset + outputChannel] += monoSample * channelGain
+                        }
+                    }
                 } else {
                     for outputChannel in 0..<channelCount {
                         let channelGain = outputChannel == 0 ? leftGain : rightGain

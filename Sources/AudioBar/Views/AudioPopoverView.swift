@@ -539,6 +539,9 @@ private struct AudioProcessRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+
+                ChannelModeButton(process: process, store: store)
+                    .padding(.top, 2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -665,6 +668,25 @@ private struct AudioProcessRow: View {
             return "macOS does not expose a public per-app volume control for this source"
         }
         return "Set source volume"
+    }
+}
+
+private struct ChannelModeButton: View {
+    let process: AudioProcess
+    @ObservedObject var store: AudioProcessStore
+
+    var body: some View {
+        Button(store.channelModeLabel(for: process)) {
+            store.toggleChannelMode(for: process)
+        }
+        .buttonStyle(.plain)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(.tertiary.opacity(0.18), in: Capsule())
+        .contentShape(Capsule())
+        .help("Toggle mono/stereo for this source")
     }
 }
 

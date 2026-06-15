@@ -136,6 +136,21 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(updateRouteFunction.contains("eqEngine.setSourceBalance(balance(for: process), for: process.audioObjectID)"))
     }
 
+    func testStorePersistsAndAppliesSourceChannelMode() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let toggleFunction = try XCTUnwrap(source.function(named: "toggleChannelMode"))
+        let updateRouteFunction = try XCTUnwrap(source.function(named: "updateEQSourceProcesses"))
+
+        XCTAssertTrue(source.contains("@Published private(set) var monoSourceIDs"))
+        XCTAssertTrue(source.contains("private let monoSourceIDsKey"))
+        XCTAssertTrue(source.contains("func isMono(for process: AudioProcess) -> Bool"))
+        XCTAssertTrue(source.contains("func channelModeLabel(for process: AudioProcess) -> String"))
+        XCTAssertTrue(toggleFunction.contains("monoSourceIDs.contains(process.stableSourceID)"))
+        XCTAssertTrue(toggleFunction.contains("eqEngine.setSourceMono(isMono(for: process), for: process.audioObjectID)"))
+        XCTAssertTrue(toggleFunction.contains("saveMonoSourceIDs()"))
+        XCTAssertTrue(updateRouteFunction.contains("eqEngine.setSourceMono(isMono(for: process), for: process.audioObjectID)"))
+    }
+
     func testStorePersistsSourceVolumeMapInUserDefaults() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
 

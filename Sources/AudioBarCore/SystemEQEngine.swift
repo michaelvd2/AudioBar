@@ -49,6 +49,7 @@ public final class SystemEQEngine: @unchecked Sendable {
     private var sourceProcessObjectIDs: [AudioObjectID] = []
     private var sourceVolumeByProcessObjectID: [AudioObjectID: Float32] = [:]
     private var sourceBalanceByProcessObjectID: [AudioObjectID: Float32] = [:]
+    private var sourceMonoByProcessObjectID: Set<AudioObjectID> = []
     private var inputBufferProcessObjectIDs: [AudioObjectID?] = []
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
     private var ioProcID: AudioDeviceIOProcID?
@@ -211,6 +212,7 @@ public final class SystemEQEngine: @unchecked Sendable {
         sourceProcessObjectIDs = nextIDs
         sourceVolumeByProcessObjectID = sourceVolumeByProcessObjectID.filter { nextIDs.contains($0.key) }
         sourceBalanceByProcessObjectID = sourceBalanceByProcessObjectID.filter { nextIDs.contains($0.key) }
+        sourceMonoByProcessObjectID = Set(sourceMonoByProcessObjectID.filter { nextIDs.contains($0) })
 
         if status == .active {
             let settings = processor.currentSettings
@@ -232,6 +234,18 @@ public final class SystemEQEngine: @unchecked Sendable {
 
         let clamped = max(-100, min(100, balance))
         sourceBalanceByProcessObjectID[AudioObjectID(processObjectID)] = Float32(clamped) / 100
+    }
+
+    public func setSourceMono(_ isMono: Bool, for processObjectID: UInt32) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let processObjectID = AudioObjectID(processObjectID)
+        if isMono {
+            sourceMonoByProcessObjectID.insert(processObjectID)
+        } else {
+            sourceMonoByProcessObjectID.remove(processObjectID)
+        }
     }
 
     public func stop() {
@@ -288,7 +302,7 @@ public final class SystemEQEngine: @unchecked Sendable {
             return
         }
 
-        var sources: [(pointer: UnsafePointer<Float32>, frameCount: Int, channelCount: Int, gain: Float32, balance: Float32)] = []
+        var sources: [(pointer: UnsafePointer<Float32>, frameCount: Int, channelCount: Int, gain: Float32, balance: Float32, isMono: Bool)] = []
         for inputIndex in 0..<inputBuffers.count {
             guard let inputPointer = inputBuffers[inputIndex].mData?.assumingMemoryBound(to: Float32.self) else {
                 continue
@@ -305,7 +319,8 @@ public final class SystemEQEngine: @unchecked Sendable {
                 frameCount: inputFrameCount,
                 channelCount: inputChannelCount,
                 gain: controls.gain,
-                balance: controls.balance
+                balance: controls.balance,
+                isMono: controls.isMono
             ))
         }
 
@@ -460,9 +475,9 @@ public final class SystemEQEngine: @unchecked Sendable {
         systemEQLogger.info("System EQ IO layout input=[\(inputLayout, privacy: .public)] output=[\(outputLayout, privacy: .public)]")
     }
 
-    private func controlsForInputBuffer(at inputIndex: Int, inputBufferCount: Int) -> (gain: Float32, balance: Float32) {
+    private func controlsForInputBuffer(at inputIndex: Int, inputBufferCount: Int) -> (gain: Float32, balance: Float32, isMono: Bool) {
         guard lock.try() else {
-            return (1, 0)
+            return (1, 0, false)
         }
         defer { lock.unlock() }
 
@@ -472,11 +487,12 @@ public final class SystemEQEngine: @unchecked Sendable {
             tapProcessObjectIDs: inputBufferProcessObjectIDs
         )
         else {
-            return (1, 0)
+            return (1, 0, false)
         }
         return (
             sourceVolumeByProcessObjectID[processObjectID] ?? 1,
-            sourceBalanceByProcessObjectID[processObjectID] ?? 0
+            sourceBalanceByProcessObjectID[processObjectID] ?? 0,
+            sourceMonoByProcessObjectID.contains(processObjectID)
         )
     }
 

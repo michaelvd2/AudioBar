@@ -90,6 +90,39 @@ final class AudioSourceMixerTests: XCTestCase {
         ])
     }
 
+    func testChannelAwareMixerCollapsesStereoSourceWhenMonoModeEnabled() {
+        let source: [Float32] = [
+            0.1, 0.9,
+            0.2, 0.8
+        ]
+        var output = Array<Float32>(repeating: 0, count: source.count)
+
+        source.withUnsafeBufferPointer { sourceBuffer in
+            let monoSources: [(pointer: UnsafePointer<Float32>, frameCount: Int, channelCount: Int, gain: Float32, balance: Float32, isMono: Bool)] = [(
+                pointer: sourceBuffer.baseAddress!,
+                frameCount: 2,
+                channelCount: 2,
+                gain: 1,
+                balance: 0,
+                isMono: true
+            )]
+
+            output.withUnsafeMutableBufferPointer { outputBuffer in
+                AudioSourceMixer.mixInterleaved(
+                    sources: monoSources,
+                    output: outputBuffer.baseAddress!,
+                    frameCount: 2,
+                    channelCount: 2
+                )
+            }
+        }
+
+        XCTAssertEqual(output[0], 0.5, accuracy: 0.0001)
+        XCTAssertEqual(output[1], 0.5, accuracy: 0.0001)
+        XCTAssertEqual(output[2], 0.5, accuracy: 0.0001)
+        XCTAssertEqual(output[3], 0.5, accuracy: 0.0001)
+    }
+
     func testChannelAwareMixerDownmixesStereoTapForMonoOutputBuffer() {
         let source: [Float32] = [
             0.1, 0.9,

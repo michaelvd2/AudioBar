@@ -159,6 +159,27 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(row.contains("view only"))
     }
 
+    func testAudioProcessRowsShowChannelModeButtonUnderSourceText() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var control"
+        ))
+        let channelModeButton = try XCTUnwrap(source.slice(
+            from: "private struct ChannelModeButton",
+            to: "private struct BalanceDragBar"
+        ))
+
+        let subtitleIndex = try XCTUnwrap(row.range(of: "Text(process.displaySubtitle)")?.lowerBound)
+        let buttonIndex = try XCTUnwrap(row.range(of: "ChannelModeButton(process: process, store: store)")?.lowerBound)
+
+        XCTAssertLessThan(subtitleIndex, buttonIndex)
+        XCTAssertTrue(channelModeButton.contains("Button(store.channelModeLabel(for: process))"))
+        XCTAssertTrue(channelModeButton.contains("store.toggleChannelMode(for: process)"))
+        XCTAssertTrue(channelModeButton.contains(".font(.caption2)"))
+        XCTAssertTrue(channelModeButton.contains(".help(\"Toggle mono/stereo for this source\")"))
+    }
+
     func testAudioProcessRowsUpdateRouteVolumeWhileDragging() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let row = try XCTUnwrap(source.slice(

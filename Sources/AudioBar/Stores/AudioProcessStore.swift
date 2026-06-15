@@ -27,6 +27,7 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var savedEQPresets: [SavedEQPreset]
     @Published private(set) var hiddenSources: [HiddenAudioSource]
     @Published private(set) var sourceBalances: [String: Int]
+    @Published private(set) var monoSourceIDs: Set<String>
 
     private let provider: AudioProcessProviding
     private let volumeController: AppVolumeControlling
@@ -42,6 +43,7 @@ final class AudioProcessStore: ObservableObject {
     private let savedEQPresetsKey = "AudioBar.savedEQPresets"
     private let sourceVolumesKey = "AudioBar.sourceVolumes"
     private let sourceBalancesKey = "AudioBar.sourceBalances"
+    private let monoSourceIDsKey = "AudioBar.monoSourceIDs"
     private let hiddenSourcesKey = "AudioBar.hiddenSources"
     private let firstUseSetupCompletedKey = "AudioBar.firstUseSetupCompleted"
     private var processCache: AudioProcessListCache
@@ -71,6 +73,7 @@ final class AudioProcessStore: ObservableObject {
         self.isLaunchAtLoginEnabled = loginItemController.isEnabled
         self.savedEQPresets = Self.loadSavedEQPresets(from: userDefaults, key: savedEQPresetsKey)
         self.sourceBalances = Self.loadSourceBalances(from: userDefaults, key: sourceBalancesKey)
+        self.monoSourceIDs = Self.loadMonoSourceIDs(from: userDefaults, key: monoSourceIDsKey)
         self.hiddenSourceNames = Self.loadHiddenSources(from: userDefaults, key: hiddenSourcesKey)
         self.hiddenSources = Self.makeHiddenSources(from: hiddenSourceNames)
         self.processCache = AudioProcessListCache(
@@ -194,6 +197,24 @@ final class AudioProcessStore: ObservableObject {
         sourceBalances[process.stableSourceID] = balance
         eqEngine.setSourceBalance(balance, for: process.audioObjectID)
         saveSourceBalances()
+    }
+
+    func isMono(for process: AudioProcess) -> Bool {
+        monoSourceIDs.contains(process.stableSourceID)
+    }
+
+    func channelModeLabel(for process: AudioProcess) -> String {
+        isMono(for: process) ? "Mono" : "Stereo"
+    }
+
+    func toggleChannelMode(for process: AudioProcess) {
+        if monoSourceIDs.contains(process.stableSourceID) {
+            monoSourceIDs.remove(process.stableSourceID)
+        } else {
+            monoSourceIDs.insert(process.stableSourceID)
+        }
+        eqEngine.setSourceMono(isMono(for: process), for: process.audioObjectID)
+        saveMonoSourceIDs()
     }
 
     func togglePlayback(for process: AudioProcess) {
@@ -337,6 +358,7 @@ final class AudioProcessStore: ObservableObject {
         eqEngine.setSourceProcesses(processes)
         for process in processes {
             eqEngine.setSourceBalance(balance(for: process), for: process.audioObjectID)
+            eqEngine.setSourceMono(isMono(for: process), for: process.audioObjectID)
         }
         eqEngineStatus = eqEngine.status
         recoverEQRouteIfNeeded()
@@ -435,6 +457,13 @@ final class AudioProcessStore: ObservableObject {
         userDefaults.set(data, forKey: sourceBalancesKey)
     }
 
+    private func saveMonoSourceIDs() {
+        guard let data = try? JSONEncoder().encode(monoSourceIDs) else {
+            return
+        }
+        userDefaults.set(data, forKey: monoSourceIDsKey)
+    }
+
     private func saveHiddenSources() {
         guard let data = try? JSONEncoder().encode(hiddenSourceNames) else {
             return
@@ -480,6 +509,15 @@ final class AudioProcessStore: ObservableObject {
             return [:]
         }
         return balances.mapValues(clampBalance)
+    }
+
+    private static func loadMonoSourceIDs(from userDefaults: UserDefaults, key: String) -> Set<String> {
+        guard let data = userDefaults.data(forKey: key),
+              let sourceIDs = try? JSONDecoder().decode(Set<String>.self, from: data)
+        else {
+            return []
+        }
+        return sourceIDs
     }
 
     private static func clampBalance(_ balance: Int) -> Int {
