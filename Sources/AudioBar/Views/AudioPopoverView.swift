@@ -673,6 +673,8 @@ private struct BalanceDragBar: View {
     let isEnabled: Bool
     let onChange: (Double) -> Void
 
+    private static let centerSnapThreshold = 8.0
+
     @State private var draftValue: Double?
 
     private var visibleValue: Double {
@@ -742,7 +744,11 @@ private struct BalanceDragBar: View {
             return visibleValue
         }
         let fraction = min(1, max(0, locationX / width))
-        return ((fraction * 200) - 100).rounded()
+        let snappedValue = ((fraction * 200) - 100).rounded()
+        if abs(snappedValue) <= Self.centerSnapThreshold {
+            return 0
+        }
+        return snappedValue
     }
 }
 

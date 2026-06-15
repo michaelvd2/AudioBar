@@ -222,6 +222,18 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(row.contains(".padding(.trailing, 26)"))
     }
 
+    func testBalanceSliderSnapsNearCenter() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let balanceDragBar = try XCTUnwrap(source.slice(
+            from: "private struct BalanceDragBar",
+            to: "private struct PreviousTrackButton"
+        ))
+
+        XCTAssertTrue(balanceDragBar.contains("private static let centerSnapThreshold"))
+        XCTAssertTrue(balanceDragBar.contains("abs(snappedValue) <= Self.centerSnapThreshold"))
+        XCTAssertTrue(balanceDragBar.contains("return 0"))
+    }
+
     func testAudioProcessRowsIncludePlaybackControlPerSource() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let row = try XCTUnwrap(source.slice(
