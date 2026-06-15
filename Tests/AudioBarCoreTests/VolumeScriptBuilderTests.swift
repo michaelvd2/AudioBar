@@ -50,9 +50,12 @@ final class VolumeScriptBuilderTests: XCTestCase {
         let script = SafariMediaVolumeCommandBuilder.setVolumeScript(volume: 37)
 
         XCTAssertTrue(script.contains("tell application id \"com.apple.Safari\""))
-        XCTAssertTrue(script.contains("current tab of front window"))
+        XCTAssertTrue(script.contains("repeat with safariWindow in windows"))
+        XCTAssertTrue(script.contains("repeat with safariTab in tabs of safariWindow"))
+        XCTAssertTrue(script.contains("in safariTab"))
         XCTAssertTrue(script.contains("media.volume = 0.37"))
         XCTAssertTrue(script.contains("audio,video"))
+        XCTAssertFalse(script.contains("current tab of front window"))
     }
 
     func testSafariMediaEQScriptBuildsWebAudioFilterChain() {
@@ -64,7 +67,9 @@ final class VolumeScriptBuilderTests: XCTestCase {
         let script = SafariMediaEQCommandBuilder.applyEQScript(settings: settings)
 
         XCTAssertTrue(script.contains("tell application id \"com.apple.Safari\""))
-        XCTAssertTrue(script.contains("current tab of front window"))
+        XCTAssertTrue(script.contains("repeat with safariWindow in windows"))
+        XCTAssertTrue(script.contains("repeat with safariTab in tabs of safariWindow"))
+        XCTAssertTrue(script.contains("in safariTab"))
         XCTAssertTrue(script.contains("createMediaElementSource"))
         XCTAssertTrue(script.contains("createBiquadFilter"))
         XCTAssertTrue(script.contains("filter.type = 'peaking'"))
@@ -73,6 +78,7 @@ final class VolumeScriptBuilderTests: XCTestCase {
         XCTAssertTrue(script.contains("preampDB: 3.00"))
         XCTAssertTrue(script.contains("filter.frequency.value = band.frequency"))
         XCTAssertTrue(script.contains("preamp.gain.value = Math.pow(10, settings.preampDB / 20)"))
+        XCTAssertFalse(script.contains("current tab of front window"))
     }
 
     func testSafariMediaEQBypassScriptKeepsMediaAudibleThroughDirectWebAudioConnection() {

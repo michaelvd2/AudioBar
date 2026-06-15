@@ -39,6 +39,30 @@ public final class DefaultOutputBalanceController: @unchecked Sendable {
         return true
     }
 
+    @discardableResult
+    public func apply(volume: Int, balance: Int) -> Bool {
+        guard let deviceID = defaultOutputDeviceID() else {
+            defaultOutputBalanceLogger.error("Default output volume failed: output device unavailable")
+            return false
+        }
+        guard canSetChannelVolume(deviceID: deviceID, channel: 1),
+              canSetChannelVolume(deviceID: deviceID, channel: 2)
+        else {
+            defaultOutputBalanceLogger.error("Default output volume failed: stereo channel volume unavailable")
+            return false
+        }
+
+        let nextVolumes = Self.channelVolumes(forVolume: volume, balance: balance)
+        guard setChannelVolume(nextVolumes.left, deviceID: deviceID, channel: 1),
+              setChannelVolume(nextVolumes.right, deviceID: deviceID, channel: 2)
+        else {
+            defaultOutputBalanceLogger.error("Default output volume failed: channel write failed")
+            return false
+        }
+        defaultOutputBalanceLogger.info("Default output volume applied: \(volume), balance: \(balance)")
+        return true
+    }
+
     static func channelVolumes(
         forBalance balance: Int,
         currentLeft: Float32,
@@ -54,6 +78,16 @@ public final class DefaultOutputBalanceController: @unchecked Sendable {
             left: clampVolume(baseVolume * leftGain),
             right: clampVolume(baseVolume * rightGain)
         )
+    }
+
+    static func channelVolumes(forVolume volume: Int, balance: Int) -> (left: Float32, right: Float32) {
+        let baseVolume = clampVolume(Float32(max(0, min(100, volume))) / 100)
+        let balanceVolumes = channelVolumes(
+            forBalance: balance,
+            currentLeft: baseVolume,
+            currentRight: baseVolume
+        )
+        return balanceVolumes
     }
 
     private func defaultOutputDeviceID() -> AudioObjectID? {

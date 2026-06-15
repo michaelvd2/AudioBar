@@ -45,4 +45,24 @@ final class DefaultOutputBalanceControllerTests: XCTestCase {
         XCTAssertEqual(volumes.left, 0.4, accuracy: 0.0001)
         XCTAssertEqual(volumes.right, 0.8, accuracy: 0.0001)
     }
+
+    func testOutputVolumeKeepsCenteredChannelsEqual() {
+        let volumes = DefaultOutputBalanceController.channelVolumes(
+            forVolume: 37,
+            balance: 0
+        )
+
+        XCTAssertEqual(volumes.left, 0.37, accuracy: 0.0001)
+        XCTAssertEqual(volumes.right, 0.37, accuracy: 0.0001)
+    }
+
+    func testOutputVolumePreservesRightOnlyBalance() {
+        let volumes = DefaultOutputBalanceController.channelVolumes(
+            forVolume: 37,
+            balance: 100
+        )
+
+        XCTAssertEqual(volumes.left, 0, accuracy: 0.0001)
+        XCTAssertEqual(volumes.right, 0.37, accuracy: 0.0001)
+    }
 }

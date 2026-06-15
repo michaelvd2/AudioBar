@@ -28,16 +28,15 @@ public enum SafariMediaVolumeCommandBuilder {
         let clamped = min(100, max(0, volume))
         let mediaVolume = String(format: "%.2f", Double(clamped) / 100)
         let javascript = """
-        Array.from(document.querySelectorAll('audio,video')).forEach(function(media) { media.volume = \(mediaVolume); });
+        (function() {
+            const mediaItems = Array.from(document.querySelectorAll('audio,video'));
+            if (mediaItems.length === 0) { return false; }
+            mediaItems.forEach(function(media) { media.volume = \(mediaVolume); });
+            return true;
+        })();
         """
 
-        return """
-        tell application id "com.apple.Safari"
-            if (count of windows) is 0 then return false
-            do JavaScript "\(javascript.escapedForAppleScript)" in current tab of front window
-            return true
-        end tell
-        """
+        return safariAllTabsScript(javascript: javascript)
     }
 }
 
@@ -100,14 +99,26 @@ public enum SafariMediaEQCommandBuilder {
         })();
         """
 
-        return """
-        tell application id "com.apple.Safari"
-            if (count of windows) is 0 then return false
-            do JavaScript "\(javascript.escapedForAppleScript)" in current tab of front window
-            return true
-        end tell
-        """
+        return safariAllTabsScript(javascript: javascript)
     }
+}
+
+private func safariAllTabsScript(javascript: String) -> String {
+    """
+    tell application id "com.apple.Safari"
+        if (count of windows) is 0 then return false
+        set didApply to false
+        repeat with safariWindow in windows
+            repeat with safariTab in tabs of safariWindow
+                try
+                    set tabResult to do JavaScript "\(javascript.escapedForAppleScript)" in safariTab
+                    if tabResult is true or tabResult is "true" then set didApply to true
+                end try
+            end repeat
+        end repeat
+        return didApply
+    end tell
+    """
 }
 
 private extension String {

@@ -427,6 +427,8 @@ final class AudioProcessStore: ObservableObject {
 
     private func applyRouteVolume(_ volume: Int, for process: AudioProcess) {
         eqEngine.setSourceVolume(volume, for: process.audioObjectID)
+        eqEngineStatus = eqEngine.status
+        applyDefaultOutputVolumeFallback(volume, for: process)
     }
 
     private func applyDefaultOutputBalanceFallback(_ balance: Int, for process: AudioProcess) {
@@ -437,6 +439,16 @@ final class AudioProcessStore: ObservableObject {
         if defaultOutputBalanceController.apply(balance: balance) {
             defaultOutputBalanceFallbackSourceID = process.stableSourceID
         }
+    }
+
+    private func applyDefaultOutputVolumeFallback(_ volume: Int, for process: AudioProcess) {
+        guard process.volumeCapability == .systemRoute else {
+            return
+        }
+        guard eqEngineStatus.isUnavailable else {
+            return
+        }
+        _ = defaultOutputBalanceController.apply(volume: volume, balance: balance(for: process))
     }
 
     private func resetDefaultOutputBalanceFallbackIfNeeded() {

@@ -160,6 +160,19 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(resetFunction.contains("defaultOutputBalanceController.apply(balance: 0)"))
     }
 
+    func testStoreAppliesDefaultOutputVolumeFallbackForSystemRouteWhenEQRouteIsUnavailable() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let routeVolumeFunction = try XCTUnwrap(source.function(named: "applyRouteVolume"))
+        let fallbackFunction = try XCTUnwrap(source.function(named: "applyDefaultOutputVolumeFallback"))
+
+        XCTAssertTrue(routeVolumeFunction.contains("eqEngine.setSourceVolume(volume, for: process.audioObjectID)"))
+        XCTAssertTrue(routeVolumeFunction.contains("eqEngineStatus = eqEngine.status"))
+        XCTAssertTrue(routeVolumeFunction.contains("applyDefaultOutputVolumeFallback(volume, for: process)"))
+        XCTAssertTrue(fallbackFunction.contains("guard process.volumeCapability == .systemRoute else"))
+        XCTAssertTrue(fallbackFunction.contains("guard eqEngineStatus.isUnavailable else"))
+        XCTAssertTrue(fallbackFunction.contains("defaultOutputBalanceController.apply(volume: volume, balance: balance(for: process))"))
+    }
+
     func testStoreAppliesSafariMediaEQFallbackWhenEQRouteIsUnavailable() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let updateEQEngineFunction = try XCTUnwrap(source.function(named: "updateEQEngine"))
