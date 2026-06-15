@@ -147,6 +147,19 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(updateRouteFunction.contains("eqEngine.setSourceBalance(balance(for: process), for: process.audioObjectID)"))
     }
 
+    func testStoreAppliesDefaultOutputBalanceFallbackWhenEQRouteIsUnavailable() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let setBalanceFunction = try XCTUnwrap(source.function(named: "setBalance"))
+        let fallbackFunction = try XCTUnwrap(source.function(named: "applyDefaultOutputBalanceFallback"))
+        let resetFunction = try XCTUnwrap(source.function(named: "resetDefaultOutputBalanceFallbackIfNeeded"))
+
+        XCTAssertTrue(source.contains("private let defaultOutputBalanceController"))
+        XCTAssertTrue(setBalanceFunction.contains("applyDefaultOutputBalanceFallback(balance, for: process)"))
+        XCTAssertTrue(fallbackFunction.contains("guard eqEngineStatus.isUnavailable else"))
+        XCTAssertTrue(fallbackFunction.contains("defaultOutputBalanceController.apply(balance: balance)"))
+        XCTAssertTrue(resetFunction.contains("defaultOutputBalanceController.apply(balance: 0)"))
+    }
+
     func testStorePersistsAndAppliesSourceChannelMode() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let toggleFunction = try XCTUnwrap(source.function(named: "toggleChannelMode"))

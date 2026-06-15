@@ -36,6 +36,7 @@ final class AudioProcessStore: ObservableObject {
     private let playbackController: SourcePlaybackController
     private let loginItemController: LoginItemController
     private let eqEngine: SystemEQEngine
+    private let defaultOutputBalanceController: DefaultOutputBalanceController
     private let userDefaults: UserDefaults
     private var timer: Timer?
     private var streamTimer: Timer?
@@ -49,6 +50,7 @@ final class AudioProcessStore: ObservableObject {
     private var processCache: AudioProcessListCache
     private var hiddenSourceNames: [String: String]
     private var playbackStateOverrides: [String: Bool] = [:]
+    private var defaultOutputBalanceFallbackSourceID: String?
 
     init(
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
@@ -58,6 +60,7 @@ final class AudioProcessStore: ObservableObject {
         loginItemController: LoginItemController = LoginItemController(),
         provider: AudioProcessProviding? = nil,
         eqEngine: SystemEQEngine = SystemEQEngine(),
+        defaultOutputBalanceController: DefaultOutputBalanceController = DefaultOutputBalanceController(),
         userDefaults: UserDefaults = .standard
     ) {
         self.volumeController = volumeController
@@ -67,6 +70,7 @@ final class AudioProcessStore: ObservableObject {
         self.loginItemController = loginItemController
         self.provider = provider ?? CoreAudioProcessProvider(volumeController: volumeController)
         self.eqEngine = eqEngine
+        self.defaultOutputBalanceController = defaultOutputBalanceController
         self.userDefaults = userDefaults
         self.eqSettings = Self.loadEQSettings(from: userDefaults, key: eqSettingsKey)
         self.needsFirstUseSetup = !userDefaults.bool(forKey: firstUseSetupCompletedKey)
@@ -79,6 +83,12 @@ final class AudioProcessStore: ObservableObject {
         self.processCache = AudioProcessListCache(
             persistedVolumes: Self.loadSourceVolumes(from: userDefaults, key: sourceVolumesKey)
         )
+    }
+
+    deinit {
+        if defaultOutputBalanceFallbackSourceID != nil {
+            _ = defaultOutputBalanceController.apply(balance: 0)
+        }
     }
 
     func startAutoRefresh() {
@@ -195,7 +205,9 @@ final class AudioProcessStore: ObservableObject {
     func setBalance(for process: AudioProcess, to value: Double) {
         let balance = Self.clampBalance(Int(value.rounded()))
         sourceBalances[process.stableSourceID] = balance
+        eqEngineStatus = eqEngine.status
         eqEngine.setSourceBalance(balance, for: process.audioObjectID)
+        applyDefaultOutputBalanceFallback(balance, for: process)
         saveSourceBalances()
     }
 
@@ -340,12 +352,14 @@ final class AudioProcessStore: ObservableObject {
         }
         eqEngineStatus = .starting
         eqEngineStatus = eqEngine.start(settings: eqSettings)
+        resetDefaultOutputBalanceFallbackIfRouteIsAvailable()
         updateEQStreamSnapshot()
     }
 
     func stopEQEngine() {
         eqEngine.stop()
         eqEngineStatus = eqEngine.status
+        resetDefaultOutputBalanceFallbackIfNeeded()
         updateEQStreamSnapshot()
     }
 
@@ -361,6 +375,7 @@ final class AudioProcessStore: ObservableObject {
             eqEngine.setSourceMono(isMono(for: process), for: process.audioObjectID)
         }
         eqEngineStatus = eqEngine.status
+        resetDefaultOutputBalanceFallbackIfRouteIsAvailable()
         recoverEQRouteIfNeeded()
         updateEQStreamSnapshot()
     }
@@ -385,6 +400,7 @@ final class AudioProcessStore: ObservableObject {
         }
         eqEngine.update(settings: eqSettings)
         eqEngineStatus = eqEngine.status
+        resetDefaultOutputBalanceFallbackIfRouteIsAvailable()
         updateEQStreamSnapshot()
     }
 
@@ -401,6 +417,31 @@ final class AudioProcessStore: ObservableObject {
 
     private func applyRouteVolume(_ volume: Int, for process: AudioProcess) {
         eqEngine.setSourceVolume(volume, for: process.audioObjectID)
+    }
+
+    private func applyDefaultOutputBalanceFallback(_ balance: Int, for process: AudioProcess) {
+        guard eqEngineStatus.isUnavailable else {
+            resetDefaultOutputBalanceFallbackIfNeeded()
+            return
+        }
+        if defaultOutputBalanceController.apply(balance: balance) {
+            defaultOutputBalanceFallbackSourceID = process.stableSourceID
+        }
+    }
+
+    private func resetDefaultOutputBalanceFallbackIfNeeded() {
+        guard defaultOutputBalanceFallbackSourceID != nil else {
+            return
+        }
+        _ = defaultOutputBalanceController.apply(balance: 0)
+        defaultOutputBalanceFallbackSourceID = nil
+    }
+
+    private func resetDefaultOutputBalanceFallbackIfRouteIsAvailable() {
+        guard !eqEngineStatus.isUnavailable else {
+            return
+        }
+        resetDefaultOutputBalanceFallbackIfNeeded()
     }
 
     private func notifyExternalFocusCommandIfNeeded(for process: AudioProcess) {
