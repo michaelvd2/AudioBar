@@ -534,11 +534,13 @@ private struct AudioProcessRow: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
 
-                Text(process.displaySubtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                if let inlineSubtitle {
+                    Text(inlineSubtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
 
                 ChannelModeButton(process: process, store: store)
                     .padding(.top, 2)
@@ -550,11 +552,16 @@ private struct AudioProcessRow: View {
         .contentShape(Rectangle())
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .help(process.displaySubtitle)
         .contextMenu {
             Button("Hide Source") {
                 store.hideSource(process)
             }
         }
+    }
+
+    private var inlineSubtitle: String? {
+        process.displaySubtitle == "App audio" ? nil : process.displaySubtitle
     }
 
     @ViewBuilder

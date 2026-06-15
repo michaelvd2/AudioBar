@@ -145,7 +145,7 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("/usr/bin/open"))
     }
 
-    func testAudioProcessRowsUseTwoTextLinesOnly() throws {
+    func testAudioProcessRowsUseAtMostTwoTextLines() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let row = try XCTUnwrap(source.slice(
             from: "private struct AudioProcessRow",
@@ -153,10 +153,23 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         ))
 
         XCTAssertTrue(row.contains("Text(process.displayTitle)"))
-        XCTAssertTrue(row.contains("Text(process.displaySubtitle)"))
+        XCTAssertTrue(row.contains("if let inlineSubtitle"))
+        XCTAssertTrue(row.contains("Text(inlineSubtitle)"))
         XCTAssertFalse(row.contains("capabilityText"))
         XCTAssertFalse(row.contains("web app volume"))
         XCTAssertFalse(row.contains("view only"))
+    }
+
+    func testAudioProcessRowsKeepAppAudioAsTooltipOnly() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var control"
+        ))
+
+        XCTAssertTrue(row.contains("process.displaySubtitle == \"App audio\" ? nil : process.displaySubtitle"))
+        XCTAssertTrue(row.contains(".help(process.displaySubtitle)"))
+        XCTAssertFalse(row.contains("Text(process.displaySubtitle)"))
     }
 
     func testAudioProcessRowsShowChannelModeButtonUnderSourceText() throws {
@@ -170,7 +183,7 @@ final class AudioPopoverViewSourceTests: XCTestCase {
             to: "private struct BalanceDragBar"
         ))
 
-        let subtitleIndex = try XCTUnwrap(row.range(of: "Text(process.displaySubtitle)")?.lowerBound)
+        let subtitleIndex = try XCTUnwrap(row.range(of: "Text(inlineSubtitle)")?.lowerBound)
         let buttonIndex = try XCTUnwrap(row.range(of: "ChannelModeButton(process: process, store: store)")?.lowerBound)
 
         XCTAssertLessThan(subtitleIndex, buttonIndex)
