@@ -96,12 +96,19 @@ public final class SystemEQEngine: @unchecked Sendable {
             return failLocked("Audio tap unavailable")
         }
 
+        guard let outputDeviceID = defaultOutputDeviceID(),
+              let outputDeviceUID = readString(objectID: outputDeviceID, selector: kAudioDevicePropertyDeviceUID)
+        else {
+            return failLocked("Output device unavailable")
+        }
+
+        let muteBehavior = tapMuteBehavior(forOutputDeviceID: outputDeviceID)
         var processObjectIDsForInputBuffers: [AudioObjectID?] = []
         let excludedProcesses = Array(Set((currentProcessObjectID().map { [$0] } ?? []) + sourceProcessObjectIDs))
         let fallbackTapDescription = CATapDescription(stereoGlobalTapButExcludeProcesses: excludedProcesses)
         fallbackTapDescription.name = "AudioBar System EQ Fallback Tap"
         fallbackTapDescription.isPrivate = true
-        fallbackTapDescription.muteBehavior = CATapMuteBehavior(rawValue: 2) ?? fallbackTapDescription.muteBehavior
+        fallbackTapDescription.muteBehavior = muteBehavior
 
         guard let fallbackTapID = createProcessTap(fallbackTapDescription) else {
             return failLocked("Fallback tap failed")
@@ -113,7 +120,7 @@ public final class SystemEQEngine: @unchecked Sendable {
             let tapDescription = CATapDescription(stereoMixdownOfProcesses: [processObjectID])
             tapDescription.name = "AudioBar Source Tap \(processObjectID)"
             tapDescription.isPrivate = true
-            tapDescription.muteBehavior = CATapMuteBehavior(rawValue: 2) ?? tapDescription.muteBehavior
+            tapDescription.muteBehavior = muteBehavior
 
             guard let sourceTapID = createProcessTap(tapDescription) else {
                 return failLocked("Source tap failed (\(processObjectID))")
@@ -127,12 +134,6 @@ public final class SystemEQEngine: @unchecked Sendable {
             return failLocked("Tap UID unavailable")
         }
         inputBufferProcessObjectIDs = processObjectIDsForInputBuffers
-
-        guard let outputDeviceID = defaultOutputDeviceID(),
-              let outputDeviceUID = readString(objectID: outputDeviceID, selector: kAudioDevicePropertyDeviceUID)
-        else {
-            return failLocked("Output device unavailable")
-        }
 
         guard let firstTapID = tapIDs.first,
               let tapFormat = readStreamDescription(objectID: firstTapID, selector: kAudioTapPropertyFormat)
@@ -524,6 +525,15 @@ public final class SystemEQEngine: @unchecked Sendable {
         return sourceMonoByProcessObjectID.contains(processObjectID)
     }
 
+    private func tapMuteBehavior(forOutputDeviceID outputDeviceID: AudioObjectID) -> CATapMuteBehavior {
+        let transportType = readUInt32(objectID: outputDeviceID, selector: kAudioDevicePropertyTransportType)
+        if transportType == kAudioDeviceTransportTypeBluetooth || transportType == kAudioDeviceTransportTypeBluetoothLE {
+            systemEQLogger.info("Bluetooth output detected; leaving tapped hardware playback unmuted")
+            return CATapMuteBehavior(rawValue: 0) ?? CATapMuteBehavior(rawValue: 2)!
+        }
+        return CATapMuteBehavior(rawValue: 2) ?? CATapMuteBehavior(rawValue: 0)!
+    }
+
     @available(macOS 14.2, *)
     private func createProcessTap(_ tapDescription: CATapDescription) -> AudioObjectID? {
         var newTapID = AudioObjectID(kAudioObjectUnknown)
@@ -680,6 +690,24 @@ public final class SystemEQEngine: @unchecked Sendable {
             )
         }
         return status == noErr ? value as String : nil
+    }
+
+    private func readUInt32(
+        objectID: AudioObjectID,
+        selector: AudioObjectPropertySelector
+    ) -> UInt32? {
+        var address = propertyAddress(selector)
+        var dataSize = UInt32(MemoryLayout<UInt32>.stride)
+        var value: UInt32 = 0
+        let status = AudioObjectGetPropertyData(
+            objectID,
+            &address,
+            0,
+            nil,
+            &dataSize,
+            &value
+        )
+        return status == noErr ? value : nil
     }
 
     private func readStreamDescription(

@@ -94,12 +94,21 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertEqual(taps?.map { $0[kAudioSubTapUIDKey] as? String }, ["fallback", "youtube", "safari"])
     }
 
-    func testProcessTapsMuteOriginalHardwarePlaybackWhileRouteReadsTap() throws {
+    func testProcessTapsMuteOriginalHardwarePlaybackForNonBluetoothRoutes() throws {
         let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
-        let startFunction = try XCTUnwrap(source.function(named: "start"))
+        let muteBehaviorFunction = try XCTUnwrap(source.function(named: "tapMuteBehavior"))
 
-        XCTAssertTrue(startFunction.contains("CATapMuteBehavior(rawValue: 2)"))
-        XCTAssertFalse(startFunction.contains("CATapMuteBehavior(rawValue: 0)"))
+        XCTAssertTrue(muteBehaviorFunction.contains("CATapMuteBehavior(rawValue: 2)"))
+    }
+
+    func testBluetoothRoutesLeaveOriginalHardwarePlaybackAudible() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let muteBehaviorFunction = try XCTUnwrap(source.function(named: "tapMuteBehavior"))
+
+        XCTAssertTrue(source.contains("readUInt32(objectID: outputDeviceID, selector: kAudioDevicePropertyTransportType)"))
+        XCTAssertTrue(muteBehaviorFunction.contains("kAudioDeviceTransportTypeBluetooth"))
+        XCTAssertTrue(muteBehaviorFunction.contains("kAudioDeviceTransportTypeBluetoothLE"))
+        XCTAssertTrue(muteBehaviorFunction.contains("CATapMuteBehavior(rawValue: 0)"))
     }
 
     func testEngineKeepsSourceTapGainStateForRouteMixer() throws {
