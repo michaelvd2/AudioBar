@@ -160,6 +160,19 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(resetFunction.contains("defaultOutputBalanceController.apply(balance: 0)"))
     }
 
+    func testStoreAppliesSafariMediaEQFallbackWhenEQRouteIsUnavailable() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let updateEQEngineFunction = try XCTUnwrap(source.function(named: "updateEQEngine"))
+        let fallbackFunction = try XCTUnwrap(source.function(named: "applySafariMediaEQFallbackIfNeeded"))
+
+        XCTAssertTrue(source.contains("private let safariMediaEQController"))
+        XCTAssertTrue(updateEQEngineFunction.contains("applySafariMediaEQFallbackIfNeeded(for: processes)"))
+        XCTAssertTrue(fallbackFunction.contains("guard eqEngineStatus.isUnavailable else"))
+        XCTAssertTrue(fallbackFunction.contains("processes.contains(where: { $0.volumeCapability == .safariMedia })"))
+        XCTAssertTrue(fallbackFunction.contains("safariMediaEQController.apply(settings: eqSettings)"))
+        XCTAssertTrue(source.contains("safariMediaEQController.reset()"))
+    }
+
     func testStorePersistsAndAppliesSourceChannelMode() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let toggleFunction = try XCTUnwrap(source.function(named: "toggleChannelMode"))

@@ -33,6 +33,7 @@ final class AudioProcessStore: ObservableObject {
     private let volumeController: AppVolumeControlling
     private let webAppVolumeController: WebAppKeyboardVolumeController
     private let safariMediaVolumeController: SafariMediaVolumeController
+    private let safariMediaEQController: SafariMediaEQController
     private let playbackController: SourcePlaybackController
     private let loginItemController: LoginItemController
     private let eqEngine: SystemEQEngine
@@ -51,11 +52,13 @@ final class AudioProcessStore: ObservableObject {
     private var hiddenSourceNames: [String: String]
     private var playbackStateOverrides: [String: Bool] = [:]
     private var defaultOutputBalanceFallbackSourceID: String?
+    private var isSafariMediaEQFallbackActive = false
 
     init(
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
         webAppVolumeController: WebAppKeyboardVolumeController = WebAppKeyboardVolumeController(),
         safariMediaVolumeController: SafariMediaVolumeController = SafariMediaVolumeController(),
+        safariMediaEQController: SafariMediaEQController = SafariMediaEQController(),
         playbackController: SourcePlaybackController = SourcePlaybackController(),
         loginItemController: LoginItemController = LoginItemController(),
         provider: AudioProcessProviding? = nil,
@@ -66,6 +69,7 @@ final class AudioProcessStore: ObservableObject {
         self.volumeController = volumeController
         self.webAppVolumeController = webAppVolumeController
         self.safariMediaVolumeController = safariMediaVolumeController
+        self.safariMediaEQController = safariMediaEQController
         self.playbackController = playbackController
         self.loginItemController = loginItemController
         self.provider = provider ?? CoreAudioProcessProvider(volumeController: volumeController)
@@ -88,6 +92,9 @@ final class AudioProcessStore: ObservableObject {
     deinit {
         if defaultOutputBalanceFallbackSourceID != nil {
             _ = defaultOutputBalanceController.apply(balance: 0)
+        }
+        if isSafariMediaEQFallbackActive {
+            _ = safariMediaEQController.reset()
         }
     }
 
@@ -133,6 +140,7 @@ final class AudioProcessStore: ObservableObject {
             .filter { !isHiddenSource($0) }
         updateEQSourceProcesses(nextProcesses)
         processes = nextProcesses
+        applySafariMediaEQFallbackIfNeeded(for: nextProcesses)
         lastRefreshDate = Date()
         statusMessage = activeProcesses.isEmpty ? "No active output detected" : "\(activeProcesses.count) active"
         isRefreshing = false
@@ -376,6 +384,7 @@ final class AudioProcessStore: ObservableObject {
         }
         eqEngineStatus = eqEngine.status
         resetDefaultOutputBalanceFallbackIfRouteIsAvailable()
+        applySafariMediaEQFallbackIfNeeded(for: processes)
         recoverEQRouteIfNeeded()
         updateEQStreamSnapshot()
     }
@@ -401,6 +410,7 @@ final class AudioProcessStore: ObservableObject {
         eqEngine.update(settings: eqSettings)
         eqEngineStatus = eqEngine.status
         resetDefaultOutputBalanceFallbackIfRouteIsAvailable()
+        applySafariMediaEQFallbackIfNeeded(for: processes)
         updateEQStreamSnapshot()
     }
 
@@ -442,6 +452,32 @@ final class AudioProcessStore: ObservableObject {
             return
         }
         resetDefaultOutputBalanceFallbackIfNeeded()
+    }
+
+    private func applySafariMediaEQFallbackIfNeeded(for processes: [AudioProcess]) {
+        guard eqEngineStatus.isUnavailable else {
+            resetSafariMediaEQFallbackIfNeeded()
+            return
+        }
+        guard processes.contains(where: { $0.volumeCapability == .safariMedia }) else {
+            resetSafariMediaEQFallbackIfNeeded()
+            return
+        }
+        if eqSettings.isBypassed {
+            resetSafariMediaEQFallbackIfNeeded()
+            return
+        }
+        if safariMediaEQController.apply(settings: eqSettings) {
+            isSafariMediaEQFallbackActive = true
+        }
+    }
+
+    private func resetSafariMediaEQFallbackIfNeeded() {
+        guard isSafariMediaEQFallbackActive else {
+            return
+        }
+        _ = safariMediaEQController.reset()
+        isSafariMediaEQFallbackActive = false
     }
 
     private func notifyExternalFocusCommandIfNeeded(for process: AudioProcess) {

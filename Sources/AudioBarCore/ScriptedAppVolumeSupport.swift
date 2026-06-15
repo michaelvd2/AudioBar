@@ -41,6 +41,75 @@ public enum SafariMediaVolumeCommandBuilder {
     }
 }
 
+public enum SafariMediaEQCommandBuilder {
+    public static func applyEQScript(settings: EQSettings) -> String {
+        let bands = EQBand.classic.map { band in
+            "{ frequency: \(band.frequencyHz), gain: \(String(format: "%.2f", settings.gain(for: band.frequencyHz))) }"
+        }.joined(separator: ", ")
+        let preampDB = String(format: "%.2f", EQSettings.clamp(settings.preampDB))
+        let isBypassed = settings.isBypassed ? "true" : "false"
+        let javascript = """
+        (function() {
+            const settings = { isBypassed: \(isBypassed), preampDB: \(preampDB), bands: [\(bands)] };
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) { return false; }
+            const mediaItems = Array.from(document.querySelectorAll('audio,video'));
+            if (mediaItems.length === 0) { return false; }
+            mediaItems.forEach(function(media) {
+                const state = media.__audioBarEQ || {};
+                state.context = state.context || new AudioContextClass();
+                if (!state.source) {
+                    state.source = state.context.createMediaElementSource(media);
+                }
+                try { state.source.disconnect(); } catch (_) {}
+                if (state.preamp) { try { state.preamp.disconnect(); } catch (_) {} }
+                if (state.filters) {
+                    state.filters.forEach(function(filter) {
+                        try { filter.disconnect(); } catch (_) {}
+                    });
+                }
+                if (settings.isBypassed) {
+                    state.source.connect(state.context.destination);
+                    state.filters = [];
+                    state.preamp = null;
+                    media.__audioBarEQ = state;
+                    if (state.context.state === 'suspended') { state.context.resume(); }
+                    return;
+                }
+                state.filters = settings.bands.map(function(band) {
+                    const filter = state.context.createBiquadFilter();
+                    filter.type = 'peaking';
+                    filter.frequency.value = band.frequency;
+                    filter.Q.value = 1.414;
+                    filter.gain.value = band.gain;
+                    return filter;
+                });
+                const preamp = state.context.createGain();
+                preamp.gain.value = Math.pow(10, settings.preampDB / 20);
+                state.preamp = preamp;
+                state.source.connect(state.filters[0]);
+                for (let index = 0; index < state.filters.length - 1; index += 1) {
+                    state.filters[index].connect(state.filters[index + 1]);
+                }
+                state.filters[state.filters.length - 1].connect(preamp);
+                preamp.connect(state.context.destination);
+                media.__audioBarEQ = state;
+                if (state.context.state === 'suspended') { state.context.resume(); }
+            });
+            return true;
+        })();
+        """
+
+        return """
+        tell application id "com.apple.Safari"
+            if (count of windows) is 0 then return false
+            do JavaScript "\(javascript.escapedForAppleScript)" in current tab of front window
+            return true
+        end tell
+        """
+    }
+}
+
 private extension String {
     var escapedForAppleScript: String {
         replacingOccurrences(of: "\\", with: "\\\\")

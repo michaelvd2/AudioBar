@@ -55,6 +55,36 @@ final class VolumeScriptBuilderTests: XCTestCase {
         XCTAssertTrue(script.contains("audio,video"))
     }
 
+    func testSafariMediaEQScriptBuildsWebAudioFilterChain() {
+        var settings = EQSettings.flat
+        settings.preampDB = 3
+        settings.setGain(6, for: 31)
+        settings.setGain(-4, for: 16_000)
+
+        let script = SafariMediaEQCommandBuilder.applyEQScript(settings: settings)
+
+        XCTAssertTrue(script.contains("tell application id \"com.apple.Safari\""))
+        XCTAssertTrue(script.contains("current tab of front window"))
+        XCTAssertTrue(script.contains("createMediaElementSource"))
+        XCTAssertTrue(script.contains("createBiquadFilter"))
+        XCTAssertTrue(script.contains("filter.type = 'peaking'"))
+        XCTAssertTrue(script.contains("{ frequency: 31, gain: 6.00 }"))
+        XCTAssertTrue(script.contains("{ frequency: 16000, gain: -4.00 }"))
+        XCTAssertTrue(script.contains("preampDB: 3.00"))
+        XCTAssertTrue(script.contains("filter.frequency.value = band.frequency"))
+        XCTAssertTrue(script.contains("preamp.gain.value = Math.pow(10, settings.preampDB / 20)"))
+    }
+
+    func testSafariMediaEQBypassScriptKeepsMediaAudibleThroughDirectWebAudioConnection() {
+        var settings = EQSettings.flat
+        settings.isBypassed = true
+
+        let script = SafariMediaEQCommandBuilder.applyEQScript(settings: settings)
+
+        XCTAssertTrue(script.contains("state.source.connect(state.context.destination)"))
+        XCTAssertTrue(script.contains("settings.isBypassed"))
+    }
+
     func testYouTubeWebAppKeyboardVolumeScriptSetsVolumeFromZero() {
         let script = WebAppKeyboardVolumeCommandBuilder.setYouTubeVolumeScript(
             bundleID: "com.apple.Safari.WebApp.example",
