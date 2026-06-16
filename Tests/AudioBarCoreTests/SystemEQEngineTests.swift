@@ -175,12 +175,24 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertTrue(restartFunction.contains("restartLocked(settings: settings)"))
     }
 
-    func testRetainedPausedSourcesStayInRouteToAvoidNotificationChurn() throws {
-        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
-        let setSourceProcesses = try XCTUnwrap(source.function(named: "setSourceProcesses"))
+    func testRetainedPausedSourcesStayOutOfTapRouteToAvoidStaleCoreAudioObjects() {
+        let engine = SystemEQEngine()
+        let pausedWebApp = AudioProcess(
+            audioObjectID: 42,
+            pid: 420,
+            bundleID: "com.apple.Safari.WebApp.Example",
+            appName: "YouTube",
+            trackTitle: nil,
+            currentVolume: 100,
+            volumeCapability: .webAppKeyboard,
+            volumeControlID: "com.apple.Safari.WebApp.Example",
+            isActiveOutput: false
+        )
 
-        XCTAssertTrue(setSourceProcesses.contains("$0.isActiveOutput || $0.shouldRemainVisibleWhenPaused"))
-        XCTAssertFalse(setSourceProcesses.contains(".filter(\\.isActiveOutput)"))
+        engine.setSourceProcesses([pausedWebApp])
+        engine.setSourceBalance(40, for: pausedWebApp.audioObjectID)
+
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [])
     }
 
     func testEngineOnlyCreatesSourceTapsForSourcesWithNonDefaultControls() {

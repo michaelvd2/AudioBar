@@ -17,7 +17,7 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         ))
 
         XCTAssertTrue(eqPanel.contains("Label(\"EQ\""))
-        XCTAssertTrue(eqPanel.contains("Toggle(\"On\""))
+        XCTAssertTrue(eqPanel.contains("Toggle(store.eqSettings.isBypassed ? \"Off\" : \"On\""))
         XCTAssertTrue(eqPanel.contains("get: { !store.eqSettings.isBypassed }"))
         XCTAssertTrue(eqPanel.contains("set: { store.setEQBypassed(!$0) }"))
         XCTAssertFalse(eqPanel.contains("store.eqEngineStatus.displayText"))

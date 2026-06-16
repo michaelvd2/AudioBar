@@ -343,7 +343,7 @@ private struct EQPanelView: View {
 
                         Spacer()
 
-                        Toggle("On", isOn: Binding(
+                        Toggle(store.eqSettings.isBypassed ? "Off" : "On", isOn: Binding(
                             get: { !store.eqSettings.isBypassed },
                             set: { store.setEQBypassed(!$0) }
                         ))
