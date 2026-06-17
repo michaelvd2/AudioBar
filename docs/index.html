@@ -136,6 +136,12 @@
       text-decoration: none;
     }
 
+    .button.secondary {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+    }
+
     .button[aria-disabled="true"] {
       cursor: not-allowed;
       opacity: 0.62;
@@ -224,7 +230,7 @@
 
     .mini-eq span {
       display: block;
-      width: 8px;
+      width: 7px;
       height: 42px;
       margin: 0 auto;
       border-radius: 999px;
@@ -237,8 +243,8 @@
       position: absolute;
       left: 50%;
       top: var(--knob);
-      width: 16px;
-      height: 16px;
+      width: 10px;
+      height: 10px;
       border-radius: 999px;
       background: var(--ink);
       transform: translate(-50%, -50%);
@@ -338,7 +344,8 @@
           system sound.
         </p>
         <div class="actions">
-          <a class="button" href="https://github.com/michaelvd2/AudioBar/releases/download/v0.1.7/AudioBar-notarized.zip">Download for macOS</a>
+          <a class="button" href="https://apps.apple.com/us/app/audiobar-volume-mixer-eq/id6779122908?mt=12">Mac App Store</a>
+          <a class="button secondary" href="https://github.com/michaelvd2/AudioBar/releases/download/v0.1.7/AudioBar-notarized.zip">Direct download</a>
           <span class="note">For macOS 14.2 or newer.</span>
         </div>
       </div>
