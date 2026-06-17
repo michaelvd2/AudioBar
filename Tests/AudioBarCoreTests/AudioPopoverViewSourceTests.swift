@@ -67,6 +67,20 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(source.slice(from: "private struct EQPanelView", to: "private struct AudioStreamMeter")?.contains("AudioStreamMeter(snapshot: store.eqStreamSnapshot)") ?? true)
     }
 
+    func testHeaderStreamMeterReservesReadableTextBeforeLevelBar() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let header = try XCTUnwrap(source.slice(from: "private var header", to: "private var footer"))
+        let meter = try XCTUnwrap(source.slice(from: "private struct AudioStreamMeter", to: "private struct StreamLevelBar"))
+
+        XCTAssertTrue(header.contains(".frame(width: 220)"))
+        XCTAssertFalse(header.contains(".padding(.leading, 8)"))
+        XCTAssertTrue(meter.contains(".frame(width: 82, alignment: .leading)"))
+        XCTAssertGreaterThan(
+            try XCTUnwrap(meter.range(of: "StreamLevelBar(value: snapshot.levelFraction)")?.lowerBound),
+            try XCTUnwrap(meter.range(of: ".frame(width: 82, alignment: .leading)")?.lowerBound)
+        )
+    }
+
     func testFirstUseSetupAppearsBeforeAudioControls() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let body = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))

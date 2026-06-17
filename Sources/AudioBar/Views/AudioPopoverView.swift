@@ -40,8 +40,7 @@ struct AudioPopoverView: View {
             }
 
             AudioStreamMeter(snapshot: store.eqStreamSnapshot)
-                .frame(width: 160)
-                .padding(.leading, 8)
+                .frame(width: 220)
 
             Spacer()
 
@@ -412,12 +411,15 @@ private struct AudioStreamMeter: View {
                 Text(snapshot.title)
                     .font(.caption)
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
                 Text(snapshot.subtitle)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
+            .frame(width: 82, alignment: .leading)
 
-            Spacer()
+            Spacer(minLength: 10)
 
             StreamLevelBar(value: snapshot.levelFraction)
                 .frame(width: 92, height: 5)
