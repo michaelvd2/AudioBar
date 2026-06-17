@@ -221,6 +221,18 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(channelModeButton.contains(".help(\"Toggle mono/stereo for this source\")"))
     }
 
+    func testAudioProcessRowsExposeFullInlineSubtitleAsTooltip() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var inlineSubtitle"
+        ))
+
+        XCTAssertTrue(row.contains("Text(inlineSubtitle)"))
+        XCTAssertTrue(row.contains(".truncationMode(.middle)"))
+        XCTAssertTrue(row.contains(".help(inlineSubtitle)"))
+    }
+
     func testAudioProcessRowsUpdateRouteVolumeWhileDragging() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let row = try XCTUnwrap(source.slice(
@@ -300,9 +312,28 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(row.contains("private static let controlGroupSpacing: CGFloat = 10"))
         XCTAssertTrue(row.contains("private static let controlColumnWidth: CGFloat = 322"))
         XCTAssertTrue(row.contains("private static let controlBlockMinHeight: CGFloat = 58"))
-        XCTAssertTrue(row.contains("Spacer(minLength: Self.controlGroupSpacing)"))
-        XCTAssertTrue(row.contains(".frame(width: Self.controlColumnWidth, height: 26, alignment: .trailing)"))
+        XCTAssertTrue(row.contains("HStack(alignment: .center, spacing: Self.controlGroupSpacing)"))
+        XCTAssertTrue(row.contains("playbackControls"))
+        XCTAssertTrue(row.contains("sliderControls"))
+        XCTAssertTrue(row.contains(".frame(width: Self.controlColumnWidth, alignment: .trailing)"))
         XCTAssertTrue(row.contains(".frame(minHeight: Self.controlBlockMinHeight, alignment: .center)"))
+        XCTAssertFalse(row.contains("Spacer(minLength: Self.controlGroupSpacing)"))
+        XCTAssertFalse(row.contains(".frame(width: Self.controlColumnWidth, height: 26, alignment: .trailing)"))
+    }
+
+    func testAudioProcessRowsCenterPlaybackControlsBesideSliderStack() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var volumeSliderRow"
+        ))
+
+        XCTAssertTrue(row.contains("private var playbackControls"))
+        XCTAssertTrue(row.contains("private var sliderControls"))
+        XCTAssertTrue(row.contains("HStack(alignment: .center, spacing: Self.controlGroupSpacing)"))
+        XCTAssertTrue(row.contains("VStack(alignment: .trailing, spacing: 8)"))
+        XCTAssertTrue(row.contains("volumeSliderRow"))
+        XCTAssertTrue(row.contains("balanceSliderRow"))
     }
 
     func testBalanceSliderSnapsNearCenter() throws {

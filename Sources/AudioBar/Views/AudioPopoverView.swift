@@ -544,6 +544,7 @@ private struct AudioProcessRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .help(inlineSubtitle)
                 }
 
                 ChannelModeButton(process: process, store: store)
@@ -568,26 +569,29 @@ private struct AudioProcessRow: View {
         process.displaySubtitle == "App audio" ? nil : process.displaySubtitle
     }
 
-    @ViewBuilder
     private var control: some View {
+        HStack(alignment: .center, spacing: Self.controlGroupSpacing) {
+            playbackControls
+            sliderControls
+        }
+        .frame(width: Self.controlColumnWidth, alignment: .trailing)
+        .frame(minHeight: Self.controlBlockMinHeight, alignment: .center)
+    }
+
+    private var playbackControls: some View {
+        HStack(spacing: 6) {
+            PreviousTrackButton(process: process, store: store)
+            PlaybackControlButton(process: process, store: store)
+            NextTrackButton(process: process, store: store)
+            RewindPlaybackButton(process: process, store: store)
+        }
+    }
+
+    private var sliderControls: some View {
         VStack(alignment: .trailing, spacing: 8) {
-            HStack(alignment: .center, spacing: 6) {
-                HStack(spacing: 6) {
-                    PreviousTrackButton(process: process, store: store)
-                    PlaybackControlButton(process: process, store: store)
-                    NextTrackButton(process: process, store: store)
-                    RewindPlaybackButton(process: process, store: store)
-                }
-
-                Spacer(minLength: Self.controlGroupSpacing)
-
-                volumeSliderRow
-            }
-            .frame(width: Self.controlColumnWidth, height: 26, alignment: .trailing)
-
+            volumeSliderRow
             balanceSliderRow
         }
-        .frame(minHeight: Self.controlBlockMinHeight, alignment: .center)
     }
 
     private var volumeSliderRow: some View {
