@@ -112,6 +112,9 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
     }
 
     public var displayTitle: String {
+        if isSafariWebAppSource {
+            return displayAppName
+        }
         guard !normalizedTrackTitle.isEmpty else {
             return displayAppName
         }
@@ -121,6 +124,9 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
     public var displaySubtitle: String {
         guard isActiveOutput else {
             return "Paused"
+        }
+        if isSafariWebAppSource, !normalizedTrackTitle.isEmpty {
+            return normalizedTrackTitle
         }
         if !normalizedTrackTitle.isEmpty {
             return displayAppName
@@ -149,13 +155,17 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
         guard let bundleID, !bundleID.isEmpty else {
             return nil
         }
-        if bundleID.hasPrefix("com.apple.Safari.WebApp.") {
+        if isSafariWebAppSource {
             return "Safari web app"
         }
         if isSystemSoundsSource {
             return "System audio"
         }
         return "App audio"
+    }
+
+    private var isSafariWebAppSource: Bool {
+        bundleID?.hasPrefix("com.apple.Safari.WebApp.") == true
     }
 
     private var isSystemSoundsSource: Bool {

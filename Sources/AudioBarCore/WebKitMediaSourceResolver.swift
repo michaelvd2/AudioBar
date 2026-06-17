@@ -18,7 +18,8 @@ public enum WebKitMediaSourceResolver {
         helperPID: Int32,
         helperBundleID: String?,
         helperName: String?,
-        webApps: [WebAppDescriptor]
+        webApps: [WebAppDescriptor],
+        nowPlayingMetadata: NowPlayingMetadata? = nil
     ) -> AudioProcess? {
         guard helperBundleID == "com.apple.WebKit.GPU" else {
             return nil
@@ -43,7 +44,8 @@ public enum WebKitMediaSourceResolver {
             pid: helperPID,
             bundleID: webApp.bundleID,
             appName: webApp.displayName,
-            trackTitle: normalizedTrackTitle(webApp.windowTitle, appName: webApp.displayName),
+            trackTitle: normalizedTrackTitle(webApp.windowTitle, appName: webApp.displayName)
+                ?? nowPlayingTrackTitle(nowPlayingMetadata, webApp: webApp),
             currentVolume: 100,
             volumeCapability: .webAppKeyboard,
             volumeControlID: webApp.bundleID
@@ -93,5 +95,23 @@ public enum WebKitMediaSourceResolver {
             return title.isEmpty ? nil : title
         }
         return windowTitle
+    }
+
+    private static func nowPlayingTrackTitle(_ metadata: NowPlayingMetadata?, webApp: WebAppDescriptor) -> String? {
+        guard webApp.displayName.localizedCaseInsensitiveCompare("YouTube") == .orderedSame else {
+            return nil
+        }
+        if let sourceBundleID = metadata?.sourceBundleID,
+           sourceBundleID != webApp.bundleID,
+           !sourceBundleID.hasPrefix("com.apple.Safari") {
+            return nil
+        }
+        return metadata?.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+    }
+}
+
+private extension String {
+    var nilIfBlank: String? {
+        isEmpty ? nil : self
     }
 }

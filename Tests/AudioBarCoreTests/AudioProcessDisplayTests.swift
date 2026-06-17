@@ -17,6 +17,22 @@ final class AudioProcessDisplayTests: XCTestCase {
         XCTAssertEqual(process.displaySubtitle, "Spotify")
     }
 
+    func testWebAppDisplayKeepsAppNameAndShowsTrackAsSubtitle() {
+        let process = AudioProcess(
+            audioObjectID: 12,
+            pid: 345,
+            bundleID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718",
+            appName: "YouTube",
+            trackTitle: "Collabs 3000 [Speed] - Sound of Frankfurt",
+            currentVolume: 50,
+            volumeCapability: .webAppKeyboard,
+            volumeControlID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718"
+        )
+
+        XCTAssertEqual(process.displayTitle, "YouTube")
+        XCTAssertEqual(process.displaySubtitle, "Collabs 3000 [Speed] - Sound of Frankfurt")
+    }
+
     func testDisplaySubtitleFallsBackToPIDWhenBundleIsMissing() {
         let process = AudioProcess(
             audioObjectID: 12,

@@ -9,20 +9,24 @@ public protocol AudioProcessProviding {
 public struct CoreAudioProcessProvider: AudioProcessProviding {
     private let volumeController: AppVolumeControlling
     private let webAppProvider: RunningWebAppProvider
+    private let nowPlayingMetadataProvider: NowPlayingMetadataProviding
     private let currentProcessID: pid_t
 
     public init(
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
         webAppProvider: RunningWebAppProvider = RunningWebAppProvider(),
+        nowPlayingMetadataProvider: NowPlayingMetadataProviding = NowPlayingMetadataProvider(),
         currentProcessID: pid_t = getpid()
     ) {
         self.volumeController = volumeController
         self.webAppProvider = webAppProvider
+        self.nowPlayingMetadataProvider = nowPlayingMetadataProvider
         self.currentProcessID = currentProcessID
     }
 
     public func activeOutputProcesses() -> [AudioProcess] {
         let webApps = webAppProvider.runningWebApps()
+        let nowPlayingMetadata = webApps.isEmpty ? nil : nowPlayingMetadataProvider.currentMetadata()
 
         let processes = processObjectIDs().compactMap { processObjectID -> AudioProcess? in
             guard readUInt32(
@@ -46,7 +50,8 @@ public struct CoreAudioProcessProvider: AudioProcessProviding {
                 helperPID: pid,
                 helperBundleID: bundleID,
                 helperName: runningApp?.localizedName,
-                webApps: webApps
+                webApps: webApps,
+                nowPlayingMetadata: nowPlayingMetadata
             ) {
                 return webAppSource
             }
