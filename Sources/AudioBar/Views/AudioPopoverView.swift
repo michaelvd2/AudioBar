@@ -520,7 +520,7 @@ private struct AudioProcessRow: View {
     @State private var draftBalance: Double?
 
     private static let sideMarkerWidth: CGFloat = 12
-    private static let sliderTrackWidth: CGFloat = 144
+    private static let sliderTrackWidth: CGFloat = 104
     private static let valueColumnWidth: CGFloat = 34
     private static let rowSpacing: CGFloat = 6
     private static let controlGroupSpacing: CGFloat = 28

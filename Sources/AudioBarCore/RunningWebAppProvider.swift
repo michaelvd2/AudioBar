@@ -50,10 +50,7 @@ public struct RunningWebAppProvider {
     }
 
     private func accessibilityWindowTitle(forPID pid: pid_t) -> String? {
-        let options = [
-            "AXTrustedCheckOptionPrompt": true
-        ] as CFDictionary
-        guard AXIsProcessTrustedWithOptions(options) else {
+        guard AXIsProcessTrusted() else {
             return nil
         }
 

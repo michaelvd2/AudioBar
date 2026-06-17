@@ -286,7 +286,7 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(row.contains(".padding(.trailing, 26)"))
     }
 
-    func testAudioProcessRowsUseAvailableWidthAroundVolumeControls() throws {
+    func testAudioProcessRowsUseAvailableWidthBetweenControlGroupsWithoutEnlargingSliders() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let root = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
         let row = try XCTUnwrap(source.slice(
@@ -295,7 +295,8 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         ))
 
         XCTAssertTrue(root.contains(".frame(width: 520)"))
-        XCTAssertTrue(row.contains("private static let sliderTrackWidth: CGFloat = 144"))
+        XCTAssertTrue(row.contains("private static let sliderTrackWidth: CGFloat = 104"))
+        XCTAssertFalse(row.contains("private static let sliderTrackWidth: CGFloat = 144"))
         XCTAssertTrue(row.contains("private static let controlGroupSpacing: CGFloat = 28"))
         XCTAssertTrue(row.contains("private static let controlColumnWidth: CGFloat = 370"))
         XCTAssertTrue(row.contains("Spacer(minLength: Self.controlGroupSpacing)"))
