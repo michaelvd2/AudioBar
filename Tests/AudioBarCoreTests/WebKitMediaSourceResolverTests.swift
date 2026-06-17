@@ -25,7 +25,7 @@ final class WebKitMediaSourceResolverTests: XCTestCase {
         XCTAssertEqual(source?.volumeControlID, "com.apple.Safari.WebApp.abc")
     }
 
-    func testYouTubeWebAppUsesNowPlayingTitleWhenWindowTitleIsUnavailable() {
+    func testYouTubeWebAppDisplaysWindowTitleBelowAppName() {
         let source = WebKitMediaSourceResolver.resolve(
             helperAudioObjectID: 44,
             helperPID: 83414,
@@ -35,14 +35,9 @@ final class WebKitMediaSourceResolverTests: XCTestCase {
                 WebAppDescriptor(
                     bundleID: "com.apple.Safari.WebApp.abc",
                     displayName: "YouTube",
-                    windowTitle: nil
+                    windowTitle: "Collabs 3000 [Speed] - YouTube"
                 )
-            ],
-            nowPlayingMetadata: NowPlayingMetadata(
-                title: "Collabs 3000 [Speed]",
-                artist: "Sound of Frankfurt",
-                sourceBundleID: "com.apple.Safari.WebApp.abc"
-            )
+            ]
         )
 
         XCTAssertEqual(source?.appName, "YouTube")
