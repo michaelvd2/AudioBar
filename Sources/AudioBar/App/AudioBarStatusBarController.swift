@@ -1,4 +1,5 @@
 import AppKit
+import AudioBarCore
 import Combine
 import SwiftUI
 
@@ -35,37 +36,42 @@ final class AudioBarStatusBarController: NSObject {
             return
         }
 
-        updateStatusIcon(isEQEnabled: !store.eqSettings.isBypassed)
+        updateStatusIcon(status: store.eqEngineStatus, settings: store.eqSettings)
         button.target = self
         button.action = #selector(handleStatusButtonAction(_:))
         button.sendAction(on: [.leftMouseDown, .rightMouseDown])
     }
 
     private func observeEQStatusIcon() {
-        store.$eqSettings
-            .sink { [weak self] settings in
+        Publishers.CombineLatest(store.$eqEngineStatus, store.$eqSettings)
+            .sink { [weak self] status, settings in
                 Task { @MainActor in
-                    self?.updateStatusIcon(isEQEnabled: !settings.isBypassed)
+                    self?.updateStatusIcon(status: status, settings: settings)
                 }
             }
             .store(in: &cancellables)
     }
 
-    private func updateStatusIcon(isEQEnabled: Bool) {
+    private func updateStatusIcon(status: SystemEQEngineStatus, settings: EQSettings) {
         guard let button = statusItem.button else {
             return
         }
 
+        let isEQEnabled = Self.isEQAudible(status: status, settings: settings)
         let description = isEQEnabled ? "AudioBar EQ on" : "AudioBar EQ off"
         button.image = NSImage(
-            systemSymbolName: Self.statusIconSymbolName(isEQEnabled: isEQEnabled),
+            systemSymbolName: Self.statusIconSymbolName(status: status, settings: settings),
             accessibilityDescription: description
         )
         button.toolTip = isEQEnabled ? "AudioBar: EQ On" : "AudioBar: EQ Off"
     }
 
-    static func statusIconSymbolName(isEQEnabled: Bool) -> String {
-        isEQEnabled ? "speaker.wave.2.fill" : "speaker.wave.2"
+    static func isEQAudible(status: SystemEQEngineStatus, settings: EQSettings) -> Bool {
+        status == .active && !settings.isBypassed
+    }
+
+    static func statusIconSymbolName(status: SystemEQEngineStatus, settings: EQSettings) -> String {
+        isEQAudible(status: status, settings: settings) ? "speaker.wave.2.fill" : "speaker.wave.2"
     }
 
     private func configurePopover() {

@@ -28,16 +28,21 @@ final class AudioBarStatusMenuSourceTests: XCTestCase {
         XCTAssertFalse(source.contains("popover.behavior = .transient"))
     }
 
-    func testStatusItemIconReflectsEQBypassState() throws {
+    func testStatusItemIconReflectsEffectiveEQOutputState() throws {
         let source = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
 
         XCTAssertTrue(source.contains("import Combine"))
         XCTAssertTrue(source.contains("private var cancellables: Set<AnyCancellable> = []"))
         XCTAssertTrue(source.contains("observeEQStatusIcon()"))
+        XCTAssertTrue(source.contains("store.$eqEngineStatus"))
         XCTAssertTrue(source.contains("store.$eqSettings"))
-        XCTAssertTrue(source.contains("updateStatusIcon(isEQEnabled: !settings.isBypassed)"))
-        XCTAssertTrue(source.contains("static func statusIconSymbolName(isEQEnabled: Bool) -> String"))
-        XCTAssertTrue(source.contains("isEQEnabled ? \"speaker.wave.2.fill\" : \"speaker.wave.2\""))
+        XCTAssertTrue(source.contains("Publishers.CombineLatest(store.$eqEngineStatus, store.$eqSettings)"))
+        XCTAssertTrue(source.contains("updateStatusIcon(status: status, settings: settings)"))
+        XCTAssertTrue(source.contains("updateStatusIcon(status: store.eqEngineStatus, settings: store.eqSettings)"))
+        XCTAssertTrue(source.contains("static func isEQAudible(status: SystemEQEngineStatus, settings: EQSettings) -> Bool"))
+        XCTAssertTrue(source.contains("status == .active && !settings.isBypassed"))
+        XCTAssertTrue(source.contains("static func statusIconSymbolName(status: SystemEQEngineStatus, settings: EQSettings) -> String"))
+        XCTAssertTrue(source.contains("isEQAudible(status: status, settings: settings) ? \"speaker.wave.2.fill\" : \"speaker.wave.2\""))
         XCTAssertFalse(source.contains("button.image = NSImage(systemSymbolName: \"speaker.wave.2\", accessibilityDescription: \"AudioBar\")"))
     }
 
