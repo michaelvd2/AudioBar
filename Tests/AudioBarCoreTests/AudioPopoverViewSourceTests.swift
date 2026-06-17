@@ -176,16 +176,26 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("/usr/bin/open"))
     }
 
-    func testAudioProcessRowsUseAtMostTwoTextLines() throws {
+    func testAudioProcessRowsPlaceNowPlayingBesideSourceInTopRow() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let row = try XCTUnwrap(source.slice(
             from: "private struct AudioProcessRow",
-            to: "private var control"
+            to: "private var playbackControls"
+        ))
+        let titleRow = try XCTUnwrap(source.slice(
+            from: "private var titleRow",
+            to: "private var lowerControlRow"
         ))
 
+        XCTAssertTrue(row.contains("titleRow"))
+        XCTAssertTrue(row.contains("lowerControlRow"))
         XCTAssertTrue(row.contains("Text(process.displayTitle)"))
         XCTAssertTrue(row.contains("if let inlineSubtitle"))
         XCTAssertTrue(row.contains("Text(inlineSubtitle)"))
+        XCTAssertTrue(titleRow.contains("HStack(alignment: .firstTextBaseline, spacing: 8)"))
+        let titleIndex = try XCTUnwrap(titleRow.range(of: "Text(process.displayTitle)")?.lowerBound)
+        let subtitleIndex = try XCTUnwrap(titleRow.range(of: "Text(inlineSubtitle)")?.lowerBound)
+        XCTAssertLessThan(titleIndex, subtitleIndex)
         XCTAssertFalse(row.contains("capabilityText"))
         XCTAssertFalse(row.contains("web app volume"))
         XCTAssertFalse(row.contains("view only"))
@@ -195,7 +205,7 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let row = try XCTUnwrap(source.slice(
             from: "private struct AudioProcessRow",
-            to: "private var control"
+            to: "private var playbackControls"
         ))
 
         XCTAssertTrue(row.contains("process.displaySubtitle == \"App audio\" ? nil : process.displaySubtitle"))
@@ -207,7 +217,7 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let row = try XCTUnwrap(source.slice(
             from: "private struct AudioProcessRow",
-            to: "private var control"
+            to: "private var inlineSubtitle"
         ))
         let channelModeButton = try XCTUnwrap(source.slice(
             from: "private struct ChannelModeButton",
@@ -320,7 +330,7 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(row.contains(".padding(.trailing, 26)"))
     }
 
-    func testAudioProcessRowsUseAvailableWidthBetweenControlGroupsWithoutEnlargingSliders() throws {
+    func testAudioProcessRowsUseAvailableWidthWithoutEnlargingSliders() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let root = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
         let row = try XCTUnwrap(source.slice(
@@ -332,27 +342,39 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(row.contains("private static let sliderTrackWidth: CGFloat = 104"))
         XCTAssertFalse(row.contains("private static let sliderTrackWidth: CGFloat = 144"))
         XCTAssertTrue(row.contains("private static let controlGroupSpacing: CGFloat = 10"))
-        XCTAssertTrue(row.contains("private static let controlColumnWidth: CGFloat = 322"))
-        XCTAssertTrue(row.contains("private static let controlBlockMinHeight: CGFloat = 58"))
-        XCTAssertTrue(row.contains("HStack(alignment: .center, spacing: Self.controlGroupSpacing)"))
+        XCTAssertTrue(row.contains("private static let sliderControlWidth: CGFloat = 176"))
+        XCTAssertTrue(row.contains("private var titleRow"))
+        XCTAssertTrue(row.contains("private var lowerControlRow"))
         XCTAssertTrue(row.contains("playbackControls"))
         XCTAssertTrue(row.contains("sliderControls"))
-        XCTAssertTrue(row.contains(".frame(width: Self.controlColumnWidth, alignment: .trailing)"))
-        XCTAssertTrue(row.contains(".frame(minHeight: Self.controlBlockMinHeight, alignment: .center)"))
-        XCTAssertFalse(row.contains("Spacer(minLength: Self.controlGroupSpacing)"))
-        XCTAssertFalse(row.contains(".frame(width: Self.controlColumnWidth, height: 26, alignment: .trailing)"))
+        XCTAssertTrue(row.contains("Spacer(minLength: Self.controlGroupSpacing)"))
+        XCTAssertTrue(row.contains(".frame(width: Self.sliderControlWidth, alignment: .trailing)"))
+        XCTAssertFalse(row.contains("private static let controlColumnWidth: CGFloat = 322"))
+        XCTAssertFalse(row.contains(".frame(width: Self.controlColumnWidth, alignment: .trailing)"))
     }
 
-    func testAudioProcessRowsCenterPlaybackControlsBesideSliderStack() throws {
+    func testAudioProcessRowsMovePlaybackControlsIntoLowerRow() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let row = try XCTUnwrap(source.slice(
             from: "private struct AudioProcessRow",
             to: "private var volumeSliderRow"
         ))
+        let lowerControlRow = try XCTUnwrap(source.slice(
+            from: "private var lowerControlRow",
+            to: "private var playbackControls"
+        ))
 
         XCTAssertTrue(row.contains("private var playbackControls"))
         XCTAssertTrue(row.contains("private var sliderControls"))
-        XCTAssertTrue(row.contains("HStack(alignment: .center, spacing: Self.controlGroupSpacing)"))
+        XCTAssertTrue(lowerControlRow.contains("HStack(alignment: .center, spacing: Self.controlGroupSpacing)"))
+        XCTAssertTrue(lowerControlRow.contains("ChannelModeButton(process: process, store: store)"))
+        XCTAssertTrue(lowerControlRow.contains("playbackControls"))
+        XCTAssertTrue(lowerControlRow.contains("sliderControls"))
+        let channelIndex = try XCTUnwrap(lowerControlRow.range(of: "ChannelModeButton(process: process, store: store)")?.lowerBound)
+        let playbackIndex = try XCTUnwrap(lowerControlRow.range(of: "playbackControls")?.lowerBound)
+        let sliderIndex = try XCTUnwrap(lowerControlRow.range(of: "sliderControls")?.lowerBound)
+        XCTAssertLessThan(channelIndex, playbackIndex)
+        XCTAssertLessThan(playbackIndex, sliderIndex)
         XCTAssertTrue(row.contains("VStack(alignment: .trailing, spacing: 8)"))
         XCTAssertTrue(row.contains("volumeSliderRow"))
         XCTAssertTrue(row.contains("balanceSliderRow"))

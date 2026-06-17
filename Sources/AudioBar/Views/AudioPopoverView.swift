@@ -530,39 +530,17 @@ private struct AudioProcessRow: View {
     private static let valueColumnWidth: CGFloat = 34
     private static let rowSpacing: CGFloat = 6
     private static let controlGroupSpacing: CGFloat = 10
-    private static let controlColumnWidth: CGFloat = 322
-    private static let controlBlockMinHeight: CGFloat = 58
+    private static let sliderControlWidth: CGFloat = 176
     private static var sliderRowWidth: CGFloat {
         sideMarkerWidth * 2 + sliderTrackWidth + valueColumnWidth + rowSpacing * 3
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(process.displayTitle)
-                    .font(.system(size: 13, weight: .medium))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                if let inlineSubtitle {
-                    Text(inlineSubtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .help(inlineSubtitle)
-                }
-
-                ChannelModeButton(process: process, store: store)
-                    .padding(.top, 2)
-                    .padding(.leading, -ChannelModeButton.horizontalPadding)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            control
+        VStack(alignment: .leading, spacing: 8) {
+            titleRow
+            lowerControlRow
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -574,17 +552,43 @@ private struct AudioProcessRow: View {
         }
     }
 
-    private var inlineSubtitle: String? {
-        process.displaySubtitle == "App audio" ? nil : process.displaySubtitle
+    private var titleRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(process.displayTitle)
+                .font(.system(size: 13, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .layoutPriority(1)
+
+            if let inlineSubtitle {
+                Text(inlineSubtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(2)
+                    .help(inlineSubtitle)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var control: some View {
+    private var lowerControlRow: some View {
         HStack(alignment: .center, spacing: Self.controlGroupSpacing) {
+            ChannelModeButton(process: process, store: store)
+                .padding(.leading, -ChannelModeButton.horizontalPadding)
+
+            Spacer(minLength: Self.controlGroupSpacing)
+
             playbackControls
             sliderControls
         }
-        .frame(width: Self.controlColumnWidth, alignment: .trailing)
-        .frame(minHeight: Self.controlBlockMinHeight, alignment: .center)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var inlineSubtitle: String? {
+        process.displaySubtitle == "App audio" ? nil : process.displaySubtitle
     }
 
     private var playbackControls: some View {
@@ -601,6 +605,7 @@ private struct AudioProcessRow: View {
             volumeSliderRow
             balanceSliderRow
         }
+        .frame(width: Self.sliderControlWidth, alignment: .trailing)
     }
 
     private var volumeSliderRow: some View {
