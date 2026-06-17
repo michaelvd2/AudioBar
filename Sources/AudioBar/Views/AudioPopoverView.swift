@@ -530,6 +530,7 @@ private struct AudioProcessRow: View {
     private static let valueColumnWidth: CGFloat = 34
     private static let rowSpacing: CGFloat = 6
     private static let controlGroupSpacing: CGFloat = 10
+    private static let playbackOffsetFromChannelPill: CGFloat = 238
     private static let sliderControlWidth: CGFloat = 176
     private static var sliderRowWidth: CGFloat {
         sideMarkerWidth * 2 + sliderTrackWidth + valueColumnWidth + rowSpacing * 3
@@ -581,6 +582,7 @@ private struct AudioProcessRow: View {
                 .padding(.leading, -ChannelModeButton.horizontalPadding)
 
             Spacer(minLength: Self.controlGroupSpacing)
+                .frame(width: Self.playbackOffsetFromChannelPill)
 
             playbackControls
             sliderControls
