@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import CoreGraphics
 import Foundation
 
 public struct RunningWebAppProvider {
@@ -41,6 +42,9 @@ public struct RunningWebAppProvider {
         if let title = accessibilityWindowTitle(forPID: pid) {
             return title
         }
+        if let title = cgWindowTitle(forPID: pid) {
+            return title
+        }
         return appleScriptWindowTitle(forPID: pid)
         #endif
     }
@@ -68,6 +72,35 @@ public struct RunningWebAppProvider {
             return nil
         }
         return (titleValue as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+    }
+
+    private func cgWindowTitle(forPID pid: pid_t) -> String? {
+        guard let windowInfo = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]] else {
+            return nil
+        }
+
+        return Self.visibleWindowTitle(in: windowInfo, forPID: pid)
+    }
+
+    static func visibleWindowTitle(in windowInfo: [[String: Any]], forPID pid: pid_t) -> String? {
+        for window in windowInfo {
+            let ownerPID = (window[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value
+            let layer = (window[kCGWindowLayer as String] as? NSNumber)?.intValue
+            guard ownerPID == pid, layer == 0 else {
+                continue
+            }
+
+            if let title = (window[kCGWindowName as String] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .nilIfBlank {
+                return title
+            }
+        }
+
+        return nil
     }
 
     private func appleScriptWindowTitle(forPID pid: pid_t) -> String? {

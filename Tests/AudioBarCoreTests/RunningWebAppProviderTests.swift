@@ -1,3 +1,4 @@
+import CoreGraphics
 import XCTest
 @testable import AudioBarCore
 
@@ -18,5 +19,64 @@ final class RunningWebAppProviderTests: XCTestCase {
         )
 
         XCTAssertEqual(displayName, "YouTube")
+    }
+
+    func testWindowTitleUsesVisibleWindowFallbackBeforeAppleScript() throws {
+        let source = try String(contentsOf: runningWebAppProviderURL(), encoding: .utf8)
+        let titleFunction = try XCTUnwrap(source.slice(
+            from: "private func windowTitle(forPID pid: pid_t) -> String?",
+            to: "private func accessibilityWindowTitle"
+        ))
+        let cgIndex = try XCTUnwrap(titleFunction.range(of: "cgWindowTitle(forPID: pid)")?.lowerBound)
+        let scriptIndex = try XCTUnwrap(titleFunction.range(of: "appleScriptWindowTitle(forPID: pid)")?.lowerBound)
+
+        XCTAssertLessThan(cgIndex, scriptIndex)
+        XCTAssertTrue(source.contains("CGWindowListCopyWindowInfo"))
+        XCTAssertTrue(source.contains("kCGWindowOwnerPID"))
+        XCTAssertTrue(source.contains("kCGWindowName"))
+    }
+
+    func testVisibleWindowTitleUsesLayerZeroWindowForMatchingPID() {
+        let title = RunningWebAppProvider.visibleWindowTitle(
+            in: [
+                [
+                    kCGWindowOwnerPID as String: NSNumber(value: 123),
+                    kCGWindowLayer as String: NSNumber(value: 1),
+                    kCGWindowName as String: "Menu"
+                ],
+                [
+                    kCGWindowOwnerPID as String: NSNumber(value: 456),
+                    kCGWindowLayer as String: NSNumber(value: 0),
+                    kCGWindowName as String: "Other Video - YouTube"
+                ],
+                [
+                    kCGWindowOwnerPID as String: NSNumber(value: 123),
+                    kCGWindowLayer as String: NSNumber(value: 0),
+                    kCGWindowName as String: "Collabs 3000 [Speed] - YouTube"
+                ]
+            ],
+            forPID: 123
+        )
+
+        XCTAssertEqual(title, "Collabs 3000 [Speed] - YouTube")
+    }
+
+    private func runningWebAppProviderURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/AudioBarCore/RunningWebAppProvider.swift")
+    }
+}
+
+private extension String {
+    func slice(from start: String, to end: String) -> String? {
+        guard let startRange = range(of: start),
+              let endRange = range(of: end, range: startRange.upperBound..<endIndex)
+        else {
+            return nil
+        }
+        return String(self[startRange.lowerBound..<endRange.lowerBound])
     }
 }
