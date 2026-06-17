@@ -55,22 +55,7 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
     }
 
     public var shouldRemainVisibleWhenPaused: Bool {
-        switch volumeCapability {
-        case .scripted, .webAppKeyboard, .safariMedia:
-            return true
-        case .systemRoute, .unavailable:
-            break
-        }
-
-        if isSystemSoundsSource {
-            return true
-        }
-
-        guard let bundleID else {
-            return false
-        }
-        return bundleID == "com.apple.Safari"
-            || bundleID.hasPrefix("com.apple.Safari.WebApp.")
+        true
     }
 
     public var playbackCapability: PlaybackCapability {

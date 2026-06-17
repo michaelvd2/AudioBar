@@ -68,7 +68,7 @@ struct AudioPopoverView: View {
             Spacer()
 
             if !store.hiddenSources.isEmpty {
-                Text("Blacklisted \(store.hiddenSources.count)")
+                Text("Hidden \(store.hiddenSources.count)")
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)

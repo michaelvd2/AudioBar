@@ -155,12 +155,13 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(settingsView.contains("if !store.hiddenSources.isEmpty"))
     }
 
-    func testFooterShowsHiddenSourceCountWhenBlacklistHasEntries() throws {
+    func testFooterShowsHiddenSourceCountWhenHiddenSourcesExist() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let footer = try XCTUnwrap(source.slice(from: "private var footer", to: "private var footerText"))
 
         XCTAssertTrue(footer.contains("if !store.hiddenSources.isEmpty"))
-        XCTAssertTrue(footer.contains("Text(\"Blacklisted \\(store.hiddenSources.count)\")"))
+        XCTAssertTrue(footer.contains("Text(\"Hidden \\(store.hiddenSources.count)\")"))
+        XCTAssertFalse(footer.contains("Blacklisted"))
         XCTAssertTrue(footer.contains(".help(\"Hidden sources can be restored above the footer\")"))
     }
 
