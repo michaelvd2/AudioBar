@@ -55,6 +55,16 @@ final class ReleasePackagingScriptTests: XCTestCase {
         XCTAssertTrue(script.contains("play/pause media key"))
     }
 
+    func testRunScriptUsesStableDevelopmentSigningWhenAvailable() throws {
+        let script = try String(contentsOf: buildRunScriptURL(), encoding: .utf8)
+
+        XCTAssertTrue(script.contains("AUDIOBAR_DEV_SIGN_IDENTITY"))
+        XCTAssertTrue(script.contains("Apple Development:"))
+        XCTAssertTrue(script.contains("SIGN_IDENTITY"))
+        XCTAssertTrue(script.contains("codesign --force --sign \"$SIGN_IDENTITY\""))
+        XCTAssertTrue(script.contains("codesign --force --sign -"))
+    }
+
     func testAppStorePackagingUsesSeparateSandboxedLane() throws {
         let script = try String(contentsOf: appStorePackageScriptURL(), encoding: .utf8)
         let entitlements = try String(contentsOf: appStoreEntitlementsURL(), encoding: .utf8)

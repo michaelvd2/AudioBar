@@ -36,6 +36,17 @@ final class RunningWebAppProviderTests: XCTestCase {
         XCTAssertTrue(source.contains("kCGWindowName"))
     }
 
+    func testAccessibilityTitleReaderRequestsTrustPrompt() throws {
+        let source = try String(contentsOf: runningWebAppProviderURL(), encoding: .utf8)
+        let accessibilityReader = try XCTUnwrap(source.slice(
+            from: "private func accessibilityWindowTitle(forPID pid: pid_t) -> String?",
+            to: "private func cgWindowTitle"
+        ))
+
+        XCTAssertTrue(accessibilityReader.contains("AXTrustedCheckOptionPrompt"))
+        XCTAssertTrue(accessibilityReader.contains("AXIsProcessTrustedWithOptions"))
+    }
+
     func testVisibleWindowTitleUsesLayerZeroWindowForMatchingPID() {
         let title = RunningWebAppProvider.visibleWindowTitle(
             in: [
