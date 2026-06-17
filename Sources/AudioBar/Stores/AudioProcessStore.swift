@@ -102,10 +102,10 @@ final class AudioProcessStore: ObservableObject {
         guard timer == nil else {
             return
         }
+        refresh()
         if !needsFirstUseSetup {
             startEQEngine()
         }
-        refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.refresh()
@@ -122,8 +122,8 @@ final class AudioProcessStore: ObservableObject {
         needsFirstUseSetup = false
         userDefaults.set(true, forKey: firstUseSetupCompletedKey)
         requestGuidedPermissions()
-        startEQEngine()
         refresh()
+        startEQEngine()
     }
 
     func stopAutoRefresh() {

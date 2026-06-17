@@ -75,6 +75,20 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(completeSetupFunction.contains("startEQEngine()"))
     }
 
+    func testSourceListIsLoadedBeforeStartingEQRoute() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let startAutoRefreshFunction = try XCTUnwrap(source.function(named: "startAutoRefresh"))
+        let completeSetupFunction = try XCTUnwrap(source.function(named: "completeFirstUseSetup"))
+
+        let autoRefreshIndex = try XCTUnwrap(startAutoRefreshFunction.range(of: "refresh()")?.lowerBound)
+        let autoStartIndex = try XCTUnwrap(startAutoRefreshFunction.range(of: "startEQEngine()")?.lowerBound)
+        XCTAssertLessThan(autoRefreshIndex, autoStartIndex)
+
+        let setupRefreshIndex = try XCTUnwrap(completeSetupFunction.range(of: "refresh()")?.lowerBound)
+        let setupStartIndex = try XCTUnwrap(completeSetupFunction.range(of: "startEQEngine()")?.lowerBound)
+        XCTAssertLessThan(setupRefreshIndex, setupStartIndex)
+    }
+
     func testStoreRoutesLaunchAtLoginThroughLoginItemController() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let setLaunchFunction = try XCTUnwrap(source.function(named: "setLaunchAtLoginEnabled"))
