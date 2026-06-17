@@ -20,7 +20,7 @@ struct AudioPopoverView: View {
             Divider()
             footer
         }
-        .frame(width: 430)
+        .frame(width: 520)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
@@ -520,9 +520,11 @@ private struct AudioProcessRow: View {
     @State private var draftBalance: Double?
 
     private static let sideMarkerWidth: CGFloat = 12
-    private static let sliderTrackWidth: CGFloat = 104
+    private static let sliderTrackWidth: CGFloat = 144
     private static let valueColumnWidth: CGFloat = 34
     private static let rowSpacing: CGFloat = 6
+    private static let controlGroupSpacing: CGFloat = 28
+    private static let controlColumnWidth: CGFloat = 370
     private static var sliderRowWidth: CGFloat {
         sideMarkerWidth * 2 + sliderTrackWidth + valueColumnWidth + rowSpacing * 3
     }
@@ -569,14 +571,18 @@ private struct AudioProcessRow: View {
     private var control: some View {
         VStack(alignment: .trailing, spacing: 6) {
             HStack(alignment: .center, spacing: 6) {
-                PreviousTrackButton(process: process, store: store)
-                PlaybackControlButton(process: process, store: store)
-                NextTrackButton(process: process, store: store)
-                RewindPlaybackButton(process: process, store: store)
+                HStack(spacing: 6) {
+                    PreviousTrackButton(process: process, store: store)
+                    PlaybackControlButton(process: process, store: store)
+                    NextTrackButton(process: process, store: store)
+                    RewindPlaybackButton(process: process, store: store)
+                }
+
+                Spacer(minLength: Self.controlGroupSpacing)
 
                 volumeSliderRow
             }
-            .frame(width: 296, height: 24, alignment: .trailing)
+            .frame(width: Self.controlColumnWidth, height: 24, alignment: .trailing)
 
             balanceSliderRow
         }

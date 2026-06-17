@@ -286,6 +286,22 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(row.contains(".padding(.trailing, 26)"))
     }
 
+    func testAudioProcessRowsUseAvailableWidthAroundVolumeControls() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let root = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var volumeSliderRow"
+        ))
+
+        XCTAssertTrue(root.contains(".frame(width: 520)"))
+        XCTAssertTrue(row.contains("private static let sliderTrackWidth: CGFloat = 144"))
+        XCTAssertTrue(row.contains("private static let controlGroupSpacing: CGFloat = 28"))
+        XCTAssertTrue(row.contains("private static let controlColumnWidth: CGFloat = 370"))
+        XCTAssertTrue(row.contains("Spacer(minLength: Self.controlGroupSpacing)"))
+        XCTAssertTrue(row.contains(".frame(width: Self.controlColumnWidth, height: 24, alignment: .trailing)"))
+    }
+
     func testBalanceSliderSnapsNearCenter() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let balanceDragBar = try XCTUnwrap(source.slice(
