@@ -250,6 +250,32 @@ final class SystemEQEngineTests: XCTestCase {
         ), source)
     }
 
+    func testInputBufferMapGroupsPlanarChannelBuffersByTap() {
+        let source = AudioObjectID(42)
+        let tapProcesses: [AudioObjectID?] = [nil, source]
+
+        XCTAssertNil(SystemEQInputBufferMap.processObjectID(
+            inputIndex: 0,
+            inputBufferCount: 4,
+            tapProcessObjectIDs: tapProcesses
+        ))
+        XCTAssertNil(SystemEQInputBufferMap.processObjectID(
+            inputIndex: 1,
+            inputBufferCount: 4,
+            tapProcessObjectIDs: tapProcesses
+        ))
+        XCTAssertEqual(SystemEQInputBufferMap.processObjectID(
+            inputIndex: 2,
+            inputBufferCount: 4,
+            tapProcessObjectIDs: tapProcesses
+        ), source)
+        XCTAssertEqual(SystemEQInputBufferMap.processObjectID(
+            inputIndex: 3,
+            inputBufferCount: 4,
+            tapProcessObjectIDs: tapProcesses
+        ), source)
+    }
+
     private func systemEQEngineURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

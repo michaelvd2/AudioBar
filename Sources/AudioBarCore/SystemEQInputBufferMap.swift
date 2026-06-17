@@ -11,11 +11,15 @@ enum SystemEQInputBufferMap {
             return nil
         }
 
-        let tapStartIndex = max(0, inputBufferCount - tapProcessObjectIDs.count)
+        let tapCount = tapProcessObjectIDs.count
+        let extraInputBufferCount = inputBufferCount % tapCount
+        let tapBufferCount = inputBufferCount - extraInputBufferCount
+        let buffersPerTap = max(1, tapBufferCount / tapCount)
+        let tapStartIndex = extraInputBufferCount
         let tapIndex = inputIndex - tapStartIndex
-        guard tapIndex >= 0, tapIndex < tapProcessObjectIDs.count else {
+        guard tapIndex >= 0, tapIndex < tapBufferCount else {
             return nil
         }
-        return tapProcessObjectIDs[tapIndex]
+        return tapProcessObjectIDs[tapIndex / buffersPerTap]
     }
 }
