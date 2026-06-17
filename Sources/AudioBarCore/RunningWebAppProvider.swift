@@ -4,6 +4,8 @@ import CoreGraphics
 import Foundation
 
 public struct RunningWebAppProvider {
+    private static let accessibilityPromptState = AccessibilityPromptState()
+
     public init() {}
 
     public func runningWebApps() -> [WebAppDescriptor] {
@@ -50,7 +52,7 @@ public struct RunningWebAppProvider {
     }
 
     private func accessibilityWindowTitle(forPID pid: pid_t) -> String? {
-        guard AXIsProcessTrusted() else {
+        guard Self.isAccessibilityTrusted() else {
             return nil
         }
 
@@ -76,6 +78,19 @@ public struct RunningWebAppProvider {
             return nil
         }
         return (titleValue as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+    }
+
+    private static func isAccessibilityTrusted() -> Bool {
+        if AXIsProcessTrusted() {
+            return true
+        }
+        guard Self.accessibilityPromptState.shouldRequestPrompt() else {
+            return false
+        }
+        let options = [
+            "AXTrustedCheckOptionPrompt": true
+        ] as CFDictionary
+        return AXIsProcessTrustedWithOptions(options)
     }
 
     private func cgWindowTitle(forPID pid: pid_t) -> String? {
@@ -125,6 +140,22 @@ public struct RunningWebAppProvider {
             return nil
         }
         return descriptor.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+    }
+}
+
+private final class AccessibilityPromptState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var didRequest = false
+
+    func shouldRequestPrompt() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard !didRequest else {
+            return false
+        }
+        didRequest = true
+        return true
     }
 }
 

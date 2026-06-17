@@ -36,16 +36,19 @@ final class RunningWebAppProviderTests: XCTestCase {
         XCTAssertTrue(source.contains("kCGWindowName"))
     }
 
-    func testAccessibilityTitleReaderChecksTrustWithoutPromptingDuringRefresh() throws {
+    func testAccessibilityTitleReaderRequestsTrustAtMostOnce() throws {
         let source = try String(contentsOf: runningWebAppProviderURL(), encoding: .utf8)
         let accessibilityReader = try XCTUnwrap(source.slice(
             from: "private func accessibilityWindowTitle(forPID pid: pid_t) -> String?",
             to: "private func cgWindowTitle"
         ))
 
-        XCTAssertTrue(accessibilityReader.contains("AXIsProcessTrusted()"))
-        XCTAssertFalse(accessibilityReader.contains("AXTrustedCheckOptionPrompt"))
-        XCTAssertFalse(accessibilityReader.contains("AXIsProcessTrustedWithOptions"))
+        XCTAssertTrue(source.contains("private static let accessibilityPromptState = AccessibilityPromptState()"))
+        XCTAssertTrue(accessibilityReader.contains("Self.isAccessibilityTrusted()"))
+        XCTAssertTrue(source.contains("AXIsProcessTrustedWithOptions"))
+        XCTAssertTrue(source.contains("Self.accessibilityPromptState.shouldRequestPrompt()"))
+        XCTAssertTrue(source.contains("private final class AccessibilityPromptState: @unchecked Sendable"))
+        XCTAssertTrue(source.contains("private var didRequest = false"))
     }
 
     func testVisibleWindowTitleUsesLayerZeroWindowForMatchingPID() {
