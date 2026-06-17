@@ -297,10 +297,12 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(root.contains(".frame(width: 520)"))
         XCTAssertTrue(row.contains("private static let sliderTrackWidth: CGFloat = 104"))
         XCTAssertFalse(row.contains("private static let sliderTrackWidth: CGFloat = 144"))
-        XCTAssertTrue(row.contains("private static let controlGroupSpacing: CGFloat = 28"))
-        XCTAssertTrue(row.contains("private static let controlColumnWidth: CGFloat = 370"))
+        XCTAssertTrue(row.contains("private static let controlGroupSpacing: CGFloat = 34"))
+        XCTAssertTrue(row.contains("private static let controlColumnWidth: CGFloat = 342"))
+        XCTAssertTrue(row.contains("private static let controlBlockMinHeight: CGFloat = 58"))
         XCTAssertTrue(row.contains("Spacer(minLength: Self.controlGroupSpacing)"))
-        XCTAssertTrue(row.contains(".frame(width: Self.controlColumnWidth, height: 24, alignment: .trailing)"))
+        XCTAssertTrue(row.contains(".frame(width: Self.controlColumnWidth, height: 26, alignment: .trailing)"))
+        XCTAssertTrue(row.contains(".frame(minHeight: Self.controlBlockMinHeight, alignment: .center)"))
     }
 
     func testBalanceSliderSnapsNearCenter() throws {

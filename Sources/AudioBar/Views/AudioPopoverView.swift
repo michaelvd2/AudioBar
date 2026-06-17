@@ -523,8 +523,9 @@ private struct AudioProcessRow: View {
     private static let sliderTrackWidth: CGFloat = 104
     private static let valueColumnWidth: CGFloat = 34
     private static let rowSpacing: CGFloat = 6
-    private static let controlGroupSpacing: CGFloat = 28
-    private static let controlColumnWidth: CGFloat = 370
+    private static let controlGroupSpacing: CGFloat = 34
+    private static let controlColumnWidth: CGFloat = 342
+    private static let controlBlockMinHeight: CGFloat = 58
     private static var sliderRowWidth: CGFloat {
         sideMarkerWidth * 2 + sliderTrackWidth + valueColumnWidth + rowSpacing * 3
     }
@@ -569,7 +570,7 @@ private struct AudioProcessRow: View {
 
     @ViewBuilder
     private var control: some View {
-        VStack(alignment: .trailing, spacing: 6) {
+        VStack(alignment: .trailing, spacing: 8) {
             HStack(alignment: .center, spacing: 6) {
                 HStack(spacing: 6) {
                     PreviousTrackButton(process: process, store: store)
@@ -582,10 +583,11 @@ private struct AudioProcessRow: View {
 
                 volumeSliderRow
             }
-            .frame(width: Self.controlColumnWidth, height: 24, alignment: .trailing)
+            .frame(width: Self.controlColumnWidth, height: 26, alignment: .trailing)
 
             balanceSliderRow
         }
+        .frame(minHeight: Self.controlBlockMinHeight, alignment: .center)
     }
 
     private var volumeSliderRow: some View {
