@@ -523,8 +523,8 @@ private struct AudioProcessRow: View {
     private static let sliderTrackWidth: CGFloat = 104
     private static let valueColumnWidth: CGFloat = 34
     private static let rowSpacing: CGFloat = 6
-    private static let controlGroupSpacing: CGFloat = 34
-    private static let controlColumnWidth: CGFloat = 342
+    private static let controlGroupSpacing: CGFloat = 10
+    private static let controlColumnWidth: CGFloat = 322
     private static let controlBlockMinHeight: CGFloat = 58
     private static var sliderRowWidth: CGFloat {
         sideMarkerWidth * 2 + sliderTrackWidth + valueColumnWidth + rowSpacing * 3
