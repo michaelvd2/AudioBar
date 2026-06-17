@@ -537,6 +537,7 @@ private struct AudioProcessRow: View {
                     .font(.system(size: 13, weight: .medium))
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 if let inlineSubtitle {
                     Text(inlineSubtitle)
@@ -544,11 +545,13 @@ private struct AudioProcessRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .help(inlineSubtitle)
                 }
 
                 ChannelModeButton(process: process, store: store)
                     .padding(.top, 2)
+                    .padding(.leading, -ChannelModeButton.horizontalPadding)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -695,6 +698,8 @@ private struct ChannelModeButton: View {
     let process: AudioProcess
     @ObservedObject var store: AudioProcessStore
 
+    static let horizontalPadding: CGFloat = 6
+
     var body: some View {
         Button(store.channelModeLabel(for: process)) {
             store.toggleChannelMode(for: process)
@@ -702,7 +707,7 @@ private struct ChannelModeButton: View {
         .buttonStyle(.plain)
         .font(.caption2)
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 6)
+        .padding(.horizontal, Self.horizontalPadding)
         .padding(.vertical, 2)
         .background(.tertiary.opacity(0.18), in: Capsule())
         .contentShape(Capsule())

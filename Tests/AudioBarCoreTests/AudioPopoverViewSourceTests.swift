@@ -221,6 +221,25 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(channelModeButton.contains(".help(\"Toggle mono/stereo for this source\")"))
     }
 
+    func testAudioProcessRowsAlignVisibleLeftTextEdges() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var inlineSubtitle"
+        ))
+        let channelModeButton = try XCTUnwrap(source.slice(
+            from: "private struct ChannelModeButton",
+            to: "private struct BalanceDragBar"
+        ))
+
+        XCTAssertTrue(row.contains("Text(process.displayTitle)"))
+        XCTAssertTrue(row.contains("Text(inlineSubtitle)"))
+        XCTAssertTrue(row.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
+        XCTAssertTrue(row.contains(".padding(.leading, -ChannelModeButton.horizontalPadding)"))
+        XCTAssertTrue(channelModeButton.contains("static let horizontalPadding: CGFloat = 6"))
+        XCTAssertTrue(channelModeButton.contains(".padding(.horizontal, Self.horizontalPadding)"))
+    }
+
     func testAudioProcessRowsExposeFullInlineSubtitleAsTooltip() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let row = try XCTUnwrap(source.slice(
