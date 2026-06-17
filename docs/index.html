@@ -128,6 +128,7 @@
       min-height: 44px;
       align-items: center;
       justify-content: center;
+      gap: 10px;
       border-radius: 8px;
       padding: 0 18px;
       background: var(--accent);
@@ -140,6 +141,23 @@
       border: 1px solid var(--line);
       background: var(--panel);
       color: var(--ink);
+    }
+
+    .store-emblem {
+      display: inline-grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 6px;
+      background: linear-gradient(145deg, #39c5ff, #1676ff 54%, #5a48ff);
+      box-shadow: inset 0 0 0 1px rgb(255 255 255 / 30%);
+    }
+
+    .store-emblem svg {
+      display: block;
+      width: 17px;
+      height: 17px;
     }
 
     .button[aria-disabled="true"] {
@@ -344,7 +362,16 @@
           system sound.
         </p>
         <div class="actions">
-          <a class="button" href="https://apps.apple.com/us/app/audiobar-volume-mixer-eq/id6779122908?mt=12">Mac App Store</a>
+          <a class="button" href="https://apps.apple.com/us/app/audiobar-volume-mixer-eq/id6779122908?mt=12">
+            <span class="store-emblem" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="img" focusable="false">
+                <path d="M8.2 18.3 15.8 5.1" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round"/>
+                <path d="M15.8 18.3 8.2 5.1" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round"/>
+                <path d="M5.6 15.4h12.8" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span>Mac App Store</span>
+          </a>
           <a class="button secondary" href="https://github.com/michaelvd2/AudioBar/releases/download/v0.1.7/AudioBar-notarized.zip">Direct download</a>
           <span class="note">For macOS 14.2 or newer.</span>
         </div>
