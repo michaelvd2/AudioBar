@@ -558,16 +558,17 @@ private struct AudioProcessRow: View {
                 .font(.system(size: 13, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .layoutPriority(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(2)
 
             if let inlineSubtitle {
                 Text(inlineSubtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .layoutPriority(2)
+                    .layoutPriority(1)
                     .help(inlineSubtitle)
             }
         }

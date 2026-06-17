@@ -193,9 +193,22 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(row.contains("if let inlineSubtitle"))
         XCTAssertTrue(row.contains("Text(inlineSubtitle)"))
         XCTAssertTrue(titleRow.contains("HStack(alignment: .firstTextBaseline, spacing: 8)"))
+        let sourceTitleText = try XCTUnwrap(titleRow.slice(
+            from: "Text(process.displayTitle)",
+            to: "if let inlineSubtitle"
+        ))
+        let subtitleText = try XCTUnwrap(titleRow.slice(
+            from: "Text(inlineSubtitle)",
+            to: ".help(inlineSubtitle)"
+        ))
         let titleIndex = try XCTUnwrap(titleRow.range(of: "Text(process.displayTitle)")?.lowerBound)
         let subtitleIndex = try XCTUnwrap(titleRow.range(of: "Text(inlineSubtitle)")?.lowerBound)
         XCTAssertLessThan(titleIndex, subtitleIndex)
+        XCTAssertTrue(sourceTitleText.contains(".font(.system(size: 13, weight: .medium))"))
+        XCTAssertTrue(sourceTitleText.contains(".fixedSize(horizontal: true, vertical: false)"))
+        XCTAssertTrue(sourceTitleText.contains(".layoutPriority(2)"))
+        XCTAssertTrue(subtitleText.contains(".truncationMode(.tail)"))
+        XCTAssertTrue(subtitleText.contains(".layoutPriority(1)"))
         XCTAssertFalse(row.contains("capabilityText"))
         XCTAssertFalse(row.contains("web app volume"))
         XCTAssertFalse(row.contains("view only"))
@@ -261,7 +274,7 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         ))
 
         XCTAssertTrue(row.contains("Text(inlineSubtitle)"))
-        XCTAssertTrue(row.contains(".truncationMode(.middle)"))
+        XCTAssertTrue(row.contains(".truncationMode(.tail)"))
         XCTAssertTrue(row.contains(".help(inlineSubtitle)"))
     }
 
