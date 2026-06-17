@@ -9,6 +9,16 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(body.contains(".background(Color(nsColor: .windowBackgroundColor))"))
     }
 
+    func testOpeningPopoverDoesNotStartAudioRouteRefresh() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let body = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
+        let appSource = try String(contentsOf: audioBarAppURL(), encoding: .utf8)
+        let launchFunction = try XCTUnwrap(appSource.slice(from: "func applicationDidFinishLaunching", to: "}\n}"))
+
+        XCTAssertTrue(launchFunction.contains("store.startAutoRefresh()"))
+        XCTAssertFalse(body.contains("store.startAutoRefresh()"))
+    }
+
     func testEQPanelKeepsOneSwitchControl() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let eqPanel = try XCTUnwrap(source.slice(
@@ -364,6 +374,14 @@ final class AudioPopoverViewSourceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/AudioBar/Views/AudioPopoverView.swift")
+    }
+
+    private func audioBarAppURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/AudioBar/App/AudioBarApp.swift")
     }
 }
 
