@@ -28,6 +28,19 @@ final class AudioBarStatusMenuSourceTests: XCTestCase {
         XCTAssertFalse(source.contains("popover.behavior = .transient"))
     }
 
+    func testStatusItemIconReflectsEQBypassState() throws {
+        let source = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("import Combine"))
+        XCTAssertTrue(source.contains("private var cancellables: Set<AnyCancellable> = []"))
+        XCTAssertTrue(source.contains("observeEQStatusIcon()"))
+        XCTAssertTrue(source.contains("store.$eqSettings"))
+        XCTAssertTrue(source.contains("updateStatusIcon(isEQEnabled: !settings.isBypassed)"))
+        XCTAssertTrue(source.contains("static func statusIconSymbolName(isEQEnabled: Bool) -> String"))
+        XCTAssertTrue(source.contains("isEQEnabled ? \"speaker.wave.2.fill\" : \"speaker.wave.2\""))
+        XCTAssertFalse(source.contains("button.image = NSImage(systemSymbolName: \"speaker.wave.2\", accessibilityDescription: \"AudioBar\")"))
+    }
+
     func testPopoverClosesWhenAppMovesToBackground() throws {
         let source = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
 

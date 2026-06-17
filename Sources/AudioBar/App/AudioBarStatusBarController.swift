@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
@@ -9,6 +10,7 @@ final class AudioBarStatusBarController: NSObject {
     private var outsideClickMonitor: Any?
     private var localClickMonitor: Any?
     private var suppressResignActiveCloseUntil: Date?
+    private var cancellables: Set<AnyCancellable> = []
 
     init(store: AudioProcessStore) {
         self.store = store
@@ -16,6 +18,7 @@ final class AudioBarStatusBarController: NSObject {
         super.init()
         configureButton()
         configurePopover()
+        observeEQStatusIcon()
         observeAppDeactivation()
         observeVolumeCommandRetention()
     }
@@ -32,11 +35,37 @@ final class AudioBarStatusBarController: NSObject {
             return
         }
 
-        button.image = NSImage(systemSymbolName: "speaker.wave.2", accessibilityDescription: "AudioBar")
-        button.toolTip = "AudioBar"
+        updateStatusIcon(isEQEnabled: !store.eqSettings.isBypassed)
         button.target = self
         button.action = #selector(handleStatusButtonAction(_:))
         button.sendAction(on: [.leftMouseDown, .rightMouseDown])
+    }
+
+    private func observeEQStatusIcon() {
+        store.$eqSettings
+            .sink { [weak self] settings in
+                Task { @MainActor in
+                    self?.updateStatusIcon(isEQEnabled: !settings.isBypassed)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func updateStatusIcon(isEQEnabled: Bool) {
+        guard let button = statusItem.button else {
+            return
+        }
+
+        let description = isEQEnabled ? "AudioBar EQ on" : "AudioBar EQ off"
+        button.image = NSImage(
+            systemSymbolName: Self.statusIconSymbolName(isEQEnabled: isEQEnabled),
+            accessibilityDescription: description
+        )
+        button.toolTip = isEQEnabled ? "AudioBar: EQ On" : "AudioBar: EQ Off"
+    }
+
+    static func statusIconSymbolName(isEQEnabled: Bool) -> String {
+        isEQEnabled ? "speaker.wave.2.fill" : "speaker.wave.2"
     }
 
     private func configurePopover() {
