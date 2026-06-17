@@ -42,6 +42,10 @@ struct AudioPopoverView: View {
                     .foregroundStyle(.secondary)
             }
 
+            AudioStreamMeter(snapshot: store.eqStreamSnapshot)
+                .frame(width: 160)
+                .padding(.leading, 8)
+
             Spacer()
 
             Button {
@@ -321,8 +325,6 @@ private struct EQPanelView: View {
                 isExpanded: $isExpanded,
                 content: {
                     VStack(alignment: .leading, spacing: 10) {
-                        AudioStreamMeter(snapshot: store.eqStreamSnapshot)
-
                         HStack(alignment: .bottom, spacing: 8) {
                             PreampSlider(store: store)
 

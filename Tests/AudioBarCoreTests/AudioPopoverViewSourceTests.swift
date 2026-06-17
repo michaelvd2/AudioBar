@@ -43,13 +43,18 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(eqPanel.contains("isExpanded.toggle()"))
     }
 
-    func testSourceListAppearsBeforeEQPanel() throws {
+    func testHeaderShowsSystemStreamBeforeAudioControls() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let body = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
+        let header = try XCTUnwrap(source.slice(from: "private var header", to: "private var footer"))
+        let streamIndex = try XCTUnwrap(header.range(of: "AudioStreamMeter(snapshot: store.eqStreamSnapshot)")?.lowerBound)
+        let refreshIndex = try XCTUnwrap(header.range(of: "store.refresh()")?.lowerBound)
         let contentIndex = try XCTUnwrap(body.range(of: "OutputSourceListView(store: store)")?.lowerBound)
         let eqIndex = try XCTUnwrap(body.range(of: "EQPanelView(store: store)")?.lowerBound)
 
+        XCTAssertLessThan(streamIndex, refreshIndex)
         XCTAssertLessThan(contentIndex, eqIndex)
+        XCTAssertFalse(source.slice(from: "private struct EQPanelView", to: "private struct AudioStreamMeter")?.contains("AudioStreamMeter(snapshot: store.eqStreamSnapshot)") ?? true)
     }
 
     func testFirstUseSetupAppearsBeforeAudioControls() throws {
