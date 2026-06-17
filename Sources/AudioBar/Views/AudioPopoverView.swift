@@ -341,13 +341,19 @@ private struct EQPanelView: View {
 
                         Spacer()
 
-                        Toggle(store.eqSettings.isBypassed ? "Off" : "On", isOn: Binding(
-                            get: { !store.eqSettings.isBypassed },
-                            set: { store.setEQBypassed(!$0) }
-                        ))
-                        .toggleStyle(.switch)
-                        .font(.caption)
-                        .frame(width: 76, alignment: .trailing)
+                        HStack(spacing: 6) {
+                            Text(store.eqSettings.isBypassed ? "Off" : "On")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 22, alignment: .trailing)
+
+                            Toggle("", isOn: Binding(
+                                get: { !store.eqSettings.isBypassed },
+                                set: { store.setEQBypassed(!$0) }
+                            ))
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                        }
 
                         Menu("Preset") {
                             ForEach(EQPreset.allCases, id: \.self) { preset in
