@@ -407,6 +407,11 @@ private struct AudioStreamMeter: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 16)
 
+            StreamLevelBar(value: snapshot.levelFraction)
+                .frame(width: 92, height: 5)
+
+            Spacer(minLength: 10)
+
             VStack(alignment: .leading, spacing: 1) {
                 Text(snapshot.title)
                     .font(.caption)
@@ -418,11 +423,6 @@ private struct AudioStreamMeter: View {
                     .lineLimit(1)
             }
             .frame(width: 82, alignment: .leading)
-
-            Spacer(minLength: 10)
-
-            StreamLevelBar(value: snapshot.levelFraction)
-                .frame(width: 92, height: 5)
         }
     }
 }
