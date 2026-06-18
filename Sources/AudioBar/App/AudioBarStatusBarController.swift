@@ -76,8 +76,10 @@ final class AudioBarStatusBarController: NSObject {
 
     private func configurePopover() {
         popover.behavior = .applicationDefined
-        popover.contentSize = NSSize(width: 430, height: 560)
-        popover.contentViewController = NSHostingController(rootView: AudioPopoverView(store: store))
+        popover.animates = false
+        let hostingController = NSHostingController(rootView: AudioPopoverView(store: store))
+        hostingController.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = hostingController
     }
 
     private func observeAppDeactivation() {
@@ -136,7 +138,6 @@ final class AudioBarStatusBarController: NSObject {
     }
 
     private func showSettings(relativeTo button: NSStatusBarButton) {
-        popover.contentSize = NSSize(width: 430, height: 560)
         let anchorRect = NSRect(x: 0, y: 0, width: button.bounds.width, height: button.bounds.height)
         popover.show(relativeTo: anchorRect, of: button, preferredEdge: .minY)
         installOutsideClickMonitors()

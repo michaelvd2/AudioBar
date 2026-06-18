@@ -1,8 +1,15 @@
+import AppKit
 import AudioBarCore
 import ApplicationServices
 import Combine
 import CoreGraphics
 import Foundation
+import OSLog
+
+private let audioProcessStoreLogger = Logger(
+    subsystem: "com.michaelvandijk.AudioBar",
+    category: "AudioProcessStore"
+)
 
 extension Notification.Name {
     static let audioBarWillRunExternalFocusCommand = Notification.Name("AudioBarWillRunExternalFocusCommand")
@@ -133,11 +140,55 @@ final class AudioProcessStore: ObservableObject {
         streamTimer = nil
     }
 
+    private var displayOrder: [String] = []
+    private var lastTrackTitles: [String: String] = [:]
+
+    private func orderedByFirstSeen(_ sources: [AudioProcess]) -> [AudioProcess] {
+        for source in sources where !displayOrder.contains(source.stableSourceID) {
+            displayOrder.append(source.stableSourceID)
+        }
+        for source in sources where !source.sourceDetailLabel.isEmpty {
+            lastTrackTitles[source.stableSourceID] = source.sourceDetailLabel
+        }
+        return sources.sorted { lhs, rhs in
+            (displayOrder.firstIndex(of: lhs.stableSourceID) ?? Int.max)
+                < (displayOrder.firstIndex(of: rhs.stableSourceID) ?? Int.max)
+        }
+    }
+
+    func sourceDetail(for process: AudioProcess) -> String {
+        let live = process.sourceDetailLabel
+        if !live.isEmpty {
+            return live
+        }
+        return lastTrackTitles[process.stableSourceID] ?? ""
+    }
+
+    func moveSource(withID draggedID: String, aboveID targetID: String) {
+        guard draggedID != targetID,
+              let fromIndex = displayOrder.firstIndex(of: draggedID) else {
+            return
+        }
+        displayOrder.remove(at: fromIndex)
+        if let targetIndex = displayOrder.firstIndex(of: targetID) {
+            displayOrder.insert(draggedID, at: targetIndex)
+        } else {
+            displayOrder.append(draggedID)
+        }
+        processes = processes.sorted { lhs, rhs in
+            (displayOrder.firstIndex(of: lhs.stableSourceID) ?? Int.max)
+                < (displayOrder.firstIndex(of: rhs.stableSourceID) ?? Int.max)
+        }
+    }
+
     func refresh() {
         isRefreshing = true
+        playbackStateOverrides.removeAll()
         let activeProcesses = provider.activeOutputProcesses()
-        let nextProcesses = processCache.merge(activeProcesses: activeProcesses)
-            .filter { !isHiddenSource($0) }
+        let nextProcesses = orderedByFirstSeen(
+            processCache.merge(activeProcesses: activeProcesses)
+                .filter { !isHiddenSource($0) }
+        )
         updateEQSourceProcesses(nextProcesses)
         processes = nextProcesses
         applySafariMediaEQFallbackIfNeeded(for: nextProcesses)
@@ -246,8 +297,9 @@ final class AudioProcessStore: ObservableObject {
             return
         }
 
-        playbackStateOverrides[process.stableSourceID] = !isPlaybackPlaying(process)
+        let intendedPlaying = !isPlaybackPlaying(process)
         refresh()
+        playbackStateOverrides[process.stableSourceID] = intendedPlaying
     }
 
     func rewindPlayback(for process: AudioProcess) {
@@ -302,6 +354,7 @@ final class AudioProcessStore: ObservableObject {
     func setEQBypassed(_ isBypassed: Bool) {
         eqSettings.isBypassed = isBypassed
         saveEQSettings()
+        audioProcessStoreLogger.info("EQ bypass changed: \(isBypassed)")
         if isBypassed {
             updateEQEngine()
         } else {
@@ -498,6 +551,13 @@ final class AudioProcessStore: ObservableObject {
             NotificationCenter.default.post(name: .audioBarWillRunExternalFocusCommand, object: self)
         case .systemRoute, .unavailable:
             break
+        }
+    }
+
+    func requestPermissions() {
+        requestGuidedPermissions()
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
         }
     }
 

@@ -1,6 +1,7 @@
 import AppKit
 import AudioBarCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct AudioPopoverView: View {
     @ObservedObject var store: AudioProcessStore
@@ -8,6 +9,8 @@ struct AudioPopoverView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            Divider()
+            CaptureStripView(snapshot: store.eqStreamSnapshot)
             Divider()
             if store.needsFirstUseSetup {
                 FirstUseSetupView(store: store)
@@ -20,7 +23,7 @@ struct AudioPopoverView: View {
             Divider()
             footer
         }
-        .frame(width: 520)
+        .frame(width: 460)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
@@ -39,9 +42,6 @@ struct AudioPopoverView: View {
                     .foregroundStyle(.secondary)
             }
 
-            AudioStreamMeter(snapshot: store.eqStreamSnapshot)
-                .frame(width: 220)
-
             Spacer()
 
             Button {
@@ -56,37 +56,45 @@ struct AudioPopoverView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
+        .background(Color.primary.opacity(0.04))
     }
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: 8) {
             Text(footerText)
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
 
-            Spacer()
-
             if !store.hiddenSources.isEmpty {
-                Text("Hidden \(store.hiddenSources.count)")
+                Text("· Hidden \(store.hiddenSources.count)")
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .help("Hidden sources can be restored above the footer")
             }
 
-            Button("Restart") {
+            Spacer()
+
+            Button {
+                store.requestPermissions()
+            } label: {
+                Image(systemName: "lock.shield")
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+            }
+            .buttonStyle(.plain)
+            .background(.tertiary.opacity(0.15), in: RoundedRectangle(cornerRadius: 6))
+            .help("Re-request permissions (Accessibility · Input Monitoring)")
+
+            FooterButton(title: "Restart", help: "Restart AudioBar") {
                 restartAudioBar()
             }
-            .buttonStyle(.plain)
-            .font(.caption)
-            .help("Restart AudioBar")
 
-            Button("Quit") {
+            FooterButton(title: "Quit", help: "Quit AudioBar") {
                 NSApp.terminate(nil)
             }
-            .buttonStyle(.plain)
-            .font(.caption)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
@@ -168,41 +176,44 @@ private struct PermissionPill: View {
 private struct OutputSourceListView: View {
     @ObservedObject var store: AudioProcessStore
     @State private var isExpanded = true
-
-    private let visibleRowLimit = 3
+    @State private var draggingID: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            DisclosureGroup(
-                isExpanded: $isExpanded,
-                content: {
-                    content
-                },
-                label: {
-                    HStack {
-                        Text("Audio Outputs")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(store.processes.count)")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.tertiary)
-                    }
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                isExpanded.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Text("Audio Outputs")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    CountBadge(count: store.processes.count)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 12)
                 }
-            )
-            .disclosureGroupStyle(.automatic)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
             .padding(.horizontal, 14)
             .padding(.top, 10)
-            .padding(.bottom, isExpanded ? 0 : 10)
+            .padding(.bottom, isExpanded ? 8 : 10)
+
+            if isExpanded {
+                Divider()
+                content
+            }
         }
-        .frame(minHeight: store.processes.isEmpty ? 104 : nil)
     }
 
     @ViewBuilder
     private var sourceRows: some View {
-        LazyVStack(spacing: 0) {
+        VStack(spacing: 0) {
             ForEach(store.processes) { process in
-                AudioProcessRow(process: process, store: store)
+                AudioProcessRow(process: process, store: store, draggingID: $draggingID)
                 if process.id != store.processes.last?.id {
                     Divider()
                         .padding(.leading, 14)
@@ -214,26 +225,41 @@ private struct OutputSourceListView: View {
     @ViewBuilder
     private var content: some View {
         if store.processes.isEmpty {
-            VStack(spacing: 8) {
+            HStack(spacing: 8) {
                 Image(systemName: "waveform.slash")
-                    .font(.system(size: 24))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.tertiary)
                 Text("No active output")
-                    .font(.subheadline)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 28)
+            .padding(.vertical, 12)
         } else {
-            if store.processes.count > visibleRowLimit {
-                ScrollView {
-                    sourceRows
-                }
-                .frame(maxHeight: 220)
-            } else {
-                sourceRows
-            }
+            sourceRows
         }
+    }
+}
+
+private struct SourceReorderDropDelegate: DropDelegate {
+    let targetID: String
+    @Binding var draggingID: String?
+    let store: AudioProcessStore
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let draggingID, draggingID != targetID else {
+            return
+        }
+        store.moveSource(withID: draggingID, aboveID: targetID)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggingID = nil
+        return true
     }
 }
 
@@ -297,9 +323,11 @@ private struct SourceSettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text("\(store.hiddenSources.count)")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.tertiary)
+                        CountBadge(count: store.hiddenSources.count)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        isExpanded.toggle()
                     }
                 }
                 .padding(.horizontal, 14)
@@ -321,31 +349,35 @@ private struct EQPanelView: View {
                 isExpanded: $isExpanded,
                 content: {
                     VStack(alignment: .leading, spacing: 10) {
-                        HStack(alignment: .bottom, spacing: 8) {
-                            PreampSlider(store: store)
+                        ZStack(alignment: .top) {
+                            EQBaseline()
 
-                            Divider()
-                                .frame(height: 118)
+                            HStack(alignment: .bottom, spacing: 6) {
+                                PreampSlider(store: store)
 
-                            ForEach(EQBand.classic) { band in
-                                EQBandSlider(band: band, store: store)
+                                Divider()
+                                    .frame(height: 118)
+
+                                ForEach(EQBand.classic) { band in
+                                    EQBandSlider(band: band, store: store)
+                                }
                             }
                         }
                     }
-                    .padding(.top, 8)
+                    .padding(.top, 12)
                 },
                 label: {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 14) {
                         Label("EQ", systemImage: "slider.vertical.3")
                             .font(.system(size: 13, weight: .semibold))
 
                         Spacer()
 
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             Text(store.eqSettings.isBypassed ? "Off" : "On")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                                .frame(width: 22, alignment: .trailing)
+                                .frame(width: 24, alignment: .trailing)
 
                             Toggle("", isOn: Binding(
                                 get: { !store.eqSettings.isBypassed },
@@ -355,42 +387,46 @@ private struct EQPanelView: View {
                             .labelsHidden()
                         }
 
-                        Menu("Preset") {
-                            ForEach(EQPreset.allCases, id: \.self) { preset in
-                                Button(preset.rawValue) {
-                                    store.applyEQPreset(preset)
-                                }
-                            }
-
-                            if !store.savedEQPresets.isEmpty {
-                                Divider()
-                                ForEach(store.savedEQPresets) { preset in
-                                    Button(preset.name) {
-                                        store.applySavedEQPreset(preset)
+                        HStack(spacing: 8) {
+                            Menu("Preset") {
+                                ForEach(EQPreset.allCases, id: \.self) { preset in
+                                    Button(preset.rawValue) {
+                                        store.applyEQPreset(preset)
                                     }
                                 }
-                            }
 
-                            Divider()
-                            Button("Save Current...") {
-                                presetName = store.nextSavedEQPresetName()
-                                isSavingPreset = true
-                            }
-                        }
-                        .font(.caption)
+                                if !store.savedEQPresets.isEmpty {
+                                    Divider()
+                                    ForEach(store.savedEQPresets) { preset in
+                                        Button(preset.name) {
+                                            store.applySavedEQPreset(preset)
+                                        }
+                                    }
+                                }
 
-                        Button("Reset") {
-                            store.resetEQ()
+                                Divider()
+                                Button("Save Current...") {
+                                    presetName = store.nextSavedEQPresetName()
+                                    isSavingPreset = true
+                                }
+                            }
+                            .font(.caption)
+
+                            Button("Reset") {
+                                store.resetEQ()
+                            }
+                            .font(.caption)
                         }
-                        .font(.caption)
                     }
+                    .controlSize(.small)
                 }
             )
             .disclosureGroupStyle(.automatic)
             .help(isExpanded ? "Collapse EQ sliders" : "Expand EQ sliders")
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
         .alert("Save Preset", isPresented: $isSavingPreset) {
             TextField("Name", text: $presetName)
             Button("Save") {
@@ -403,7 +439,7 @@ private struct EQPanelView: View {
     }
 }
 
-private struct AudioStreamMeter: View {
+private struct CaptureStripView: View {
     let snapshot: SystemAudioStreamSnapshot
 
     var body: some View {
@@ -413,23 +449,122 @@ private struct AudioStreamMeter: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 16)
 
+            Text(snapshot.title)
+                .font(.caption)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+
+            Text(snapshot.subtitle)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Spacer(minLength: 12)
+
             StreamLevelBar(value: snapshot.levelFraction)
-                .frame(width: 92, height: 5)
-
-            Spacer(minLength: 10)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(snapshot.title)
-                    .font(.caption)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(snapshot.subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .frame(width: 82, alignment: .leading)
+                .frame(width: 150, height: 5)
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+}
+
+private struct CountBadge: View {
+    let count: Int
+
+    var body: some View {
+        Text("\(count)")
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(.tertiary.opacity(0.18), in: RoundedRectangle(cornerRadius: 5))
+    }
+}
+
+private struct MarqueeText: View {
+    let text: String
+    var isPlaying: Bool = true
+    var font: Font = .caption
+    var color: Color = .secondary
+
+    @State private var textWidth: CGFloat = 0
+    @State private var containerWidth: CGFloat = 0
+    @State private var animating = false
+
+    var body: some View {
+        let overflow = max(0, textWidth - containerWidth)
+        GeometryReader { container in
+            Text(text)
+                .font(font)
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .fixedSize()
+                .background(
+                    GeometryReader { measure in
+                        Color.clear
+                            .onAppear {
+                                textWidth = measure.size.width
+                                containerWidth = container.size.width
+                            }
+                            .onChange(of: text) { _, _ in
+                                textWidth = measure.size.width
+                                containerWidth = container.size.width
+                            }
+                    }
+                )
+                .offset(x: animating ? -overflow : 0)
+                .frame(width: container.size.width, height: container.size.height, alignment: .leading)
+                .clipped()
+                .animation(
+                    overflow > 0
+                        ? .linear(duration: max(3, Double(overflow) / 30)).repeatForever(autoreverses: false)
+                        : .default,
+                    value: animating
+                )
+        }
+        .frame(height: 16)
+        .onChange(of: overflow) { _, newValue in
+            animating = isPlaying && newValue > 0
+        }
+        .onChange(of: isPlaying) { _, newValue in
+            animating = newValue && overflow > 0
+        }
+        .onAppear {
+            animating = isPlaying && overflow > 0
+        }
+    }
+}
+
+private struct FooterButton: View {
+    let title: String
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+        }
+        .buttonStyle(.plain)
+        .background(.tertiary.opacity(0.15), in: RoundedRectangle(cornerRadius: 6))
+        .help(help)
+    }
+}
+
+private struct EQBaseline: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer()
+                .frame(height: 71)
+            Rectangle()
+                .fill(.secondary.opacity(0.16))
+                .frame(height: 1)
+            Spacer()
+        }
+        .allowsHitTesting(false)
     }
 }
 
@@ -522,99 +657,71 @@ private func valueText(_ value: Double) -> String {
 private struct AudioProcessRow: View {
     let process: AudioProcess
     @ObservedObject var store: AudioProcessStore
+    @Binding var draggingID: String?
     @State private var draftVolume: Double?
     @State private var draftBalance: Double?
+    @State private var isExpanded = false
 
     private static let sideMarkerWidth: CGFloat = 12
     private static let sliderTrackWidth: CGFloat = 104
     private static let valueColumnWidth: CGFloat = 34
     private static let rowSpacing: CGFloat = 6
     private static let controlGroupSpacing: CGFloat = 10
-    private static let playbackOffsetFromChannelPill: CGFloat = 238
-    private static let sliderControlWidth: CGFloat = 176
     private static var sliderRowWidth: CGFloat {
         sideMarkerWidth * 2 + sliderTrackWidth + valueColumnWidth + rowSpacing * 3
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            titleRow
-            lowerControlRow
+            headerRow
+            if isExpanded {
+                expandedControls
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 11)
         .help(process.displaySubtitle)
         .contextMenu {
             Button("Hide Source") {
                 store.hideSource(process)
             }
         }
+        .opacity(draggingID == process.stableSourceID ? 0.5 : 1)
+        .onDrop(
+            of: [UTType.text],
+            delegate: SourceReorderDropDelegate(
+                targetID: process.stableSourceID,
+                draggingID: $draggingID,
+                store: store
+            )
+        )
     }
 
-    private var titleRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(process.displayTitle)
+    private var headerRow: some View {
+        HStack(spacing: 8) {
+            Text(process.appDisplayName)
                 .font(.system(size: 13, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(2)
+                .onDrag {
+                    draggingID = process.stableSourceID
+                    return NSItemProvider(object: process.stableSourceID as NSString)
+                }
 
-            if let inlineSubtitle {
-                Text(inlineSubtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+            if !store.sourceDetail(for: process).isEmpty {
+                MarqueeText(text: store.sourceDetail(for: process), isPlaying: store.isPlaybackPlaying(process))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .layoutPriority(1)
-                    .help(inlineSubtitle)
+                    .help(store.sourceDetail(for: process))
+                    .offset(y: 2)
+            } else {
+                Spacer(minLength: 8)
             }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var lowerControlRow: some View {
-        HStack(alignment: .center, spacing: Self.controlGroupSpacing) {
-            ChannelModeButton(process: process, store: store)
-                .padding(.leading, -ChannelModeButton.horizontalPadding)
-
-            Spacer(minLength: Self.controlGroupSpacing)
-                .frame(width: Self.playbackOffsetFromChannelPill)
 
             playbackControls
-            sliderControls
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var inlineSubtitle: String? {
-        process.displaySubtitle == "App audio" ? nil : process.displaySubtitle
-    }
-
-    private var playbackControls: some View {
-        HStack(spacing: 6) {
-            PreviousTrackButton(process: process, store: store)
-            PlaybackControlButton(process: process, store: store)
-            NextTrackButton(process: process, store: store)
-            RewindPlaybackButton(process: process, store: store)
-        }
-    }
-
-    private var sliderControls: some View {
-        VStack(alignment: .trailing, spacing: 8) {
-            volumeSliderRow
-            balanceSliderRow
-        }
-        .frame(width: Self.sliderControlWidth, alignment: .trailing)
-    }
-
-    private var volumeSliderRow: some View {
-        HStack(spacing: Self.rowSpacing) {
-            Color.clear
-                .frame(width: Self.sideMarkerWidth)
 
             VolumeDragBar(
                 value: displayedVolume,
@@ -629,18 +736,65 @@ private struct AudioProcessRow: View {
                     store.setVolume(for: process, to: $0)
                 }
             )
-            .frame(width: Self.sliderTrackWidth)
+            .frame(width: 72)
             .help(volumeHelpText)
-
-            Color.clear
-                .frame(width: Self.sideMarkerWidth)
 
             Text(volumeLabel)
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
-                .frame(width: Self.valueColumnWidth, alignment: .leading)
+                .frame(width: 38, alignment: .leading)
+
+            Button {
+                isExpanded.toggle()
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .frame(width: 16, height: 16)
+            }
+            .buttonStyle(.plain)
+            .help(isExpanded ? "Hide stereo and balance" : "Show stereo and balance")
         }
-        .frame(width: Self.sliderRowWidth, height: 18, alignment: .trailing)
+    }
+
+    private var expandedControls: some View {
+        HStack(spacing: 8) {
+            Spacer(minLength: 8)
+
+            ChannelModeButton(process: process, store: store)
+
+            BalanceDragBar(
+                value: displayedBalance,
+                isEnabled: process.volumeCapability.isAdjustable,
+                onChange: {
+                    draftBalance = $0
+                    store.setBalance(for: process, to: $0)
+                }
+            )
+            .frame(width: 72)
+            .help("Set left/right balance")
+
+            Text(balanceLabel)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 38, alignment: .leading)
+
+            Color.clear
+                .frame(width: 16, height: 1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var playbackControls: some View {
+        HStack(spacing: 2) {
+            PreviousTrackButton(process: process, store: store)
+            PlaybackControlButton(process: process, store: store)
+            NextTrackButton(process: process, store: store)
+            RewindPlaybackButton(process: process, store: store)
+        }
+        .padding(3)
+        .background(.tertiary.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
     }
 
     private var balanceSliderRow: some View {
@@ -725,6 +879,7 @@ private struct ChannelModeButton: View {
         .padding(.vertical, 2)
         .background(.tertiary.opacity(0.18), in: Capsule())
         .contentShape(Capsule())
+        .fixedSize()
         .help("Toggle mono/stereo for this source")
     }
 }
@@ -822,8 +977,8 @@ private struct PreviousTrackButton: View {
             store.previousTrack(for: process)
         } label: {
             Image(systemName: "backward.end.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .frame(width: 26, height: 28)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 22, height: 22)
         }
         .buttonStyle(.plain)
         .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)
@@ -841,8 +996,8 @@ private struct PlaybackControlButton: View {
             store.togglePlayback(for: process)
         } label: {
             Image(systemName: store.isPlaybackPlaying(process) ? "pause.fill" : "play.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .frame(width: 26, height: 28)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 22, height: 22)
         }
         .buttonStyle(.plain)
         .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)
@@ -867,8 +1022,8 @@ private struct NextTrackButton: View {
             store.nextTrack(for: process)
         } label: {
             Image(systemName: "forward.end.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .frame(width: 26, height: 28)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 22, height: 22)
         }
         .buttonStyle(.plain)
         .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)
@@ -886,8 +1041,8 @@ private struct RewindPlaybackButton: View {
             store.rewindPlayback(for: process)
         } label: {
             Image(systemName: "gobackward.15")
-                .font(.system(size: 16, weight: .semibold))
-                .frame(width: 26, height: 28)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 22, height: 22)
         }
         .buttonStyle(.plain)
         .foregroundStyle(process.playbackCapability.isControllable ? .secondary : .tertiary)

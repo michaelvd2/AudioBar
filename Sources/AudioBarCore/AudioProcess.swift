@@ -122,6 +122,14 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
         return "PID \(pid)"
     }
 
+    public var appDisplayName: String {
+        displayAppName
+    }
+
+    public var sourceDetailLabel: String {
+        normalizedTrackTitle
+    }
+
     private var normalizedTrackTitle: String {
         trackTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }

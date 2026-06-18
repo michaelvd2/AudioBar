@@ -126,6 +126,31 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertFalse(muteBehaviorFunction.contains("CATapMuteBehavior(rawValue: 0)"))
     }
 
+    func testEngineLogsAppliedEQSettingsForRouteDiagnosis() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let startFunction = try XCTUnwrap(source.function(named: "start"))
+        let updateFunction = try XCTUnwrap(source.function(named: "update"))
+
+        XCTAssertTrue(source.contains("private func settingsSummary"))
+        XCTAssertTrue(startFunction.contains("System EQ settings applied"))
+        XCTAssertTrue(startFunction.contains("settingsSummary(settings)"))
+        XCTAssertTrue(updateFunction.contains("System EQ settings updated"))
+        XCTAssertTrue(updateFunction.contains("settingsSummary(settings)"))
+    }
+
+    func testEngineRetriesTransientAggregateIOSetupFailures() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let startFunction = try XCTUnwrap(source.function(named: "start"))
+        let retryFunction = try XCTUnwrap(source.function(named: "createIOProcIDWithRetry"))
+
+        XCTAssertTrue(source.contains("private static let ioSetupRetryCount"))
+        XCTAssertTrue(source.contains("private static let ioSetupRetryDelaySeconds"))
+        XCTAssertTrue(startFunction.contains("createIOProcIDWithRetry(for: aggregateID)"))
+        XCTAssertTrue(retryFunction.contains("AudioDeviceCreateIOProcID"))
+        XCTAssertTrue(retryFunction.contains("Thread.sleep"))
+        XCTAssertTrue(retryFunction.contains("System EQ IO setup retry"))
+    }
+
     func testEngineKeepsSourceTapGainStateForRouteMixer() throws {
         let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
 

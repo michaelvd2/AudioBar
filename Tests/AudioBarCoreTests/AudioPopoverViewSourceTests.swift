@@ -141,6 +141,22 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("store.restoreHiddenSource(source.id)"))
     }
 
+    func testHiddenSourcesLabelTogglesDisclosureWhenClicked() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let settingsView = try XCTUnwrap(source.slice(
+            from: "private struct SourceSettingsView",
+            to: "private struct EQPanelView"
+        ))
+        let hiddenSourcesLabel = try XCTUnwrap(settingsView.slice(
+            from: "Text(\"Hidden Sources\")",
+            to: ".padding(.horizontal, 14)"
+        ))
+
+        XCTAssertTrue(hiddenSourcesLabel.contains(".contentShape(Rectangle())"))
+        XCTAssertTrue(hiddenSourcesLabel.contains(".onTapGesture"))
+        XCTAssertTrue(hiddenSourcesLabel.contains("isExpanded.toggle()"))
+    }
+
     func testSettingsShowsLaunchAtLoginToggleEvenWithoutHiddenSources() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let settingsView = try XCTUnwrap(source.slice(
@@ -206,7 +222,8 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         let subtitleIndex = try XCTUnwrap(titleRow.range(of: "Text(inlineSubtitle)")?.lowerBound)
         XCTAssertLessThan(titleIndex, subtitleIndex)
         XCTAssertTrue(sourceTitleText.contains(".font(.system(size: 13, weight: .medium))"))
-        XCTAssertTrue(sourceTitleText.contains(".fixedSize(horizontal: true, vertical: false)"))
+        XCTAssertFalse(sourceTitleText.contains(".fixedSize(horizontal: true, vertical: false)"))
+        XCTAssertTrue(sourceTitleText.contains(".frame(minWidth: 0, alignment: .leading)"))
         XCTAssertTrue(sourceTitleText.contains(".layoutPriority(2)"))
         XCTAssertTrue(subtitleText.contains(".truncationMode(.tail)"))
         XCTAssertTrue(subtitleText.contains(".layoutPriority(1)"))
@@ -356,14 +373,14 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(row.contains("private static let sliderTrackWidth: CGFloat = 104"))
         XCTAssertFalse(row.contains("private static let sliderTrackWidth: CGFloat = 144"))
         XCTAssertTrue(row.contains("private static let controlGroupSpacing: CGFloat = 10"))
-        XCTAssertTrue(row.contains("private static let playbackOffsetFromChannelPill: CGFloat = 238"))
         XCTAssertTrue(row.contains("private static let sliderControlWidth: CGFloat = 176"))
         XCTAssertTrue(row.contains("private var titleRow"))
         XCTAssertTrue(row.contains("private var lowerControlRow"))
         XCTAssertTrue(row.contains("playbackControls"))
         XCTAssertTrue(row.contains("sliderControls"))
         XCTAssertTrue(row.contains("Spacer(minLength: Self.controlGroupSpacing)"))
-        XCTAssertTrue(row.contains(".frame(width: Self.playbackOffsetFromChannelPill)"))
+        XCTAssertFalse(row.contains("playbackOffsetFromChannelPill"))
+        XCTAssertFalse(row.contains(".frame(width: Self.playbackOffsetFromChannelPill)"))
         XCTAssertTrue(row.contains(".frame(width: Self.sliderControlWidth, alignment: .trailing)"))
         XCTAssertFalse(row.contains("private static let controlColumnWidth: CGFloat = 322"))
         XCTAssertFalse(row.contains(".frame(width: Self.controlColumnWidth, alignment: .trailing)"))

@@ -51,6 +51,9 @@ public enum SystemEQEngineStatus: Equatable, Sendable {
 }
 
 public final class SystemEQEngine: @unchecked Sendable {
+    private static let ioSetupRetryCount = 2
+    private static let ioSetupRetryDelaySeconds = 0.08
+
     public private(set) var status: SystemEQEngineStatus = .stopped
 
     private let lock = NSRecursiveLock()
@@ -164,6 +167,7 @@ public final class SystemEQEngine: @unchecked Sendable {
             channelCount: Int(max(1, tapFormat.mChannelsPerFrame))
         )
         processor.update(settings: settings)
+        systemEQLogger.info("System EQ settings applied: \(self.settingsSummary(settings), privacy: .public)")
         currentStreamSnapshot = .active(
             sampleRate: tapFormat.mSampleRate,
             channelCount: Int(max(1, tapFormat.mChannelsPerFrame))
@@ -185,13 +189,9 @@ public final class SystemEQEngine: @unchecked Sendable {
         }
         aggregateID = newAggregateID
 
-        var newIOProcID: AudioDeviceIOProcID?
-        operationStatus = AudioDeviceCreateIOProcID(
-            aggregateID,
-            systemEQIOProc,
-            Unmanaged.passUnretained(self).toOpaque(),
-            &newIOProcID
-        )
+        let ioSetup = createIOProcIDWithRetry(for: aggregateID)
+        operationStatus = ioSetup.status
+        let newIOProcID = ioSetup.ioProcID
         guard operationStatus == noErr, let newIOProcID else {
             return failLocked("IO setup failed (\(operationStatus))")
         }
@@ -209,6 +209,7 @@ public final class SystemEQEngine: @unchecked Sendable {
 
     public func update(settings: EQSettings) {
         processor.update(settings: settings)
+        systemEQLogger.info("System EQ settings updated: \(self.settingsSummary(settings), privacy: .public)")
     }
 
     public func setSourceProcesses(_ processes: [AudioProcess]) {
@@ -549,6 +550,33 @@ public final class SystemEQEngine: @unchecked Sendable {
         return CATapMuteBehavior(rawValue: 2) ?? CATapMuteBehavior(rawValue: 1)!
     }
 
+    private func createIOProcIDWithRetry(
+        for aggregateID: AudioObjectID
+    ) -> (status: OSStatus, ioProcID: AudioDeviceIOProcID?) {
+        var lastStatus: OSStatus = noErr
+
+        for attempt in 0...Self.ioSetupRetryCount {
+            var newIOProcID: AudioDeviceIOProcID?
+            lastStatus = AudioDeviceCreateIOProcID(
+                aggregateID,
+                systemEQIOProc,
+                Unmanaged.passUnretained(self).toOpaque(),
+                &newIOProcID
+            )
+            if lastStatus == noErr, let newIOProcID {
+                return (lastStatus, newIOProcID)
+            }
+
+            guard attempt < Self.ioSetupRetryCount else {
+                break
+            }
+            systemEQLogger.info("System EQ IO setup retry \(attempt + 1, privacy: .public) after status \(lastStatus, privacy: .public)")
+            Thread.sleep(forTimeInterval: Self.ioSetupRetryDelaySeconds)
+        }
+
+        return (lastStatus, nil)
+    }
+
     private func isBluetoothOutputDevice(_ outputDeviceID: AudioObjectID) -> Bool {
         let transportType = readUInt32(objectID: outputDeviceID, selector: kAudioDevicePropertyTransportType)
         return transportType == kAudioDeviceTransportTypeBluetooth
@@ -769,6 +797,16 @@ public final class SystemEQEngine: @unchecked Sendable {
 
     private func formatSummary(_ description: AudioStreamBasicDescription) -> String {
         "format=\(description.mFormatID) flags=\(description.mFormatFlags) bits=\(description.mBitsPerChannel) channels=\(description.mChannelsPerFrame) rate=\(description.mSampleRate)"
+    }
+
+    private func settingsSummary(_ settings: EQSettings) -> String {
+        let activeBands = settings.bandGainsDB
+            .filter { abs($0.value) > 0.001 }
+            .keys
+            .sorted()
+            .map(String.init)
+            .joined(separator: ",")
+        return "bypassed=\(settings.isBypassed) preamp=\(settings.preampDB) activeBands=\(activeBands.isEmpty ? "none" : activeBands)"
     }
 
     private func levelDB(samples: UnsafePointer<Float32>, count: Int) -> Double {

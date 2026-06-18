@@ -179,6 +179,16 @@ public enum ScriptVolumeCommandBuilder {
                 return ""
             end tell
             """
+        case "com.apple.Safari":
+            return """
+            tell application id "com.apple.Safari"
+                if (count of windows) is 0 then return ""
+                try
+                    return (name of current tab of front window)
+                end try
+                return ""
+            end tell
+            """
         default:
             return nil
         }

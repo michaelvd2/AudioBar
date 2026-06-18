@@ -16,6 +16,8 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let function = try XCTUnwrap(source.function(named: "setEQBypassed"))
 
+        XCTAssertTrue(source.contains("private let audioProcessStoreLogger"))
+        XCTAssertTrue(function.contains("EQ bypass changed"))
         XCTAssertTrue(function.contains("restartEQEngine()"))
         XCTAssertTrue(function.contains("updateEQEngine()"))
     }
