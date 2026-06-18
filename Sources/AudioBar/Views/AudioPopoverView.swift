@@ -218,7 +218,6 @@ private struct OutputSourceListView: View {
                 AudioProcessRow(process: process, store: store, draggingID: $draggingID)
                 if process.id != store.processes.last?.id {
                     Divider()
-                        .padding(.leading, 14)
                 }
             }
         }

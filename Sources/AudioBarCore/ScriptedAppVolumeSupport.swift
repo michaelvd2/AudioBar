@@ -183,6 +183,14 @@ public enum ScriptVolumeCommandBuilder {
             return """
             tell application id "com.apple.Safari"
                 if (count of windows) is 0 then return ""
+                repeat with safariWindow in windows
+                    repeat with safariTab in tabs of safariWindow
+                        try
+                            set mediaPlaying to do JavaScript "Array.from(document.querySelectorAll('audio,video')).some(function(m){return !m.paused && !m.ended && m.currentTime > 0;})" in safariTab
+                            if mediaPlaying is true or mediaPlaying is "true" then return (name of safariTab)
+                        end try
+                    end repeat
+                end repeat
                 try
                     return (name of current tab of front window)
                 end try

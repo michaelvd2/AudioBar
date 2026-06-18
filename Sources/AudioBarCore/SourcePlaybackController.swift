@@ -65,21 +65,41 @@ public enum ScriptPlaybackCommandBuilder {
 
 public enum SafariMediaPlaybackCommandBuilder {
     public static func togglePlaybackScript() -> String {
-        let javascript = """
+        let pauseJS = """
         (function() {
-            const media = Array.from(document.querySelectorAll('audio,video'));
-            const target = media.find(function(item) { return !item.paused; }) || media[0];
-            if (!target) { return false; }
-            if (target.paused) { target.play(); } else { target.pause(); }
-            return true;
+            const m = Array.from(document.querySelectorAll('audio,video')).find(function(x){ return !x.paused && !x.ended; });
+            if (m) { m.pause(); return true; }
+            return false;
+        })();
+        """
+        let playJS = """
+        (function() {
+            const m = document.querySelector('audio,video');
+            if (m) { m.play(); return true; }
+            return false;
         })();
         """
 
         return """
         tell application id "com.apple.Safari"
             if (count of windows) is 0 then return false
-            do JavaScript "\(javascript.escapedForAppleScript)" in current tab of front window
-            return true
+            repeat with safariWindow in windows
+                repeat with safariTab in tabs of safariWindow
+                    try
+                        set didPause to do JavaScript "\(pauseJS.escapedForAppleScript)" in safariTab
+                        if didPause is true or didPause is "true" then return true
+                    end try
+                end repeat
+            end repeat
+            repeat with safariWindow in windows
+                repeat with safariTab in tabs of safariWindow
+                    try
+                        set didPlay to do JavaScript "\(playJS.escapedForAppleScript)" in safariTab
+                        if didPlay is true or didPlay is "true" then return true
+                    end try
+                end repeat
+            end repeat
+            return false
         end tell
         """
     }
@@ -98,8 +118,15 @@ public enum SafariMediaPlaybackCommandBuilder {
         return """
         tell application id "com.apple.Safari"
             if (count of windows) is 0 then return false
-            do JavaScript "\(javascript.escapedForAppleScript)" in current tab of front window
-            return true
+            repeat with safariWindow in windows
+                repeat with safariTab in tabs of safariWindow
+                    try
+                        set didRewind to do JavaScript "\(javascript.escapedForAppleScript)" in safariTab
+                        if didRewind is true or didRewind is "true" then return true
+                    end try
+                end repeat
+            end repeat
+            return false
         end tell
         """
     }
