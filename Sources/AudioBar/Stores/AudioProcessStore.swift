@@ -554,6 +554,10 @@ final class AudioProcessStore: ObservableObject {
         }
     }
 
+    func hasRequiredPermissions() -> Bool {
+        AXIsProcessTrusted() && CGPreflightListenEventAccess()
+    }
+
     func requestPermissions() {
         requestGuidedPermissions()
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
