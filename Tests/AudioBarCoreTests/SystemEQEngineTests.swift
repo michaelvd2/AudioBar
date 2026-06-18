@@ -174,18 +174,17 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertFalse(updateDedicatedSources.contains("_ = start(settings: settings)"))
     }
 
-    func testBluetoothReplacementRouteKeepsAvailableSourceTapsWarmForSmoothBalanceDragging() throws {
+    func testBluetoothReplacementRouteDoesNotDedicateEveryAvailableSource() throws {
         let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
         let startFunction = try XCTUnwrap(source.function(named: "start"))
         let sourceNeedsDedicatedTap = try XCTUnwrap(source.function(named: "sourceNeedsDedicatedTap"))
-        let stopFunction = try XCTUnwrap(source.function(named: "stopLocked"))
 
-        XCTAssertTrue(source.contains("private var keepsAvailableSourcesDedicated"))
-        XCTAssertTrue(startFunction.contains("keepsAvailableSourcesDedicated = isBluetoothOutputDevice(outputDeviceID)"))
+        XCTAssertFalse(source.contains("keepsAvailableSourcesDedicated"))
         XCTAssertTrue(startFunction.contains("updateDedicatedSourceProcessesLocked()"))
-        XCTAssertTrue(sourceNeedsDedicatedTap.contains("if keepsAvailableSourcesDedicated"))
-        XCTAssertTrue(sourceNeedsDedicatedTap.contains("return true"))
-        XCTAssertTrue(stopFunction.contains("keepsAvailableSourcesDedicated = false"))
+        XCTAssertFalse(sourceNeedsDedicatedTap.contains("if keepsAvailableSourcesDedicated"))
+        XCTAssertTrue(sourceNeedsDedicatedTap.contains("sourceVolumeByProcessObjectID"))
+        XCTAssertTrue(sourceNeedsDedicatedTap.contains("sourceBalanceByProcessObjectID"))
+        XCTAssertTrue(sourceNeedsDedicatedTap.contains("sourceMonoByProcessObjectID"))
     }
 
     func testActiveRouteRestartsWhenDefaultOutputDeviceChanges() throws {

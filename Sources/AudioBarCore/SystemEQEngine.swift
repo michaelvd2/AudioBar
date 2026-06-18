@@ -61,7 +61,6 @@ public final class SystemEQEngine: @unchecked Sendable {
     private var tapIDs: [AudioObjectID] = []
     private var availableSourceProcessObjectIDs: [AudioObjectID] = []
     private var sourceProcessObjectIDs: [AudioObjectID] = []
-    private var keepsAvailableSourcesDedicated = false
     private var sourceVolumeByProcessObjectID: [AudioObjectID: Float32] = [:]
     private var sourceBalanceByProcessObjectID: [AudioObjectID: Float32] = [:]
     private var sourceMonoByProcessObjectID: Set<AudioObjectID> = []
@@ -116,7 +115,6 @@ public final class SystemEQEngine: @unchecked Sendable {
             return failLocked("Output device unavailable")
         }
 
-        keepsAvailableSourcesDedicated = isBluetoothOutputDevice(outputDeviceID)
         updateDedicatedSourceProcessesLocked()
 
         let muteBehavior = tapMuteBehavior(forOutputDeviceID: outputDeviceID)
@@ -531,9 +529,6 @@ public final class SystemEQEngine: @unchecked Sendable {
     }
 
     private func sourceNeedsDedicatedTap(_ processObjectID: AudioObjectID) -> Bool {
-        if keepsAvailableSourcesDedicated {
-            return true
-        }
         if let volume = sourceVolumeByProcessObjectID[processObjectID], volume < 0.99 {
             return true
         }
@@ -651,7 +646,6 @@ public final class SystemEQEngine: @unchecked Sendable {
             }
         }
         tapIDs = []
-        keepsAvailableSourcesDedicated = false
         inputBufferProcessObjectIDs = []
         didLogIOBufferLayout = false
 

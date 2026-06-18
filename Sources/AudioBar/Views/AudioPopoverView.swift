@@ -8,9 +8,11 @@ struct AudioPopoverView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
-            Divider()
-            CaptureStripView(snapshot: store.eqStreamSnapshot)
+            VStack(spacing: 0) {
+                header
+                CaptureStripView(snapshot: store.eqStreamSnapshot)
+            }
+            .background(Color.primary.opacity(0.05))
             Divider()
             if store.needsFirstUseSetup {
                 FirstUseSetupView(store: store)
@@ -55,8 +57,8 @@ struct AudioPopoverView: View {
             .disabled(store.isRefreshing)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(Color.primary.opacity(0.04))
+        .padding(.top, 12)
+        .padding(.bottom, 6)
     }
 
     private var footer: some View {
@@ -465,7 +467,8 @@ private struct CaptureStripView: View {
                 .frame(width: 150, height: 5)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.top, 2)
+        .padding(.bottom, 11)
     }
 }
 
