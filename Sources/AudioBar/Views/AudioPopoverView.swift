@@ -964,11 +964,11 @@ private struct BalanceDragBar: View {
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(.tertiary.opacity(isEnabled ? 0.24 : 0.12))
-                    .frame(height: 5)
+                    .frame(height: 4)
 
                 Capsule()
                     .fill(isEnabled ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.2))
-                    .frame(width: fillWidth, height: 5)
+                    .frame(width: fillWidth, height: 4)
                     .offset(x: fillOffset)
 
                 Rectangle()
@@ -1128,11 +1128,11 @@ private struct VolumeDragBar: View {
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(.tertiary.opacity(isEnabled ? 0.28 : 0.14))
-                    .frame(height: 5)
+                    .frame(height: 4)
 
                 Capsule()
                     .fill(isEnabled ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.22))
-                    .frame(width: max(0, proxy.size.width * fraction), height: 5)
+                    .frame(width: max(0, proxy.size.width * fraction), height: 4)
 
                 Circle()
                     .fill(isEnabled ? Color.primary.opacity(0.92) : Color.secondary.opacity(0.42))
