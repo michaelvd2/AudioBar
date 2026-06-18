@@ -659,7 +659,7 @@ private struct VerticalGainSlider: View {
     let range: ClosedRange<Double>
     let onChange: (Double) -> Void
 
-    private let knob: CGFloat = 15
+    private let knob: CGFloat = 14
 
     var body: some View {
         GeometryReader { proxy in
@@ -669,11 +669,16 @@ private struct VerticalGainSlider: View {
             let clampedValue = min(range.upperBound, max(range.lowerBound, value))
             let fraction = span > 0 ? (clampedValue - range.lowerBound) / span : 0.5
             let knobY = knob / 2 + (1 - fraction) * usable
+            let centerY = knob / 2 + 0.5 * usable
 
             ZStack {
                 Capsule()
-                    .fill(.tertiary.opacity(0.3))
-                    .frame(width: 3, height: h)
+                    .fill(.tertiary.opacity(0.28))
+                    .frame(width: 4, height: h)
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.9))
+                    .frame(width: 4, height: abs(knobY - centerY))
+                    .position(x: proxy.size.width / 2, y: (knobY + centerY) / 2)
                 Circle()
                     .fill(Color.primary.opacity(0.92))
                     .frame(width: knob, height: knob)
@@ -962,7 +967,7 @@ private struct BalanceDragBar: View {
                     .frame(height: 5)
 
                 Capsule()
-                    .fill(.secondary.opacity(isEnabled ? 0.5 : 0.2))
+                    .fill(isEnabled ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.2))
                     .frame(width: fillWidth, height: 5)
                     .offset(x: fillOffset)
 
@@ -1126,7 +1131,7 @@ private struct VolumeDragBar: View {
                     .frame(height: 5)
 
                 Capsule()
-                    .fill(.secondary.opacity(isEnabled ? 0.58 : 0.22))
+                    .fill(isEnabled ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.22))
                     .frame(width: max(0, proxy.size.width * fraction), height: 5)
 
                 Circle()
