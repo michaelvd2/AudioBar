@@ -30,7 +30,6 @@ public final class ScriptedAppVolumeController: AppVolumeControlling {
     public func currentTrackTitle(for bundleID: String?) -> String? {
         guard
             let bundleID,
-            ScriptedAppVolumeSupport.supports(bundleID),
             let script = ScriptVolumeCommandBuilder.currentTrackScript(bundleID: bundleID),
             let descriptor = run(script)
         else {

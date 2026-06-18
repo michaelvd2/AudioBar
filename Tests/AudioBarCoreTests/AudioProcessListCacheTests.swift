@@ -114,7 +114,7 @@ final class AudioProcessListCacheTests: XCTestCase {
         XCTAssertEqual(cache.persistedVolumes["old"], 10)
     }
 
-    func testCacheDoesNotKeepTransientRouteOnlySourcesAsPaused() {
+    func testCacheKeepsAnyPreviouslyAudibleAppSourceAsPausedUntilHidden() {
         var cache = AudioProcessListCache()
         let appCleaner = AudioProcess(
             audioObjectID: 99,
@@ -130,7 +130,9 @@ final class AudioProcessListCacheTests: XCTestCase {
 
         let merged = cache.merge(activeProcesses: [])
 
-        XCTAssertTrue(merged.isEmpty)
+        XCTAssertEqual(merged.map(\.displayTitle), ["AppCleaner"])
+        XCTAssertEqual(merged.first?.displaySubtitle, "Paused")
+        XCTAssertEqual(merged.first?.isActiveOutput, false)
     }
 
     func testCacheKeepsSystemSoundsVisibleAfterNotificationAudioStops() {

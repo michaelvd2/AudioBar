@@ -2,6 +2,23 @@ import Foundation
 import XCTest
 
 final class AudioPopoverViewSourceTests: XCTestCase {
+    func testPopoverRootUsesOpaqueSystemBackgroundForReadableContrast() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let body = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
+
+        XCTAssertTrue(body.contains(".background(Color(nsColor: .windowBackgroundColor))"))
+    }
+
+    func testOpeningPopoverDoesNotStartAudioRouteRefresh() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let body = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
+        let appSource = try String(contentsOf: audioBarAppURL(), encoding: .utf8)
+        let launchFunction = try XCTUnwrap(appSource.slice(from: "func applicationDidFinishLaunching", to: "}\n}"))
+
+        XCTAssertTrue(launchFunction.contains("store.startAutoRefresh()"))
+        XCTAssertFalse(body.contains("store.startAutoRefresh()"))
+    }
+
     func testEQPanelKeepsOneSwitchControl() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let eqPanel = try XCTUnwrap(source.slice(
@@ -10,10 +27,13 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         ))
 
         XCTAssertTrue(eqPanel.contains("Label(\"EQ\""))
-        XCTAssertTrue(eqPanel.contains("Toggle(\"On\""))
+        XCTAssertTrue(eqPanel.contains("Text(store.eqSettings.isBypassed ? \"Off\" : \"On\")"))
+        XCTAssertTrue(eqPanel.contains("Toggle(\"\", isOn: Binding("))
         XCTAssertTrue(eqPanel.contains("get: { !store.eqSettings.isBypassed }"))
         XCTAssertTrue(eqPanel.contains("set: { store.setEQBypassed(!$0) }"))
+        XCTAssertTrue(eqPanel.contains(".labelsHidden()"))
         XCTAssertFalse(eqPanel.contains("store.eqEngineStatus.displayText"))
+        XCTAssertFalse(eqPanel.contains("Toggle(store.eqSettings.isBypassed ? \"Off\" : \"On\""))
         XCTAssertFalse(eqPanel.contains("Toggle(\"EQ On\""))
         XCTAssertFalse(eqPanel.contains("Toggle(\"Bypass\""))
         XCTAssertFalse(eqPanel.contains("store.stopEQEngine()"))
@@ -36,13 +56,31 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(eqPanel.contains("isExpanded.toggle()"))
     }
 
-    func testSourceListAppearsBeforeEQPanel() throws {
+    func testHeaderShowsSystemStreamBeforeAudioControls() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let body = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
+        let header = try XCTUnwrap(source.slice(from: "private var header", to: "private var footer"))
+        let streamIndex = try XCTUnwrap(header.range(of: "AudioStreamMeter(snapshot: store.eqStreamSnapshot)")?.lowerBound)
+        let refreshIndex = try XCTUnwrap(header.range(of: "store.refresh()")?.lowerBound)
         let contentIndex = try XCTUnwrap(body.range(of: "OutputSourceListView(store: store)")?.lowerBound)
         let eqIndex = try XCTUnwrap(body.range(of: "EQPanelView(store: store)")?.lowerBound)
 
+        XCTAssertLessThan(streamIndex, refreshIndex)
         XCTAssertLessThan(contentIndex, eqIndex)
+        XCTAssertFalse(source.slice(from: "private struct EQPanelView", to: "private struct AudioStreamMeter")?.contains("AudioStreamMeter(snapshot: store.eqStreamSnapshot)") ?? true)
+    }
+
+    func testHeaderStreamMeterPlacesTextRightOfLevelBar() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let header = try XCTUnwrap(source.slice(from: "private var header", to: "private var footer"))
+        let meter = try XCTUnwrap(source.slice(from: "private struct AudioStreamMeter", to: "private struct StreamLevelBar"))
+        let barIndex = try XCTUnwrap(meter.range(of: "StreamLevelBar(value: snapshot.levelFraction)")?.lowerBound)
+        let textIndex = try XCTUnwrap(meter.range(of: ".frame(width: 82, alignment: .leading)")?.lowerBound)
+
+        XCTAssertTrue(header.contains(".frame(width: 220)"))
+        XCTAssertFalse(header.contains(".padding(.leading, 8)"))
+        XCTAssertTrue(meter.contains(".frame(width: 82, alignment: .leading)"))
+        XCTAssertLessThan(barIndex, textIndex)
     }
 
     func testFirstUseSetupAppearsBeforeAudioControls() throws {
@@ -103,6 +141,22 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("store.restoreHiddenSource(source.id)"))
     }
 
+    func testHiddenSourcesLabelTogglesDisclosureWhenClicked() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let settingsView = try XCTUnwrap(source.slice(
+            from: "private struct SourceSettingsView",
+            to: "private struct EQPanelView"
+        ))
+        let hiddenSourcesLabel = try XCTUnwrap(settingsView.slice(
+            from: "Text(\"Hidden Sources\")",
+            to: ".padding(.horizontal, 14)"
+        ))
+
+        XCTAssertTrue(hiddenSourcesLabel.contains(".contentShape(Rectangle())"))
+        XCTAssertTrue(hiddenSourcesLabel.contains(".onTapGesture"))
+        XCTAssertTrue(hiddenSourcesLabel.contains("isExpanded.toggle()"))
+    }
+
     func testSettingsShowsLaunchAtLoginToggleEvenWithoutHiddenSources() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let settingsView = try XCTUnwrap(source.slice(
@@ -117,27 +171,129 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(settingsView.contains("if !store.hiddenSources.isEmpty"))
     }
 
-    func testFooterShowsHiddenSourceCountWhenBlacklistHasEntries() throws {
+    func testFooterShowsHiddenSourceCountWhenHiddenSourcesExist() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let footer = try XCTUnwrap(source.slice(from: "private var footer", to: "private var footerText"))
 
         XCTAssertTrue(footer.contains("if !store.hiddenSources.isEmpty"))
-        XCTAssertTrue(footer.contains("Text(\"Blacklisted \\(store.hiddenSources.count)\")"))
+        XCTAssertTrue(footer.contains("Text(\"Hidden \\(store.hiddenSources.count)\")"))
+        XCTAssertFalse(footer.contains("Blacklisted"))
         XCTAssertTrue(footer.contains(".help(\"Hidden sources can be restored above the footer\")"))
     }
 
-    func testAudioProcessRowsUseTwoTextLinesOnly() throws {
+    func testFooterExposesRestartBeforeQuit() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let footer = try XCTUnwrap(source.slice(from: "private var footer", to: "private var footerText"))
+
+        let restartIndex = try XCTUnwrap(footer.range(of: "Button(\"Restart\")")?.lowerBound)
+        let quitIndex = try XCTUnwrap(footer.range(of: "Button(\"Quit\")")?.lowerBound)
+        XCTAssertLessThan(restartIndex, quitIndex)
+        XCTAssertTrue(footer.contains("restartAudioBar()"))
+        XCTAssertTrue(source.contains("private func restartAudioBar()"))
+        XCTAssertTrue(source.contains("/usr/bin/open"))
+    }
+
+    func testAudioProcessRowsPlaceNowPlayingBesideSourceInTopRow() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let row = try XCTUnwrap(source.slice(
             from: "private struct AudioProcessRow",
-            to: "private var control"
+            to: "private var playbackControls"
+        ))
+        let titleRow = try XCTUnwrap(source.slice(
+            from: "private var titleRow",
+            to: "private var lowerControlRow"
         ))
 
+        XCTAssertTrue(row.contains("titleRow"))
+        XCTAssertTrue(row.contains("lowerControlRow"))
         XCTAssertTrue(row.contains("Text(process.displayTitle)"))
-        XCTAssertTrue(row.contains("Text(process.displaySubtitle)"))
+        XCTAssertTrue(row.contains("if let inlineSubtitle"))
+        XCTAssertTrue(row.contains("Text(inlineSubtitle)"))
+        XCTAssertTrue(titleRow.contains("HStack(alignment: .firstTextBaseline, spacing: 8)"))
+        let sourceTitleText = try XCTUnwrap(titleRow.slice(
+            from: "Text(process.displayTitle)",
+            to: "if let inlineSubtitle"
+        ))
+        let subtitleText = try XCTUnwrap(titleRow.slice(
+            from: "Text(inlineSubtitle)",
+            to: ".help(inlineSubtitle)"
+        ))
+        let titleIndex = try XCTUnwrap(titleRow.range(of: "Text(process.displayTitle)")?.lowerBound)
+        let subtitleIndex = try XCTUnwrap(titleRow.range(of: "Text(inlineSubtitle)")?.lowerBound)
+        XCTAssertLessThan(titleIndex, subtitleIndex)
+        XCTAssertTrue(sourceTitleText.contains(".font(.system(size: 13, weight: .medium))"))
+        XCTAssertFalse(sourceTitleText.contains(".fixedSize(horizontal: true, vertical: false)"))
+        XCTAssertTrue(sourceTitleText.contains(".frame(minWidth: 0, alignment: .leading)"))
+        XCTAssertTrue(sourceTitleText.contains(".layoutPriority(2)"))
+        XCTAssertTrue(subtitleText.contains(".truncationMode(.tail)"))
+        XCTAssertTrue(subtitleText.contains(".layoutPriority(1)"))
         XCTAssertFalse(row.contains("capabilityText"))
         XCTAssertFalse(row.contains("web app volume"))
         XCTAssertFalse(row.contains("view only"))
+    }
+
+    func testAudioProcessRowsKeepAppAudioAsTooltipOnly() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var playbackControls"
+        ))
+
+        XCTAssertTrue(row.contains("process.displaySubtitle == \"App audio\" ? nil : process.displaySubtitle"))
+        XCTAssertTrue(row.contains(".help(process.displaySubtitle)"))
+        XCTAssertFalse(row.contains("Text(process.displaySubtitle)"))
+    }
+
+    func testAudioProcessRowsShowChannelModeButtonUnderSourceText() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var inlineSubtitle"
+        ))
+        let channelModeButton = try XCTUnwrap(source.slice(
+            from: "private struct ChannelModeButton",
+            to: "private struct BalanceDragBar"
+        ))
+
+        let subtitleIndex = try XCTUnwrap(row.range(of: "Text(inlineSubtitle)")?.lowerBound)
+        let buttonIndex = try XCTUnwrap(row.range(of: "ChannelModeButton(process: process, store: store)")?.lowerBound)
+
+        XCTAssertLessThan(subtitleIndex, buttonIndex)
+        XCTAssertTrue(channelModeButton.contains("Button(store.channelModeLabel(for: process))"))
+        XCTAssertTrue(channelModeButton.contains("store.toggleChannelMode(for: process)"))
+        XCTAssertTrue(channelModeButton.contains(".font(.caption2)"))
+        XCTAssertTrue(channelModeButton.contains(".help(\"Toggle mono/stereo for this source\")"))
+    }
+
+    func testAudioProcessRowsAlignVisibleLeftTextEdges() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var inlineSubtitle"
+        ))
+        let channelModeButton = try XCTUnwrap(source.slice(
+            from: "private struct ChannelModeButton",
+            to: "private struct BalanceDragBar"
+        ))
+
+        XCTAssertTrue(row.contains("Text(process.displayTitle)"))
+        XCTAssertTrue(row.contains("Text(inlineSubtitle)"))
+        XCTAssertTrue(row.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
+        XCTAssertTrue(row.contains(".padding(.leading, -ChannelModeButton.horizontalPadding)"))
+        XCTAssertTrue(channelModeButton.contains("static let horizontalPadding: CGFloat = 6"))
+        XCTAssertTrue(channelModeButton.contains(".padding(.horizontal, Self.horizontalPadding)"))
+    }
+
+    func testAudioProcessRowsExposeFullInlineSubtitleAsTooltip() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var inlineSubtitle"
+        ))
+
+        XCTAssertTrue(row.contains("Text(inlineSubtitle)"))
+        XCTAssertTrue(row.contains(".truncationMode(.tail)"))
+        XCTAssertTrue(row.contains(".help(inlineSubtitle)"))
     }
 
     func testAudioProcessRowsUpdateRouteVolumeWhileDragging() throws {
@@ -162,25 +318,119 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertFalse(dragBar.contains("Slider("))
     }
 
-    func testAudioProcessRowsRevealHideActionOnlyOnRowHover() throws {
+    func testAudioProcessRowsExposeHideOnlyThroughContextMenu() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let row = try XCTUnwrap(source.slice(
             from: "private struct AudioProcessRow",
             to: "private var volumeLabel"
         ))
 
-        XCTAssertTrue(row.contains("@State private var isHovered = false"))
         XCTAssertTrue(row.contains(".contentShape(Rectangle())"))
-        XCTAssertTrue(row.contains(".onHover { isHovered = $0 }"))
-        XCTAssertTrue(row.contains("Image(systemName: \"eye.slash\")"))
-        XCTAssertTrue(row.contains(".opacity(isHovered ? 1 : 0)"))
-        XCTAssertTrue(row.contains(".allowsHitTesting(isHovered)"))
-        XCTAssertTrue(row.contains(".frame(width: 234, height: 42, alignment: .trailing)"))
-        XCTAssertTrue(row.contains(".padding(.trailing, 56)"))
+        XCTAssertTrue(row.contains(".contextMenu"))
+        XCTAssertTrue(row.contains("Button(\"Hide Source\")"))
+        XCTAssertTrue(row.contains("store.hideSource(process)"))
+        XCTAssertFalse(row.contains("Image(systemName: \"eye.slash\")"))
+        XCTAssertFalse(row.contains("@State private var isHovered"))
+        XCTAssertFalse(row.contains(".onHover"))
+    }
+
+    func testAudioProcessRowsPutVolumeValueRightOfVolumeAndBalanceBelow() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var volumeLabel"
+        ))
+
+        XCTAssertTrue(row.contains("VolumeDragBar("))
+        XCTAssertTrue(row.contains("Text(volumeLabel)"))
+        XCTAssertTrue(row.contains("BalanceDragBar("))
+        XCTAssertTrue(row.contains("value: displayedBalance"))
+        XCTAssertTrue(row.contains("Self.sliderTrackWidth"))
+        XCTAssertTrue(row.contains("Self.sideMarkerWidth"))
+        XCTAssertTrue(row.contains("Self.valueColumnWidth"))
+        XCTAssertTrue(row.contains(".frame(width: Self.valueColumnWidth, alignment: .leading)"))
+        XCTAssertFalse(row.contains(".frame(width: Self.valueColumnWidth, alignment: .trailing)"))
+        XCTAssertTrue(row.contains("Color.clear"))
+        XCTAssertTrue(source.contains("store.balance(for: process)"))
+        XCTAssertTrue(row.contains("store.setBalance(for: process, to: $0)"))
+        XCTAssertTrue(row.contains("Text(\"L\")"))
+        XCTAssertTrue(row.contains("Text(\"R\")"))
+        XCTAssertTrue(source.contains("private static let sliderTrackWidth"))
+        XCTAssertTrue(source.contains("private static let sideMarkerWidth"))
+        XCTAssertTrue(source.contains("private static let valueColumnWidth"))
+        XCTAssertFalse(row.contains(".padding(.trailing, 26)"))
+    }
+
+    func testAudioProcessRowsUseAvailableWidthWithoutEnlargingSliders() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let root = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var volumeSliderRow"
+        ))
+
+        XCTAssertTrue(root.contains(".frame(width: 520)"))
+        XCTAssertTrue(row.contains("private static let sliderTrackWidth: CGFloat = 104"))
+        XCTAssertFalse(row.contains("private static let sliderTrackWidth: CGFloat = 144"))
+        XCTAssertTrue(row.contains("private static let controlGroupSpacing: CGFloat = 10"))
+        XCTAssertTrue(row.contains("private static let sliderControlWidth: CGFloat = 176"))
+        XCTAssertTrue(row.contains("private var titleRow"))
+        XCTAssertTrue(row.contains("private var lowerControlRow"))
+        XCTAssertTrue(row.contains("playbackControls"))
+        XCTAssertTrue(row.contains("sliderControls"))
+        XCTAssertTrue(row.contains("Spacer(minLength: Self.controlGroupSpacing)"))
+        XCTAssertFalse(row.contains("playbackOffsetFromChannelPill"))
+        XCTAssertFalse(row.contains(".frame(width: Self.playbackOffsetFromChannelPill)"))
+        XCTAssertTrue(row.contains(".frame(width: Self.sliderControlWidth, alignment: .trailing)"))
+        XCTAssertFalse(row.contains("private static let controlColumnWidth: CGFloat = 322"))
+        XCTAssertFalse(row.contains(".frame(width: Self.controlColumnWidth, alignment: .trailing)"))
+    }
+
+    func testAudioProcessRowsMovePlaybackControlsIntoLowerRow() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var volumeSliderRow"
+        ))
+        let lowerControlRow = try XCTUnwrap(source.slice(
+            from: "private var lowerControlRow",
+            to: "private var playbackControls"
+        ))
+
+        XCTAssertTrue(row.contains("private var playbackControls"))
+        XCTAssertTrue(row.contains("private var sliderControls"))
+        XCTAssertTrue(lowerControlRow.contains("HStack(alignment: .center, spacing: Self.controlGroupSpacing)"))
+        XCTAssertTrue(lowerControlRow.contains("ChannelModeButton(process: process, store: store)"))
+        XCTAssertTrue(lowerControlRow.contains("playbackControls"))
+        XCTAssertTrue(lowerControlRow.contains("sliderControls"))
+        let channelIndex = try XCTUnwrap(lowerControlRow.range(of: "ChannelModeButton(process: process, store: store)")?.lowerBound)
+        let playbackIndex = try XCTUnwrap(lowerControlRow.range(of: "playbackControls")?.lowerBound)
+        let sliderIndex = try XCTUnwrap(lowerControlRow.range(of: "sliderControls")?.lowerBound)
+        XCTAssertLessThan(channelIndex, playbackIndex)
+        XCTAssertLessThan(playbackIndex, sliderIndex)
+        XCTAssertTrue(row.contains("VStack(alignment: .trailing, spacing: 8)"))
+        XCTAssertTrue(row.contains("volumeSliderRow"))
+        XCTAssertTrue(row.contains("balanceSliderRow"))
+    }
+
+    func testBalanceSliderSnapsNearCenter() throws {
+        let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let balanceDragBar = try XCTUnwrap(source.slice(
+            from: "private struct BalanceDragBar",
+            to: "private struct PreviousTrackButton"
+        ))
+
+        XCTAssertTrue(balanceDragBar.contains("private static let centerSnapThreshold"))
+        XCTAssertTrue(balanceDragBar.contains("abs(snappedValue) <= Self.centerSnapThreshold"))
+        XCTAssertTrue(balanceDragBar.contains("return 0"))
     }
 
     func testAudioProcessRowsIncludePlaybackControlPerSource() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let row = try XCTUnwrap(source.slice(
+            from: "private struct AudioProcessRow",
+            to: "private var volumeLabel"
+        ))
         let playbackButton = try XCTUnwrap(source.slice(
             from: "private struct PlaybackControlButton",
             to: "private struct RewindPlaybackButton"
@@ -189,17 +439,35 @@ final class AudioPopoverViewSourceTests: XCTestCase {
             from: "private struct RewindPlaybackButton",
             to: "private struct VolumeDragBar"
         ))
+        let previousButton = try XCTUnwrap(source.slice(
+            from: "private struct PreviousTrackButton",
+            to: "private struct PlaybackControlButton"
+        ))
+        let nextButton = try XCTUnwrap(source.slice(
+            from: "private struct NextTrackButton",
+            to: "private struct RewindPlaybackButton"
+        ))
 
+        XCTAssertTrue(row.contains("PreviousTrackButton(process: process, store: store)"))
         XCTAssertTrue(playbackButton.contains("process.playbackCapability.isControllable"))
         XCTAssertTrue(playbackButton.contains("store.togglePlayback(for: process)"))
         XCTAssertTrue(playbackButton.contains("store.isPlaybackPlaying(process) ? \"pause.fill\" : \"play.fill\""))
-        XCTAssertTrue(playbackButton.contains(".font(.system(size: 19, weight: .semibold))"))
-        XCTAssertTrue(playbackButton.contains(".frame(width: 32, height: 31)"))
+        XCTAssertTrue(playbackButton.contains(".font(.system(size: 16, weight: .semibold))"))
+        XCTAssertTrue(playbackButton.contains(".frame(width: 26, height: 28)"))
         XCTAssertTrue(playbackButton.contains(".help(playbackHelpText)"))
+        XCTAssertTrue(row.contains("NextTrackButton(process: process, store: store)"))
+        XCTAssertTrue(previousButton.contains("Image(systemName: \"backward.end.fill\")"))
+        XCTAssertTrue(previousButton.contains("store.previousTrack(for: process)"))
+        XCTAssertTrue(previousButton.contains("process.playbackCapability.isControllable"))
+        XCTAssertTrue(previousButton.contains(".disabled(!process.playbackCapability.isControllable)"))
+        XCTAssertTrue(nextButton.contains("Image(systemName: \"forward.end.fill\")"))
+        XCTAssertTrue(nextButton.contains("store.nextTrack(for: process)"))
+        XCTAssertTrue(nextButton.contains("process.playbackCapability.isControllable"))
+        XCTAssertTrue(nextButton.contains(".disabled(!process.playbackCapability.isControllable)"))
         XCTAssertTrue(rewindButton.contains("Image(systemName: \"gobackward.15\")"))
         XCTAssertTrue(rewindButton.contains("store.rewindPlayback(for: process)"))
-        XCTAssertTrue(rewindButton.contains(".font(.system(size: 19, weight: .semibold))"))
-        XCTAssertTrue(rewindButton.contains(".frame(width: 32, height: 31)"))
+        XCTAssertTrue(rewindButton.contains(".font(.system(size: 16, weight: .semibold))"))
+        XCTAssertTrue(rewindButton.contains(".frame(width: 26, height: 28)"))
         XCTAssertTrue(rewindButton.contains(".help(\"Rewind 15 seconds\")"))
     }
 
@@ -246,6 +514,14 @@ final class AudioPopoverViewSourceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/AudioBar/Views/AudioPopoverView.swift")
+    }
+
+    private func audioBarAppURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/AudioBar/App/AudioBarApp.swift")
     }
 }
 

@@ -13,6 +13,7 @@ public enum SystemEQEngineStatus: Equatable, Sendable {
     case probing
     case ready
     case active
+    case unavailable(message: String)
     case failed(message: String)
 
     public var displayText: String {
@@ -27,6 +28,8 @@ public enum SystemEQEngineStatus: Equatable, Sendable {
             return "System tap ready"
         case .active:
             return "EQ active"
+        case let .unavailable(message):
+            return message
         case let .failed(message):
             return message
         }
@@ -38,16 +41,29 @@ public enum SystemEQEngineStatus: Equatable, Sendable {
         }
         return false
     }
+
+    public var isUnavailable: Bool {
+        if case .unavailable = self {
+            return true
+        }
+        return false
+    }
 }
 
 public final class SystemEQEngine: @unchecked Sendable {
+    private static let ioSetupRetryCount = 2
+    private static let ioSetupRetryDelaySeconds = 0.08
+
     public private(set) var status: SystemEQEngineStatus = .stopped
 
     private let lock = NSRecursiveLock()
     private let processor = EQProcessor(sampleRate: 48_000, channelCount: 2)
     private var tapIDs: [AudioObjectID] = []
+    private var availableSourceProcessObjectIDs: [AudioObjectID] = []
     private var sourceProcessObjectIDs: [AudioObjectID] = []
     private var sourceVolumeByProcessObjectID: [AudioObjectID: Float32] = [:]
+    private var sourceBalanceByProcessObjectID: [AudioObjectID: Float32] = [:]
+    private var sourceMonoByProcessObjectID: Set<AudioObjectID> = []
     private var inputBufferProcessObjectIDs: [AudioObjectID?] = []
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
     private var ioProcID: AudioDeviceIOProcID?
@@ -93,12 +109,21 @@ public final class SystemEQEngine: @unchecked Sendable {
             return failLocked("Audio tap unavailable")
         }
 
+        guard let outputDeviceID = defaultOutputDeviceID(),
+              let outputDeviceUID = readString(objectID: outputDeviceID, selector: kAudioDevicePropertyDeviceUID)
+        else {
+            return failLocked("Output device unavailable")
+        }
+
+        updateDedicatedSourceProcessesLocked()
+
+        let muteBehavior = tapMuteBehavior(forOutputDeviceID: outputDeviceID)
         var processObjectIDsForInputBuffers: [AudioObjectID?] = []
         let excludedProcesses = Array(Set((currentProcessObjectID().map { [$0] } ?? []) + sourceProcessObjectIDs))
         let fallbackTapDescription = CATapDescription(stereoGlobalTapButExcludeProcesses: excludedProcesses)
         fallbackTapDescription.name = "AudioBar System EQ Fallback Tap"
         fallbackTapDescription.isPrivate = true
-        fallbackTapDescription.muteBehavior = CATapMuteBehavior(rawValue: 2) ?? fallbackTapDescription.muteBehavior
+        fallbackTapDescription.muteBehavior = muteBehavior
 
         guard let fallbackTapID = createProcessTap(fallbackTapDescription) else {
             return failLocked("Fallback tap failed")
@@ -110,7 +135,7 @@ public final class SystemEQEngine: @unchecked Sendable {
             let tapDescription = CATapDescription(stereoMixdownOfProcesses: [processObjectID])
             tapDescription.name = "AudioBar Source Tap \(processObjectID)"
             tapDescription.isPrivate = true
-            tapDescription.muteBehavior = CATapMuteBehavior(rawValue: 2) ?? tapDescription.muteBehavior
+            tapDescription.muteBehavior = muteBehavior
 
             guard let sourceTapID = createProcessTap(tapDescription) else {
                 return failLocked("Source tap failed (\(processObjectID))")
@@ -124,12 +149,6 @@ public final class SystemEQEngine: @unchecked Sendable {
             return failLocked("Tap UID unavailable")
         }
         inputBufferProcessObjectIDs = processObjectIDsForInputBuffers
-
-        guard let outputDeviceID = defaultOutputDeviceID(),
-              let outputDeviceUID = readString(objectID: outputDeviceID, selector: kAudioDevicePropertyDeviceUID)
-        else {
-            return failLocked("Output device unavailable")
-        }
 
         guard let firstTapID = tapIDs.first,
               let tapFormat = readStreamDescription(objectID: firstTapID, selector: kAudioTapPropertyFormat)
@@ -146,6 +165,7 @@ public final class SystemEQEngine: @unchecked Sendable {
             channelCount: Int(max(1, tapFormat.mChannelsPerFrame))
         )
         processor.update(settings: settings)
+        systemEQLogger.info("System EQ settings applied: \(self.settingsSummary(settings), privacy: .public)")
         currentStreamSnapshot = .active(
             sampleRate: tapFormat.mSampleRate,
             channelCount: Int(max(1, tapFormat.mChannelsPerFrame))
@@ -167,13 +187,9 @@ public final class SystemEQEngine: @unchecked Sendable {
         }
         aggregateID = newAggregateID
 
-        var newIOProcID: AudioDeviceIOProcID?
-        operationStatus = AudioDeviceCreateIOProcID(
-            aggregateID,
-            systemEQIOProc,
-            Unmanaged.passUnretained(self).toOpaque(),
-            &newIOProcID
-        )
+        let ioSetup = createIOProcIDWithRetry(for: aggregateID)
+        operationStatus = ioSetup.status
+        let newIOProcID = ioSetup.ioProcID
         guard operationStatus == noErr, let newIOProcID else {
             return failLocked("IO setup failed (\(operationStatus))")
         }
@@ -191,29 +207,24 @@ public final class SystemEQEngine: @unchecked Sendable {
 
     public func update(settings: EQSettings) {
         processor.update(settings: settings)
+        systemEQLogger.info("System EQ settings updated: \(self.settingsSummary(settings), privacy: .public)")
     }
 
     public func setSourceProcesses(_ processes: [AudioProcess]) {
         lock.lock()
         defer { lock.unlock() }
 
-        let nextIDs = Array(Set(processes
-            .filter { $0.isActiveOutput || $0.shouldRemainVisibleWhenPaused }
+        let nextAvailableIDs = Array(Set(processes
+            .filter(\.isActiveOutput)
             .map { AudioObjectID($0.audioObjectID) }
             .filter { $0 != kAudioObjectUnknown }
         )).sorted()
 
-        guard nextIDs != sourceProcessObjectIDs else {
-            return
-        }
-
-        sourceProcessObjectIDs = nextIDs
-        sourceVolumeByProcessObjectID = sourceVolumeByProcessObjectID.filter { nextIDs.contains($0.key) }
-
-        if status == .active {
-            let settings = processor.currentSettings
-            _ = restartLocked(settings: settings)
-        }
+        availableSourceProcessObjectIDs = nextAvailableIDs
+        sourceVolumeByProcessObjectID = sourceVolumeByProcessObjectID.filter { nextAvailableIDs.contains($0.key) }
+        sourceBalanceByProcessObjectID = sourceBalanceByProcessObjectID.filter { nextAvailableIDs.contains($0.key) }
+        sourceMonoByProcessObjectID = Set(sourceMonoByProcessObjectID.filter { nextAvailableIDs.contains($0) })
+        updateDedicatedSourceProcessesLocked()
     }
 
     public func setSourceVolume(_ volume: Int, for processObjectID: AudioObjectID) {
@@ -221,7 +232,39 @@ public final class SystemEQEngine: @unchecked Sendable {
         defer { lock.unlock() }
 
         let clamped = max(0, min(100, volume))
-        sourceVolumeByProcessObjectID[processObjectID] = Float32(clamped) / 100
+        if clamped >= 99 {
+            sourceVolumeByProcessObjectID.removeValue(forKey: processObjectID)
+        } else {
+            sourceVolumeByProcessObjectID[processObjectID] = Float32(clamped) / 100
+        }
+        updateDedicatedSourceProcessesLocked()
+    }
+
+    public func setSourceBalance(_ balance: Int, for processObjectID: UInt32) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let clamped = max(-100, min(100, balance))
+        let processObjectID = AudioObjectID(processObjectID)
+        if abs(clamped) <= 8 {
+            sourceBalanceByProcessObjectID.removeValue(forKey: processObjectID)
+        } else {
+            sourceBalanceByProcessObjectID[processObjectID] = Float32(clamped) / 100
+        }
+        updateDedicatedSourceProcessesLocked()
+    }
+
+    public func setSourceMono(_ isMono: Bool, for processObjectID: UInt32) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let processObjectID = AudioObjectID(processObjectID)
+        if isMono {
+            sourceMonoByProcessObjectID.insert(processObjectID)
+        } else {
+            sourceMonoByProcessObjectID.remove(processObjectID)
+        }
+        updateDedicatedSourceProcessesLocked()
     }
 
     public func stop() {
@@ -278,7 +321,7 @@ public final class SystemEQEngine: @unchecked Sendable {
             return
         }
 
-        var sources: [(pointer: UnsafePointer<Float32>, frameCount: Int, channelCount: Int, gain: Float32)] = []
+        var sources: [(pointer: UnsafePointer<Float32>, frameCount: Int, channelCount: Int, gain: Float32, balance: Float32, isMono: Bool)] = []
         for inputIndex in 0..<inputBuffers.count {
             guard let inputPointer = inputBuffers[inputIndex].mData?.assumingMemoryBound(to: Float32.self) else {
                 continue
@@ -289,12 +332,14 @@ public final class SystemEQEngine: @unchecked Sendable {
             guard inputFrameCount > 0 else {
                 continue
             }
-            let gain = gainForInputBuffer(at: inputIndex, inputBufferCount: inputBuffers.count)
+            let controls = controlsForInputBuffer(at: inputIndex, inputBufferCount: inputBuffers.count)
             sources.append((
                 pointer: UnsafePointer(inputPointer),
                 frameCount: inputFrameCount,
                 channelCount: inputChannelCount,
-                gain: gain
+                gain: controls.gain,
+                balance: controls.balance,
+                isMono: controls.isMono
             ))
         }
 
@@ -449,9 +494,9 @@ public final class SystemEQEngine: @unchecked Sendable {
         systemEQLogger.info("System EQ IO layout input=[\(inputLayout, privacy: .public)] output=[\(outputLayout, privacy: .public)]")
     }
 
-    private func gainForInputBuffer(at inputIndex: Int, inputBufferCount: Int) -> Float32 {
+    private func controlsForInputBuffer(at inputIndex: Int, inputBufferCount: Int) -> (gain: Float32, balance: Float32, isMono: Bool) {
         guard lock.try() else {
-            return 1
+            return (1, 0, false)
         }
         defer { lock.unlock() }
 
@@ -461,9 +506,76 @@ public final class SystemEQEngine: @unchecked Sendable {
             tapProcessObjectIDs: inputBufferProcessObjectIDs
         )
         else {
-            return 1
+            return (1, 0, false)
         }
-        return sourceVolumeByProcessObjectID[processObjectID] ?? 1
+        return (
+            sourceVolumeByProcessObjectID[processObjectID] ?? 1,
+            sourceBalanceByProcessObjectID[processObjectID] ?? 0,
+            sourceMonoByProcessObjectID.contains(processObjectID)
+        )
+    }
+
+    private func updateDedicatedSourceProcessesLocked() {
+        let nextIDs = availableSourceProcessObjectIDs.filter { sourceNeedsDedicatedTap($0) }
+        guard nextIDs != sourceProcessObjectIDs else {
+            return
+        }
+
+        sourceProcessObjectIDs = nextIDs
+        if status == .active {
+            let settings = processor.currentSettings
+            _ = restartLocked(settings: settings)
+        }
+    }
+
+    private func sourceNeedsDedicatedTap(_ processObjectID: AudioObjectID) -> Bool {
+        if let volume = sourceVolumeByProcessObjectID[processObjectID], volume < 0.99 {
+            return true
+        }
+        if let balance = sourceBalanceByProcessObjectID[processObjectID], abs(balance) > 0.08 {
+            return true
+        }
+        return sourceMonoByProcessObjectID.contains(processObjectID)
+    }
+
+    private func tapMuteBehavior(forOutputDeviceID outputDeviceID: AudioObjectID) -> CATapMuteBehavior {
+        if isBluetoothOutputDevice(outputDeviceID) {
+            systemEQLogger.info("Bluetooth output detected; using muted replacement route")
+        }
+        return CATapMuteBehavior(rawValue: 2) ?? CATapMuteBehavior(rawValue: 1)!
+    }
+
+    private func createIOProcIDWithRetry(
+        for aggregateID: AudioObjectID
+    ) -> (status: OSStatus, ioProcID: AudioDeviceIOProcID?) {
+        var lastStatus: OSStatus = noErr
+
+        for attempt in 0...Self.ioSetupRetryCount {
+            var newIOProcID: AudioDeviceIOProcID?
+            lastStatus = AudioDeviceCreateIOProcID(
+                aggregateID,
+                systemEQIOProc,
+                Unmanaged.passUnretained(self).toOpaque(),
+                &newIOProcID
+            )
+            if lastStatus == noErr, let newIOProcID {
+                return (lastStatus, newIOProcID)
+            }
+
+            guard attempt < Self.ioSetupRetryCount else {
+                break
+            }
+            systemEQLogger.info("System EQ IO setup retry \(attempt + 1, privacy: .public) after status \(lastStatus, privacy: .public)")
+            Thread.sleep(forTimeInterval: Self.ioSetupRetryDelaySeconds)
+        }
+
+        return (lastStatus, nil)
+    }
+
+    private func isBluetoothOutputDevice(_ outputDeviceID: AudioObjectID) -> Bool {
+        let transportType = readUInt32(objectID: outputDeviceID, selector: kAudioDevicePropertyTransportType)
+        return transportType == kAudioDeviceTransportTypeBluetooth
+            || transportType == kAudioDeviceTransportTypeBluetoothLE
     }
 
     @available(macOS 14.2, *)
@@ -487,7 +599,10 @@ public final class SystemEQEngine: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        guard status == .active else {
+        switch status {
+        case .active, .unavailable:
+            break
+        default:
             return
         }
 
@@ -500,6 +615,14 @@ public final class SystemEQEngine: @unchecked Sendable {
         stopLocked(updateStatus: false)
         status = .failed(message: message)
         systemEQLogger.error("System EQ route failed: \(message, privacy: .public)")
+        return status
+    }
+
+    private func pauseLocked(_ message: String) -> SystemEQEngineStatus {
+        stopLocked(updateStatus: false)
+        status = .unavailable(message: message)
+        currentStreamSnapshot = .inactive
+        systemEQLogger.info("System EQ route paused: \(message, privacy: .public)")
         return status
     }
 
@@ -624,6 +747,24 @@ public final class SystemEQEngine: @unchecked Sendable {
         return status == noErr ? value as String : nil
     }
 
+    private func readUInt32(
+        objectID: AudioObjectID,
+        selector: AudioObjectPropertySelector
+    ) -> UInt32? {
+        var address = propertyAddress(selector)
+        var dataSize = UInt32(MemoryLayout<UInt32>.stride)
+        var value: UInt32 = 0
+        let status = AudioObjectGetPropertyData(
+            objectID,
+            &address,
+            0,
+            nil,
+            &dataSize,
+            &value
+        )
+        return status == noErr ? value : nil
+    }
+
     private func readStreamDescription(
         objectID: AudioObjectID,
         selector: AudioObjectPropertySelector
@@ -650,6 +791,16 @@ public final class SystemEQEngine: @unchecked Sendable {
 
     private func formatSummary(_ description: AudioStreamBasicDescription) -> String {
         "format=\(description.mFormatID) flags=\(description.mFormatFlags) bits=\(description.mBitsPerChannel) channels=\(description.mChannelsPerFrame) rate=\(description.mSampleRate)"
+    }
+
+    private func settingsSummary(_ settings: EQSettings) -> String {
+        let activeBands = settings.bandGainsDB
+            .filter { abs($0.value) > 0.001 }
+            .keys
+            .sorted()
+            .map(String.init)
+            .joined(separator: ",")
+        return "bypassed=\(settings.isBypassed) preamp=\(settings.preampDB) activeBands=\(activeBands.isEmpty ? "none" : activeBands)"
     }
 
     private func levelDB(samples: UnsafePointer<Float32>, count: Int) -> Double {

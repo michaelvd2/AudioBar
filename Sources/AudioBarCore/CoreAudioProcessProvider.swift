@@ -41,13 +41,16 @@ public struct CoreAudioProcessProvider: AudioProcessProviding {
                 selector: kAudioProcessPropertyBundleID
             )
             let runningApp = NSRunningApplication(processIdentifier: pid)
-            if let webAppSource = WebKitMediaSourceResolver.resolve(
+            if var webAppSource = WebKitMediaSourceResolver.resolve(
                 helperAudioObjectID: processObjectID,
                 helperPID: pid,
                 helperBundleID: bundleID,
                 helperName: runningApp?.localizedName,
                 webApps: webApps
             ) {
+                if webAppSource.trackTitle == nil {
+                    webAppSource.trackTitle = volumeController.currentTrackTitle(for: webAppSource.bundleID)
+                }
                 return webAppSource
             }
 

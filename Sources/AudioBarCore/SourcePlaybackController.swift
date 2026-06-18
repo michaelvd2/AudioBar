@@ -33,6 +33,22 @@ public enum ScriptPlaybackCommandBuilder {
         """
     }
 
+    public static func previousTrackScript(bundleID: String) -> String {
+        """
+        tell application id "\(bundleID)"
+            previous track
+        end tell
+        """
+    }
+
+    public static func nextTrackScript(bundleID: String) -> String {
+        """
+        tell application id "\(bundleID)"
+            next track
+        end tell
+        """
+    }
+
     public static func rewind15SecondsScript(bundleID: String) -> String {
         """
         tell application id "\(bundleID)"
@@ -49,21 +65,41 @@ public enum ScriptPlaybackCommandBuilder {
 
 public enum SafariMediaPlaybackCommandBuilder {
     public static func togglePlaybackScript() -> String {
-        let javascript = """
+        let pauseJS = """
         (function() {
-            const media = Array.from(document.querySelectorAll('audio,video'));
-            const target = media.find(function(item) { return !item.paused; }) || media[0];
-            if (!target) { return false; }
-            if (target.paused) { target.play(); } else { target.pause(); }
-            return true;
+            const m = Array.from(document.querySelectorAll('audio,video')).find(function(x){ return !x.paused && !x.ended; });
+            if (m) { m.pause(); return true; }
+            return false;
+        })();
+        """
+        let playJS = """
+        (function() {
+            const m = document.querySelector('audio,video');
+            if (m) { m.play(); return true; }
+            return false;
         })();
         """
 
         return """
         tell application id "com.apple.Safari"
             if (count of windows) is 0 then return false
-            do JavaScript "\(javascript.escapedForAppleScript)" in current tab of front window
-            return true
+            repeat with safariWindow in windows
+                repeat with safariTab in tabs of safariWindow
+                    try
+                        set didPause to do JavaScript "\(pauseJS.escapedForAppleScript)" in safariTab
+                        if didPause is true or didPause is "true" then return true
+                    end try
+                end repeat
+            end repeat
+            repeat with safariWindow in windows
+                repeat with safariTab in tabs of safariWindow
+                    try
+                        set didPlay to do JavaScript "\(playJS.escapedForAppleScript)" in safariTab
+                        if didPlay is true or didPlay is "true" then return true
+                    end try
+                end repeat
+            end repeat
+            return false
         end tell
         """
     }
@@ -82,11 +118,43 @@ public enum SafariMediaPlaybackCommandBuilder {
         return """
         tell application id "com.apple.Safari"
             if (count of windows) is 0 then return false
-            do JavaScript "\(javascript.escapedForAppleScript)" in current tab of front window
-            return true
+            repeat with safariWindow in windows
+                repeat with safariTab in tabs of safariWindow
+                    try
+                        set didRewind to do JavaScript "\(javascript.escapedForAppleScript)" in safariTab
+                        if didRewind is true or didRewind is "true" then return true
+                    end try
+                end repeat
+            end repeat
+            return false
         end tell
         """
     }
+}
+
+public enum WebAppKeyboardPlaybackCommandBuilder {
+    #if !APP_STORE
+    public static func previousTrackScript(bundleID: String) -> String {
+        trackShortcutScript(bundleID: bundleID, key: "p")
+    }
+
+    public static func nextTrackScript(bundleID: String) -> String {
+        trackShortcutScript(bundleID: bundleID, key: "n")
+    }
+
+    private static func trackShortcutScript(bundleID: String, key: String) -> String {
+        """
+        tell application id "\(bundleID)" to activate
+        delay 0.08
+        tell application "System Events"
+            tell (first process whose bundle identifier is "\(bundleID)")
+                keystroke "\(key)" using {shift down}
+                return true
+            end tell
+        end tell
+        """
+    }
+    #endif
 }
 
 #if APP_STORE
@@ -96,12 +164,28 @@ public final class SystemMediaKeyPlaybackController {
     public func togglePlayPause() -> Bool {
         false
     }
+
+    public func previousTrack() -> Bool {
+        false
+    }
+
+    public func nextTrack() -> Bool {
+        false
+    }
 }
 
 public final class NowPlayingPlaybackController {
     public init() {}
 
     public func togglePlayPause() -> Bool {
+        false
+    }
+
+    public func previousTrack() -> Bool {
+        false
+    }
+
+    public func nextTrack() -> Bool {
         false
     }
 
@@ -114,14 +198,26 @@ public final class SystemMediaKeyPlaybackController {
     public init() {}
 
     public func togglePlayPause() -> Bool {
+        postMediaCommand(NX_KEYTYPE_PLAY, label: "play/pause")
+    }
+
+    public func previousTrack() -> Bool {
+        postMediaCommand(NX_KEYTYPE_PREVIOUS, label: "previous track")
+    }
+
+    public func nextTrack() -> Bool {
+        postMediaCommand(NX_KEYTYPE_NEXT, label: "next track")
+    }
+
+    private func postMediaCommand(_ key: Int32, label: StaticString) -> Bool {
         guard hasInputMonitoringAccess() else {
-            playbackLogger.info("Requesting Input Monitoring access for system play/pause media key")
+            playbackLogger.info("Requesting Input Monitoring access for system media key")
             return CGRequestListenEventAccess()
         }
 
-        playbackLogger.info("Posting system play/pause media key; inputMonitoringTrusted=true")
-        postMediaKey(NX_KEYTYPE_PLAY, state: NX_KEYDOWN)
-        postMediaKey(NX_KEYTYPE_PLAY, state: NX_KEYUP)
+        playbackLogger.info("Posting system \(label) media key; inputMonitoringTrusted=true")
+        postMediaKey(key, state: NX_KEYDOWN)
+        postMediaKey(key, state: NX_KEYUP)
         return true
     }
 
@@ -154,12 +250,22 @@ public final class NowPlayingPlaybackController {
 
     private let frameworkPath = "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote"
     private let togglePlayPauseCommand: Int32 = 2
+    private let nextTrackCommand: Int32 = 4
+    private let previousTrackCommand: Int32 = 5
     private let goBackFifteenSecondsCommand: Int32 = 12
 
     public init() {}
 
     public func togglePlayPause() -> Bool {
         sendCommand(togglePlayPauseCommand, logMessage: "Sent Now Playing toggle through MediaRemote")
+    }
+
+    public func previousTrack() -> Bool {
+        sendCommand(previousTrackCommand, logMessage: "Sent Now Playing previous track through MediaRemote")
+    }
+
+    public func nextTrack() -> Bool {
+        sendCommand(nextTrackCommand, logMessage: "Sent Now Playing next track through MediaRemote")
     }
 
     public func rewind15Seconds() -> Bool {
@@ -215,6 +321,82 @@ public final class SourcePlaybackController {
             #endif
         case .safariMedia:
             source = SafariMediaPlaybackCommandBuilder.togglePlaybackScript()
+        case .unavailable:
+            source = nil
+        }
+
+        guard let source, let script = NSAppleScript(source: source) else {
+            return false
+        }
+        var error: NSDictionary?
+        _ = script.executeAndReturnError(&error)
+        return error == nil
+    }
+
+    public func previousTrack(for process: AudioProcess) -> Bool {
+        let source: String?
+        switch process.playbackCapability {
+        case .scripted:
+            guard let bundleID = process.bundleID else {
+                return false
+            }
+            source = ScriptPlaybackCommandBuilder.previousTrackScript(bundleID: bundleID)
+        case .webAppKeyboard:
+            #if APP_STORE
+            return false
+            #else
+            guard let bundleID = process.volumeControlID ?? process.bundleID else {
+                return false
+            }
+            source = WebAppKeyboardPlaybackCommandBuilder.previousTrackScript(bundleID: bundleID)
+            #endif
+        case .safariMedia:
+            #if APP_STORE
+            return false
+            #else
+            if nowPlayingController.previousTrack() {
+                return true
+            }
+            return mediaKeyController.previousTrack()
+            #endif
+        case .unavailable:
+            source = nil
+        }
+
+        guard let source, let script = NSAppleScript(source: source) else {
+            return false
+        }
+        var error: NSDictionary?
+        _ = script.executeAndReturnError(&error)
+        return error == nil
+    }
+
+    public func nextTrack(for process: AudioProcess) -> Bool {
+        let source: String?
+        switch process.playbackCapability {
+        case .scripted:
+            guard let bundleID = process.bundleID else {
+                return false
+            }
+            source = ScriptPlaybackCommandBuilder.nextTrackScript(bundleID: bundleID)
+        case .webAppKeyboard:
+            #if APP_STORE
+            return false
+            #else
+            guard let bundleID = process.volumeControlID ?? process.bundleID else {
+                return false
+            }
+            source = WebAppKeyboardPlaybackCommandBuilder.nextTrackScript(bundleID: bundleID)
+            #endif
+        case .safariMedia:
+            #if APP_STORE
+            return false
+            #else
+            if nowPlayingController.nextTrack() {
+                return true
+            }
+            return mediaKeyController.nextTrack()
+            #endif
         case .unavailable:
             source = nil
         }

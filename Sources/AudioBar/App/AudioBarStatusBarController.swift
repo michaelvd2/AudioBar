@@ -1,4 +1,6 @@
 import AppKit
+import AudioBarCore
+import Combine
 import SwiftUI
 
 @MainActor
@@ -8,6 +10,8 @@ final class AudioBarStatusBarController: NSObject {
     private let popover = NSPopover()
     private var outsideClickMonitor: Any?
     private var localClickMonitor: Any?
+    private var suppressResignActiveCloseUntil: Date?
+    private var cancellables: Set<AnyCancellable> = []
 
     init(store: AudioProcessStore) {
         self.store = store
@@ -15,7 +19,9 @@ final class AudioBarStatusBarController: NSObject {
         super.init()
         configureButton()
         configurePopover()
+        observeEQStatusIcon()
         observeAppDeactivation()
+        observeVolumeCommandRetention()
     }
 
     deinit {
@@ -30,17 +36,50 @@ final class AudioBarStatusBarController: NSObject {
             return
         }
 
-        button.image = NSImage(systemSymbolName: "speaker.wave.2", accessibilityDescription: "AudioBar")
-        button.toolTip = "AudioBar"
+        updateStatusIcon(status: store.eqEngineStatus, settings: store.eqSettings)
         button.target = self
         button.action = #selector(handleStatusButtonAction(_:))
         button.sendAction(on: [.leftMouseDown, .rightMouseDown])
     }
 
+    private func observeEQStatusIcon() {
+        Publishers.CombineLatest(store.$eqEngineStatus, store.$eqSettings)
+            .sink { [weak self] status, settings in
+                Task { @MainActor in
+                    self?.updateStatusIcon(status: status, settings: settings)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func updateStatusIcon(status: SystemEQEngineStatus, settings: EQSettings) {
+        guard let button = statusItem.button else {
+            return
+        }
+
+        let isEQEnabled = Self.isEQAudible(status: status, settings: settings)
+        let description = isEQEnabled ? "AudioBar EQ on" : "AudioBar EQ off"
+        button.image = NSImage(
+            systemSymbolName: Self.statusIconSymbolName(status: status, settings: settings),
+            accessibilityDescription: description
+        )
+        button.toolTip = isEQEnabled ? "AudioBar: EQ On" : "AudioBar: EQ Off"
+    }
+
+    static func isEQAudible(status: SystemEQEngineStatus, settings: EQSettings) -> Bool {
+        status == .active && !settings.isBypassed
+    }
+
+    static func statusIconSymbolName(status: SystemEQEngineStatus, settings: EQSettings) -> String {
+        isEQAudible(status: status, settings: settings) ? "speaker.wave.2.fill" : "speaker.wave.2"
+    }
+
     private func configurePopover() {
         popover.behavior = .applicationDefined
-        popover.contentSize = NSSize(width: 430, height: 560)
-        popover.contentViewController = NSHostingController(rootView: AudioPopoverView(store: store))
+        popover.animates = false
+        let hostingController = NSHostingController(rootView: AudioPopoverView(store: store))
+        hostingController.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = hostingController
     }
 
     private func observeAppDeactivation() {
@@ -49,6 +88,15 @@ final class AudioBarStatusBarController: NSObject {
             selector: #selector(closePopoverWhenAppResignsActive),
             name: NSApplication.didResignActiveNotification,
             object: nil
+        )
+    }
+
+    private func observeVolumeCommandRetention() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(retainPopoverForExternalVolumeCommand),
+            name: Notification.Name.audioBarWillRunExternalFocusCommand,
+            object: store
         )
     }
 
@@ -90,7 +138,6 @@ final class AudioBarStatusBarController: NSObject {
     }
 
     private func showSettings(relativeTo button: NSStatusBarButton) {
-        popover.contentSize = NSSize(width: 430, height: 560)
         let anchorRect = NSRect(x: 0, y: 0, width: button.bounds.width, height: button.bounds.height)
         popover.show(relativeTo: anchorRect, of: button, preferredEdge: .minY)
         installOutsideClickMonitors()
@@ -110,7 +157,26 @@ final class AudioBarStatusBarController: NSObject {
     }
 
     @objc private func closePopoverWhenAppResignsActive() {
+        if shouldSuppressResignActiveClose() {
+            return
+        }
+
         closePopover()
+    }
+
+    @objc private func retainPopoverForExternalVolumeCommand() {
+        suppressResignActiveCloseUntil = Date().addingTimeInterval(1.2)
+    }
+
+    private func shouldSuppressResignActiveClose() -> Bool {
+        guard let suppressResignActiveCloseUntil else {
+            return false
+        }
+        if suppressResignActiveCloseUntil > Date() {
+            return true
+        }
+        self.suppressResignActiveCloseUntil = nil
+        return false
     }
 
     private func closePopover() {

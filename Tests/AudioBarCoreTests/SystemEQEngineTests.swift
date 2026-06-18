@@ -10,6 +10,9 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertEqual(SystemEQEngineStatus.ready.displayText, "System tap ready")
         XCTAssertEqual(SystemEQEngineStatus.active.displayText, "EQ active")
         XCTAssertEqual(SystemEQEngineStatus.failed(message: "Tap unavailable").displayText, "Tap unavailable")
+        XCTAssertEqual(SystemEQEngineStatus.unavailable(message: "EQ paused for Bluetooth output").displayText, "EQ paused for Bluetooth output")
+        XCTAssertFalse(SystemEQEngineStatus.unavailable(message: "EQ paused for Bluetooth output").isFailure)
+        XCTAssertTrue(SystemEQEngineStatus.unavailable(message: "EQ paused for Bluetooth output").isUnavailable)
     }
 
     func testNewEngineStartsStoppedAndSettingsUpdateDoesNotActivateRoute() {
@@ -94,12 +97,58 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertEqual(taps?.map { $0[kAudioSubTapUIDKey] as? String }, ["fallback", "youtube", "safari"])
     }
 
-    func testProcessTapsMuteOriginalHardwarePlaybackWhileRouteReadsTap() throws {
+    func testProcessTapsMuteOriginalHardwarePlaybackForNonBluetoothRoutes() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let muteBehaviorFunction = try XCTUnwrap(source.function(named: "tapMuteBehavior"))
+
+        XCTAssertTrue(muteBehaviorFunction.contains("CATapMuteBehavior(rawValue: 2)"))
+    }
+
+    func testBluetoothRouteDetectionIncludesClassicAndLETransports() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let bluetoothDetectionFunction = try XCTUnwrap(source.function(named: "isBluetoothOutputDevice"))
+
+        XCTAssertTrue(bluetoothDetectionFunction.contains("readUInt32(objectID: outputDeviceID, selector: kAudioDevicePropertyTransportType)"))
+        XCTAssertTrue(bluetoothDetectionFunction.contains("kAudioDeviceTransportTypeBluetooth"))
+        XCTAssertTrue(bluetoothDetectionFunction.contains("kAudioDeviceTransportTypeBluetoothLE"))
+    }
+
+    func testBluetoothRoutesUseMutedReplacementRouteInsteadOfUnmutedPassthrough() throws {
         let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
         let startFunction = try XCTUnwrap(source.function(named: "start"))
+        let muteBehaviorFunction = try XCTUnwrap(source.function(named: "tapMuteBehavior"))
 
-        XCTAssertTrue(startFunction.contains("CATapMuteBehavior(rawValue: 2)"))
-        XCTAssertFalse(startFunction.contains("CATapMuteBehavior(rawValue: 0)"))
+        XCTAssertTrue(startFunction.contains("let muteBehavior = tapMuteBehavior(forOutputDeviceID: outputDeviceID)"))
+        XCTAssertFalse(startFunction.contains("return pauseLocked(\"EQ paused for Bluetooth output\")"))
+        XCTAssertTrue(muteBehaviorFunction.contains("isBluetoothOutputDevice(outputDeviceID)"))
+        XCTAssertTrue(muteBehaviorFunction.contains("Bluetooth output detected; using muted replacement route"))
+        XCTAssertTrue(muteBehaviorFunction.contains("CATapMuteBehavior(rawValue: 2)"))
+        XCTAssertFalse(muteBehaviorFunction.contains("CATapMuteBehavior(rawValue: 0)"))
+    }
+
+    func testEngineLogsAppliedEQSettingsForRouteDiagnosis() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let startFunction = try XCTUnwrap(source.function(named: "start"))
+        let updateFunction = try XCTUnwrap(source.function(named: "update"))
+
+        XCTAssertTrue(source.contains("private func settingsSummary"))
+        XCTAssertTrue(startFunction.contains("System EQ settings applied"))
+        XCTAssertTrue(startFunction.contains("settingsSummary(settings)"))
+        XCTAssertTrue(updateFunction.contains("System EQ settings updated"))
+        XCTAssertTrue(updateFunction.contains("settingsSummary(settings)"))
+    }
+
+    func testEngineRetriesTransientAggregateIOSetupFailures() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let startFunction = try XCTUnwrap(source.function(named: "start"))
+        let retryFunction = try XCTUnwrap(source.function(named: "createIOProcIDWithRetry"))
+
+        XCTAssertTrue(source.contains("private static let ioSetupRetryCount"))
+        XCTAssertTrue(source.contains("private static let ioSetupRetryDelaySeconds"))
+        XCTAssertTrue(startFunction.contains("createIOProcIDWithRetry(for: aggregateID)"))
+        XCTAssertTrue(retryFunction.contains("AudioDeviceCreateIOProcID"))
+        XCTAssertTrue(retryFunction.contains("Thread.sleep"))
+        XCTAssertTrue(retryFunction.contains("System EQ IO setup retry"))
     }
 
     func testEngineKeepsSourceTapGainStateForRouteMixer() throws {
@@ -107,17 +156,35 @@ final class SystemEQEngineTests: XCTestCase {
 
         XCTAssertTrue(source.contains("private var sourceProcessObjectIDs"))
         XCTAssertTrue(source.contains("private var sourceVolumeByProcessObjectID"))
+        XCTAssertTrue(source.contains("private var sourceBalanceByProcessObjectID"))
+        XCTAssertTrue(source.contains("private var sourceMonoByProcessObjectID"))
+        XCTAssertTrue(source.contains("public func setSourceBalance"))
+        XCTAssertTrue(source.contains("public func setSourceMono"))
         XCTAssertTrue(source.contains("CATapDescription(stereoMixdownOfProcesses: [processObjectID])"))
+        XCTAssertTrue(source.contains("isMono: controls.isMono"))
         XCTAssertTrue(source.contains("AudioSourceMixer.mixInterleaved"))
         XCTAssertTrue(source.contains("processor.processInterleaved"))
     }
 
-    func testActiveRouteRestartsWhenSourceProcessesChange() throws {
+    func testActiveRouteRestartsWhenDedicatedSourceProcessesChange() throws {
         let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
-        let setSourceProcesses = try XCTUnwrap(source.function(named: "setSourceProcesses"))
+        let updateDedicatedSources = try XCTUnwrap(source.function(named: "updateDedicatedSourceProcessesLocked"))
 
-        XCTAssertTrue(setSourceProcesses.contains("restartLocked(settings: settings)"))
-        XCTAssertFalse(setSourceProcesses.contains("_ = start(settings: settings)"))
+        XCTAssertTrue(updateDedicatedSources.contains("restartLocked(settings: settings)"))
+        XCTAssertFalse(updateDedicatedSources.contains("_ = start(settings: settings)"))
+    }
+
+    func testBluetoothReplacementRouteDoesNotDedicateEveryAvailableSource() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let startFunction = try XCTUnwrap(source.function(named: "start"))
+        let sourceNeedsDedicatedTap = try XCTUnwrap(source.function(named: "sourceNeedsDedicatedTap"))
+
+        XCTAssertFalse(source.contains("keepsAvailableSourcesDedicated"))
+        XCTAssertTrue(startFunction.contains("updateDedicatedSourceProcessesLocked()"))
+        XCTAssertFalse(sourceNeedsDedicatedTap.contains("if keepsAvailableSourcesDedicated"))
+        XCTAssertTrue(sourceNeedsDedicatedTap.contains("sourceVolumeByProcessObjectID"))
+        XCTAssertTrue(sourceNeedsDedicatedTap.contains("sourceBalanceByProcessObjectID"))
+        XCTAssertTrue(sourceNeedsDedicatedTap.contains("sourceMonoByProcessObjectID"))
     }
 
     func testActiveRouteRestartsWhenDefaultOutputDeviceChanges() throws {
@@ -128,16 +195,62 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertTrue(source.contains("restartAfterDefaultOutputDeviceChange"))
 
         let restartFunction = try XCTUnwrap(source.function(named: "restartAfterDefaultOutputDeviceChange"))
-        XCTAssertTrue(restartFunction.contains("status == .active"))
+        XCTAssertTrue(restartFunction.contains("case .active, .unavailable"))
         XCTAssertTrue(restartFunction.contains("restartLocked(settings: settings)"))
     }
 
-    func testRetainedPausedSourcesStayInRouteToAvoidNotificationChurn() throws {
-        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
-        let setSourceProcesses = try XCTUnwrap(source.function(named: "setSourceProcesses"))
+    func testRetainedPausedSourcesStayOutOfTapRouteToAvoidStaleCoreAudioObjects() {
+        let engine = SystemEQEngine()
+        let pausedWebApp = AudioProcess(
+            audioObjectID: 42,
+            pid: 420,
+            bundleID: "com.apple.Safari.WebApp.Example",
+            appName: "YouTube",
+            trackTitle: nil,
+            currentVolume: 100,
+            volumeCapability: .webAppKeyboard,
+            volumeControlID: "com.apple.Safari.WebApp.Example",
+            isActiveOutput: false
+        )
 
-        XCTAssertTrue(setSourceProcesses.contains("$0.isActiveOutput || $0.shouldRemainVisibleWhenPaused"))
-        XCTAssertFalse(setSourceProcesses.contains(".filter(\\.isActiveOutput)"))
+        engine.setSourceProcesses([pausedWebApp])
+        engine.setSourceBalance(40, for: pausedWebApp.audioObjectID)
+
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [])
+    }
+
+    func testEngineOnlyCreatesSourceTapsForSourcesWithNonDefaultControls() {
+        let engine = SystemEQEngine()
+        let process = AudioProcess(
+            audioObjectID: 42,
+            pid: 420,
+            bundleID: "com.example.Player",
+            appName: "Player",
+            trackTitle: nil,
+            currentVolume: 100,
+            volumeCapability: .systemRoute
+        )
+
+        engine.setSourceProcesses([process])
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [])
+
+        engine.setSourceBalance(40, for: process.audioObjectID)
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [AudioObjectID(process.audioObjectID)])
+
+        engine.setSourceBalance(0, for: process.audioObjectID)
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [])
+
+        engine.setSourceMono(true, for: process.audioObjectID)
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [AudioObjectID(process.audioObjectID)])
+
+        engine.setSourceMono(false, for: process.audioObjectID)
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [])
+
+        engine.setSourceVolume(80, for: process.audioObjectID)
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [AudioObjectID(process.audioObjectID)])
+
+        engine.setSourceVolume(100, for: process.audioObjectID)
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [])
     }
 
     func testInputBufferMapAlignsTapMetadataAfterExtraDeviceBuffers() {
@@ -161,12 +274,42 @@ final class SystemEQEngineTests: XCTestCase {
         ), source)
     }
 
+    func testInputBufferMapGroupsPlanarChannelBuffersByTap() {
+        let source = AudioObjectID(42)
+        let tapProcesses: [AudioObjectID?] = [nil, source]
+
+        XCTAssertNil(SystemEQInputBufferMap.processObjectID(
+            inputIndex: 0,
+            inputBufferCount: 4,
+            tapProcessObjectIDs: tapProcesses
+        ))
+        XCTAssertNil(SystemEQInputBufferMap.processObjectID(
+            inputIndex: 1,
+            inputBufferCount: 4,
+            tapProcessObjectIDs: tapProcesses
+        ))
+        XCTAssertEqual(SystemEQInputBufferMap.processObjectID(
+            inputIndex: 2,
+            inputBufferCount: 4,
+            tapProcessObjectIDs: tapProcesses
+        ), source)
+        XCTAssertEqual(SystemEQInputBufferMap.processObjectID(
+            inputIndex: 3,
+            inputBufferCount: 4,
+            tapProcessObjectIDs: tapProcesses
+        ), source)
+    }
+
     private func systemEQEngineURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/AudioBarCore/SystemEQEngine.swift")
+    }
+
+    private func sourceProcessObjectIDs(in engine: SystemEQEngine) -> [AudioObjectID] {
+        Mirror(reflecting: engine).children.first { $0.label == "sourceProcessObjectIDs" }?.value as? [AudioObjectID] ?? []
     }
 }
 

@@ -25,6 +25,27 @@ final class WebKitMediaSourceResolverTests: XCTestCase {
         XCTAssertEqual(source?.volumeControlID, "com.apple.Safari.WebApp.abc")
     }
 
+    func testYouTubeWebAppDisplaysWindowTitleBelowAppName() {
+        let source = WebKitMediaSourceResolver.resolve(
+            helperAudioObjectID: 44,
+            helperPID: 83414,
+            helperBundleID: "com.apple.WebKit.GPU",
+            helperName: "YouTube Graphics and Media",
+            webApps: [
+                WebAppDescriptor(
+                    bundleID: "com.apple.Safari.WebApp.abc",
+                    displayName: "YouTube",
+                    windowTitle: "Collabs 3000 [Speed] - YouTube"
+                )
+            ]
+        )
+
+        XCTAssertEqual(source?.appName, "YouTube")
+        XCTAssertEqual(source?.trackTitle, "Collabs 3000 [Speed]")
+        XCTAssertEqual(source?.displayTitle, "YouTube")
+        XCTAssertEqual(source?.displaySubtitle, "Collabs 3000 [Speed]")
+    }
+
     func testNonWebKitHelperDoesNotResolveAsWebAppSource() {
         let source = WebKitMediaSourceResolver.resolve(
             helperAudioObjectID: 44,

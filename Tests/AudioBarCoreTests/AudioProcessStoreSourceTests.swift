@@ -16,6 +16,8 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let function = try XCTUnwrap(source.function(named: "setEQBypassed"))
 
+        XCTAssertTrue(source.contains("private let audioProcessStoreLogger"))
+        XCTAssertTrue(function.contains("EQ bypass changed"))
         XCTAssertTrue(function.contains("restartEQEngine()"))
         XCTAssertTrue(function.contains("updateEQEngine()"))
     }
@@ -31,10 +33,35 @@ final class AudioProcessStoreSourceTests: XCTestCase {
 
     func testRefreshRetriesFailedEQRouteAfterSourceListChanges() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let routeUpdateFunction = try XCTUnwrap(source.function(named: "updateEQSourceProcesses"))
+
+        XCTAssertTrue(routeUpdateFunction.contains("recoverEQRouteIfNeeded()"))
+        XCTAssertTrue(source.contains("private func recoverEQRouteIfNeeded()"))
+    }
+
+    func testUnavailableEQRoutesAreNotRetriedAsFailures() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let updateFunction = try XCTUnwrap(source.function(named: "updateEQEngine"))
+        let recoverFunction = try XCTUnwrap(source.function(named: "recoverEQRouteIfNeeded"))
+
+        XCTAssertTrue(updateFunction.contains("eqEngineStatus.isFailure"))
+        XCTAssertFalse(updateFunction.contains("isUnavailable"))
+        XCTAssertTrue(recoverFunction.contains("eqEngineStatus.isFailure"))
+        XCTAssertFalse(recoverFunction.contains("isUnavailable"))
+    }
+
+    func testRefreshSyncsEQStatusAfterSourceRouteChangesBeforeRecovering() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let refreshFunction = try XCTUnwrap(source.function(named: "refresh"))
 
-        XCTAssertTrue(refreshFunction.contains("recoverEQRouteIfNeeded()"))
-        XCTAssertTrue(source.contains("private func recoverEQRouteIfNeeded()"))
+        let routeUpdateIndex = try XCTUnwrap(refreshFunction.range(of: "updateEQSourceProcesses(nextProcesses)")?.lowerBound)
+        let publishIndex = try XCTUnwrap(refreshFunction.range(of: "processes = nextProcesses")?.lowerBound)
+
+        XCTAssertLessThan(routeUpdateIndex, publishIndex)
+        XCTAssertTrue(source.contains("private func updateEQSourceProcesses"))
+        XCTAssertTrue(source.contains("eqEngineStatus = eqEngine.status"))
+        XCTAssertTrue(source.contains("recoverEQRouteIfNeeded()"))
+        XCTAssertTrue(source.contains("updateEQStreamSnapshot()"))
     }
 
     func testFirstUseSetupGatesAutomaticEQStartupUntilPermissionsAreRequested() throws {
@@ -48,6 +75,20 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(completeSetupFunction.contains("requestGuidedPermissions()"))
         XCTAssertTrue(completeSetupFunction.contains("userDefaults.set(true, forKey: firstUseSetupCompletedKey)"))
         XCTAssertTrue(completeSetupFunction.contains("startEQEngine()"))
+    }
+
+    func testSourceListIsLoadedBeforeStartingEQRoute() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let startAutoRefreshFunction = try XCTUnwrap(source.function(named: "startAutoRefresh"))
+        let completeSetupFunction = try XCTUnwrap(source.function(named: "completeFirstUseSetup"))
+
+        let autoRefreshIndex = try XCTUnwrap(startAutoRefreshFunction.range(of: "refresh()")?.lowerBound)
+        let autoStartIndex = try XCTUnwrap(startAutoRefreshFunction.range(of: "startEQEngine()")?.lowerBound)
+        XCTAssertLessThan(autoRefreshIndex, autoStartIndex)
+
+        let setupRefreshIndex = try XCTUnwrap(completeSetupFunction.range(of: "refresh()")?.lowerBound)
+        let setupStartIndex = try XCTUnwrap(completeSetupFunction.range(of: "startEQEngine()")?.lowerBound)
+        XCTAssertLessThan(setupRefreshIndex, setupStartIndex)
     }
 
     func testStoreRoutesLaunchAtLoginThroughLoginItemController() throws {
@@ -90,7 +131,9 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("persistedVolumes: Self.loadSourceVolumes"))
 
         let refreshFunction = try XCTUnwrap(source.function(named: "refresh"))
-        XCTAssertTrue(refreshFunction.contains("eqEngine.setSourceProcesses(nextProcesses)"))
+        let routeUpdateFunction = try XCTUnwrap(source.function(named: "updateEQSourceProcesses"))
+        XCTAssertTrue(refreshFunction.contains("updateEQSourceProcesses(nextProcesses)"))
+        XCTAssertTrue(routeUpdateFunction.contains("eqEngine.setSourceProcesses(processes)"))
         XCTAssertTrue(refreshFunction.contains("processCache.merge(activeProcesses: activeProcesses)"))
         XCTAssertTrue(refreshFunction.contains("activeProcesses.count"))
     }
@@ -104,6 +147,74 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(setVolumeFunction.contains("processCache.setCurrentVolume(volume, forStableSourceID: process.stableSourceID)"))
         XCTAssertTrue(setVolumeFunction.contains("saveSourceVolumes()"))
         XCTAssertTrue(setVolumeFunction.contains("processes[index].currentVolume = min(100, max(0, volume))"))
+    }
+
+    func testStorePersistsAndAppliesSourceBalance() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let setBalanceFunction = try XCTUnwrap(source.function(named: "setBalance"))
+        let updateRouteFunction = try XCTUnwrap(source.function(named: "updateEQSourceProcesses"))
+
+        XCTAssertTrue(source.contains("@Published private(set) var sourceBalances"))
+        XCTAssertTrue(source.contains("private let sourceBalancesKey"))
+        XCTAssertTrue(source.contains("func balance(for process: AudioProcess) -> Int"))
+        XCTAssertTrue(setBalanceFunction.contains("sourceBalances[process.stableSourceID] = balance"))
+        XCTAssertTrue(setBalanceFunction.contains("eqEngine.setSourceBalance(balance, for: process.audioObjectID)"))
+        XCTAssertTrue(setBalanceFunction.contains("saveSourceBalances()"))
+        XCTAssertTrue(updateRouteFunction.contains("eqEngine.setSourceBalance(balance(for: process), for: process.audioObjectID)"))
+    }
+
+    func testStoreAppliesDefaultOutputBalanceFallbackWhenEQRouteIsUnavailable() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let setBalanceFunction = try XCTUnwrap(source.function(named: "setBalance"))
+        let fallbackFunction = try XCTUnwrap(source.function(named: "applyDefaultOutputBalanceFallback"))
+        let resetFunction = try XCTUnwrap(source.function(named: "resetDefaultOutputBalanceFallbackIfNeeded"))
+
+        XCTAssertTrue(source.contains("private let defaultOutputBalanceController"))
+        XCTAssertTrue(setBalanceFunction.contains("applyDefaultOutputBalanceFallback(balance, for: process)"))
+        XCTAssertTrue(fallbackFunction.contains("guard eqEngineStatus.isUnavailable else"))
+        XCTAssertTrue(fallbackFunction.contains("defaultOutputBalanceController.apply(balance: balance)"))
+        XCTAssertTrue(resetFunction.contains("defaultOutputBalanceController.apply(balance: 0)"))
+    }
+
+    func testStoreAppliesDefaultOutputVolumeFallbackForSystemRouteWhenEQRouteIsUnavailable() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let routeVolumeFunction = try XCTUnwrap(source.function(named: "applyRouteVolume"))
+        let fallbackFunction = try XCTUnwrap(source.function(named: "applyDefaultOutputVolumeFallback"))
+
+        XCTAssertTrue(routeVolumeFunction.contains("eqEngine.setSourceVolume(volume, for: process.audioObjectID)"))
+        XCTAssertTrue(routeVolumeFunction.contains("eqEngineStatus = eqEngine.status"))
+        XCTAssertTrue(routeVolumeFunction.contains("applyDefaultOutputVolumeFallback(volume, for: process)"))
+        XCTAssertTrue(fallbackFunction.contains("guard process.volumeCapability == .systemRoute else"))
+        XCTAssertTrue(fallbackFunction.contains("guard eqEngineStatus.isUnavailable else"))
+        XCTAssertTrue(fallbackFunction.contains("defaultOutputBalanceController.apply(volume: volume, balance: balance(for: process))"))
+    }
+
+    func testStoreAppliesSafariMediaEQFallbackWhenEQRouteIsUnavailable() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let updateEQEngineFunction = try XCTUnwrap(source.function(named: "updateEQEngine"))
+        let fallbackFunction = try XCTUnwrap(source.function(named: "applySafariMediaEQFallbackIfNeeded"))
+
+        XCTAssertTrue(source.contains("private let safariMediaEQController"))
+        XCTAssertTrue(updateEQEngineFunction.contains("applySafariMediaEQFallbackIfNeeded(for: processes)"))
+        XCTAssertTrue(fallbackFunction.contains("guard eqEngineStatus.isUnavailable else"))
+        XCTAssertTrue(fallbackFunction.contains("processes.contains(where: { $0.volumeCapability == .safariMedia })"))
+        XCTAssertTrue(fallbackFunction.contains("safariMediaEQController.apply(settings: eqSettings)"))
+        XCTAssertTrue(source.contains("safariMediaEQController.reset()"))
+    }
+
+    func testStorePersistsAndAppliesSourceChannelMode() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let toggleFunction = try XCTUnwrap(source.function(named: "toggleChannelMode"))
+        let updateRouteFunction = try XCTUnwrap(source.function(named: "updateEQSourceProcesses"))
+
+        XCTAssertTrue(source.contains("@Published private(set) var monoSourceIDs"))
+        XCTAssertTrue(source.contains("private let monoSourceIDsKey"))
+        XCTAssertTrue(source.contains("func isMono(for process: AudioProcess) -> Bool"))
+        XCTAssertTrue(source.contains("func channelModeLabel(for process: AudioProcess) -> String"))
+        XCTAssertTrue(toggleFunction.contains("monoSourceIDs.contains(process.stableSourceID)"))
+        XCTAssertTrue(toggleFunction.contains("eqEngine.setSourceMono(isMono(for: process), for: process.audioObjectID)"))
+        XCTAssertTrue(toggleFunction.contains("saveMonoSourceIDs()"))
+        XCTAssertTrue(updateRouteFunction.contains("eqEngine.setSourceMono(isMono(for: process), for: process.audioObjectID)"))
     }
 
     func testStorePersistsSourceVolumeMapInUserDefaults() throws {
@@ -127,6 +238,8 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(refreshFunction.contains("filter { !isHiddenSource($0) }"))
         XCTAssertTrue(hideFunction.contains("hiddenSourceNames[process.stableSourceID] = process.displayTitle"))
         XCTAssertTrue(hideFunction.contains("saveHiddenSources()"))
+        XCTAssertTrue(hideFunction.contains("updateEQSourceProcesses(processes)"))
+        XCTAssertFalse(hideFunction.contains("eqEngine.setSourceProcesses(processes)"))
         XCTAssertTrue(restoreFunction.contains("hiddenSourceNames.removeValue(forKey: sourceID)"))
         XCTAssertTrue(restoreFunction.contains("refresh()"))
     }
@@ -169,6 +282,17 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(rewindFunction.contains("playbackController.rewind15Seconds(for: process)"))
     }
 
+    func testStoreRoutesTrackNavigationBySourceCapability() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let previousFunction = try XCTUnwrap(source.function(named: "previousTrack"))
+        let nextFunction = try XCTUnwrap(source.function(named: "nextTrack"))
+
+        XCTAssertTrue(previousFunction.contains("guard process.playbackCapability.isControllable else"))
+        XCTAssertTrue(previousFunction.contains("playbackController.previousTrack(for: process)"))
+        XCTAssertTrue(nextFunction.contains("guard process.playbackCapability.isControllable else"))
+        XCTAssertTrue(nextFunction.contains("playbackController.nextTrack(for: process)"))
+    }
+
     func testPlaybackToggleUpdatesDisplayedPlaybackStateImmediately() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let togglePlaybackFunction = try XCTUnwrap(source.function(named: "togglePlayback"))
@@ -185,6 +309,8 @@ final class AudioProcessStoreSourceTests: XCTestCase {
 
         XCTAssertTrue(source.contains("private let nowPlayingController"))
         XCTAssertTrue(source.contains("nowPlayingController.togglePlayPause()"))
+        XCTAssertTrue(source.contains("WebAppKeyboardPlaybackCommandBuilder.previousTrackScript"))
+        XCTAssertTrue(source.contains("WebAppKeyboardPlaybackCommandBuilder.nextTrackScript"))
         XCTAssertTrue(source.contains("MRMediaRemoteSendCommand"))
         XCTAssertTrue(source.contains("let togglePlayPauseCommand: Int32 = 2"))
         XCTAssertTrue(source.contains("let goBackFifteenSecondsCommand: Int32 = 12"))
@@ -194,10 +320,23 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("mediaKeyController.togglePlayPause()"))
         XCTAssertTrue(source.contains("CGPreflightListenEventAccess()"))
         XCTAssertTrue(source.contains("CGRequestListenEventAccess()"))
-        XCTAssertFalse(source.contains("WebAppKeyboardPlaybackCommandBuilder"))
-        XCTAssertFalse(source.contains("to activate"))
         XCTAssertFalse(source.contains("key code 40"))
         XCTAssertFalse(source.contains("key code 49"))
+    }
+
+    func testStoreNotifiesBeforeExternalCommandCanMoveAppFocus() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let setVolumeFunction = try XCTUnwrap(source.function(named: "setVolume"))
+        let previousFunction = try XCTUnwrap(source.function(named: "previousTrack"))
+        let nextFunction = try XCTUnwrap(source.function(named: "nextTrack"))
+
+        XCTAssertTrue(source.contains("extension Notification.Name"))
+        XCTAssertTrue(source.contains("audioBarWillRunExternalFocusCommand"))
+        XCTAssertTrue(setVolumeFunction.contains("notifyExternalFocusCommandIfNeeded(for: process)"))
+        XCTAssertTrue(previousFunction.contains("notifyExternalFocusCommandIfNeeded(for: process)"))
+        XCTAssertTrue(nextFunction.contains("notifyExternalFocusCommandIfNeeded(for: process)"))
+        XCTAssertTrue(source.contains("private func notifyExternalFocusCommandIfNeeded"))
+        XCTAssertTrue(source.contains("NotificationCenter.default.post(name: .audioBarWillRunExternalFocusCommand, object: self)"))
     }
 
     private func audioProcessStoreURL() -> URL {

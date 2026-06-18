@@ -28,17 +28,97 @@ public enum SafariMediaVolumeCommandBuilder {
         let clamped = min(100, max(0, volume))
         let mediaVolume = String(format: "%.2f", Double(clamped) / 100)
         let javascript = """
-        Array.from(document.querySelectorAll('audio,video')).forEach(function(media) { media.volume = \(mediaVolume); });
+        (function() {
+            const mediaItems = Array.from(document.querySelectorAll('audio,video'));
+            if (mediaItems.length === 0) { return false; }
+            mediaItems.forEach(function(media) { media.volume = \(mediaVolume); });
+            return true;
+        })();
         """
 
-        return """
-        tell application id "com.apple.Safari"
-            if (count of windows) is 0 then return false
-            do JavaScript "\(javascript.escapedForAppleScript)" in current tab of front window
-            return true
-        end tell
-        """
+        return safariAllTabsScript(javascript: javascript)
     }
+}
+
+public enum SafariMediaEQCommandBuilder {
+    public static func applyEQScript(settings: EQSettings) -> String {
+        let bands = EQBand.classic.map { band in
+            "{ frequency: \(band.frequencyHz), gain: \(String(format: "%.2f", settings.gain(for: band.frequencyHz))) }"
+        }.joined(separator: ", ")
+        let preampDB = String(format: "%.2f", EQSettings.clamp(settings.preampDB))
+        let isBypassed = settings.isBypassed ? "true" : "false"
+        let javascript = """
+        (function() {
+            const settings = { isBypassed: \(isBypassed), preampDB: \(preampDB), bands: [\(bands)] };
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) { return false; }
+            const mediaItems = Array.from(document.querySelectorAll('audio,video'));
+            if (mediaItems.length === 0) { return false; }
+            mediaItems.forEach(function(media) {
+                const state = media.__audioBarEQ || {};
+                state.context = state.context || new AudioContextClass();
+                if (!state.source) {
+                    state.source = state.context.createMediaElementSource(media);
+                }
+                try { state.source.disconnect(); } catch (_) {}
+                if (state.preamp) { try { state.preamp.disconnect(); } catch (_) {} }
+                if (state.filters) {
+                    state.filters.forEach(function(filter) {
+                        try { filter.disconnect(); } catch (_) {}
+                    });
+                }
+                if (settings.isBypassed) {
+                    state.source.connect(state.context.destination);
+                    state.filters = [];
+                    state.preamp = null;
+                    media.__audioBarEQ = state;
+                    if (state.context.state === 'suspended') { state.context.resume(); }
+                    return;
+                }
+                state.filters = settings.bands.map(function(band) {
+                    const filter = state.context.createBiquadFilter();
+                    filter.type = 'peaking';
+                    filter.frequency.value = band.frequency;
+                    filter.Q.value = 1.414;
+                    filter.gain.value = band.gain;
+                    return filter;
+                });
+                const preamp = state.context.createGain();
+                preamp.gain.value = Math.pow(10, settings.preampDB / 20);
+                state.preamp = preamp;
+                state.source.connect(state.filters[0]);
+                for (let index = 0; index < state.filters.length - 1; index += 1) {
+                    state.filters[index].connect(state.filters[index + 1]);
+                }
+                state.filters[state.filters.length - 1].connect(preamp);
+                preamp.connect(state.context.destination);
+                media.__audioBarEQ = state;
+                if (state.context.state === 'suspended') { state.context.resume(); }
+            });
+            return true;
+        })();
+        """
+
+        return safariAllTabsScript(javascript: javascript)
+    }
+}
+
+private func safariAllTabsScript(javascript: String) -> String {
+    """
+    tell application id "com.apple.Safari"
+        if (count of windows) is 0 then return false
+        set didApply to false
+        repeat with safariWindow in windows
+            repeat with safariTab in tabs of safariWindow
+                try
+                    set tabResult to do JavaScript "\(javascript.escapedForAppleScript)" in safariTab
+                    if tabResult is true or tabResult is "true" then set didApply to true
+                end try
+            end repeat
+        end repeat
+        return didApply
+    end tell
+    """
 }
 
 private extension String {
@@ -96,6 +176,24 @@ public enum ScriptVolumeCommandBuilder {
                         return trackName & " - " & artistName
                     end if
                 end if
+                return ""
+            end tell
+            """
+        case "com.apple.Safari":
+            return """
+            tell application id "com.apple.Safari"
+                if (count of windows) is 0 then return ""
+                repeat with safariWindow in windows
+                    repeat with safariTab in tabs of safariWindow
+                        try
+                            set mediaPlaying to do JavaScript "Array.from(document.querySelectorAll('audio,video')).some(function(m){return !m.paused && !m.ended && m.currentTime > 0;})" in safariTab
+                            if mediaPlaying is true or mediaPlaying is "true" then return (name of safariTab)
+                        end try
+                    end repeat
+                end repeat
+                try
+                    return (name of current tab of front window)
+                end try
                 return ""
             end tell
             """

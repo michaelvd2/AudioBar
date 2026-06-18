@@ -1,8 +1,19 @@
+import AppKit
 import AudioBarCore
 import ApplicationServices
 import Combine
 import CoreGraphics
 import Foundation
+import OSLog
+
+private let audioProcessStoreLogger = Logger(
+    subsystem: "com.michaelvandijk.AudioBar",
+    category: "AudioProcessStore"
+)
+
+extension Notification.Name {
+    static let audioBarWillRunExternalFocusCommand = Notification.Name("AudioBarWillRunExternalFocusCommand")
+}
 
 struct HiddenAudioSource: Equatable, Identifiable {
     let id: String
@@ -22,48 +33,62 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var isLaunchAtLoginEnabled: Bool
     @Published private(set) var savedEQPresets: [SavedEQPreset]
     @Published private(set) var hiddenSources: [HiddenAudioSource]
+    @Published private(set) var sourceBalances: [String: Int]
+    @Published private(set) var monoSourceIDs: Set<String>
 
     private let provider: AudioProcessProviding
     private let volumeController: AppVolumeControlling
     private let webAppVolumeController: WebAppKeyboardVolumeController
     private let safariMediaVolumeController: SafariMediaVolumeController
+    private let safariMediaEQController: SafariMediaEQController
     private let playbackController: SourcePlaybackController
     private let loginItemController: LoginItemController
     private let eqEngine: SystemEQEngine
+    private let defaultOutputBalanceController: DefaultOutputBalanceController
     private let userDefaults: UserDefaults
     private var timer: Timer?
     private var streamTimer: Timer?
     private let eqSettingsKey = "AudioBar.eqSettings"
     private let savedEQPresetsKey = "AudioBar.savedEQPresets"
     private let sourceVolumesKey = "AudioBar.sourceVolumes"
+    private let sourceBalancesKey = "AudioBar.sourceBalances"
+    private let monoSourceIDsKey = "AudioBar.monoSourceIDs"
     private let hiddenSourcesKey = "AudioBar.hiddenSources"
     private let firstUseSetupCompletedKey = "AudioBar.firstUseSetupCompleted"
     private var processCache: AudioProcessListCache
     private var hiddenSourceNames: [String: String]
     private var playbackStateOverrides: [String: Bool] = [:]
+    private var defaultOutputBalanceFallbackSourceID: String?
+    private var isSafariMediaEQFallbackActive = false
 
     init(
         volumeController: AppVolumeControlling = ScriptedAppVolumeController(),
         webAppVolumeController: WebAppKeyboardVolumeController = WebAppKeyboardVolumeController(),
         safariMediaVolumeController: SafariMediaVolumeController = SafariMediaVolumeController(),
+        safariMediaEQController: SafariMediaEQController = SafariMediaEQController(),
         playbackController: SourcePlaybackController = SourcePlaybackController(),
         loginItemController: LoginItemController = LoginItemController(),
         provider: AudioProcessProviding? = nil,
         eqEngine: SystemEQEngine = SystemEQEngine(),
+        defaultOutputBalanceController: DefaultOutputBalanceController = DefaultOutputBalanceController(),
         userDefaults: UserDefaults = .standard
     ) {
         self.volumeController = volumeController
         self.webAppVolumeController = webAppVolumeController
         self.safariMediaVolumeController = safariMediaVolumeController
+        self.safariMediaEQController = safariMediaEQController
         self.playbackController = playbackController
         self.loginItemController = loginItemController
         self.provider = provider ?? CoreAudioProcessProvider(volumeController: volumeController)
         self.eqEngine = eqEngine
+        self.defaultOutputBalanceController = defaultOutputBalanceController
         self.userDefaults = userDefaults
         self.eqSettings = Self.loadEQSettings(from: userDefaults, key: eqSettingsKey)
         self.needsFirstUseSetup = !userDefaults.bool(forKey: firstUseSetupCompletedKey)
         self.isLaunchAtLoginEnabled = loginItemController.isEnabled
         self.savedEQPresets = Self.loadSavedEQPresets(from: userDefaults, key: savedEQPresetsKey)
+        self.sourceBalances = Self.loadSourceBalances(from: userDefaults, key: sourceBalancesKey)
+        self.monoSourceIDs = Self.loadMonoSourceIDs(from: userDefaults, key: monoSourceIDsKey)
         self.hiddenSourceNames = Self.loadHiddenSources(from: userDefaults, key: hiddenSourcesKey)
         self.hiddenSources = Self.makeHiddenSources(from: hiddenSourceNames)
         self.processCache = AudioProcessListCache(
@@ -71,14 +96,23 @@ final class AudioProcessStore: ObservableObject {
         )
     }
 
+    deinit {
+        if defaultOutputBalanceFallbackSourceID != nil {
+            _ = defaultOutputBalanceController.apply(balance: 0)
+        }
+        if isSafariMediaEQFallbackActive {
+            _ = safariMediaEQController.reset()
+        }
+    }
+
     func startAutoRefresh() {
         guard timer == nil else {
             return
         }
+        refresh()
         if !needsFirstUseSetup {
             startEQEngine()
         }
-        refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.refresh()
@@ -95,8 +129,8 @@ final class AudioProcessStore: ObservableObject {
         needsFirstUseSetup = false
         userDefaults.set(true, forKey: firstUseSetupCompletedKey)
         requestGuidedPermissions()
-        startEQEngine()
         refresh()
+        startEQEngine()
     }
 
     func stopAutoRefresh() {
@@ -106,14 +140,58 @@ final class AudioProcessStore: ObservableObject {
         streamTimer = nil
     }
 
+    private var displayOrder: [String] = []
+    private var lastTrackTitles: [String: String] = [:]
+
+    private func orderedByFirstSeen(_ sources: [AudioProcess]) -> [AudioProcess] {
+        for source in sources where !displayOrder.contains(source.stableSourceID) {
+            displayOrder.append(source.stableSourceID)
+        }
+        for source in sources where !source.sourceDetailLabel.isEmpty {
+            lastTrackTitles[source.stableSourceID] = source.sourceDetailLabel
+        }
+        return sources.sorted { lhs, rhs in
+            (displayOrder.firstIndex(of: lhs.stableSourceID) ?? Int.max)
+                < (displayOrder.firstIndex(of: rhs.stableSourceID) ?? Int.max)
+        }
+    }
+
+    func sourceDetail(for process: AudioProcess) -> String {
+        let live = process.sourceDetailLabel
+        if !live.isEmpty {
+            return live
+        }
+        return lastTrackTitles[process.stableSourceID] ?? ""
+    }
+
+    func moveSource(withID draggedID: String, aboveID targetID: String) {
+        guard draggedID != targetID,
+              let fromIndex = displayOrder.firstIndex(of: draggedID) else {
+            return
+        }
+        displayOrder.remove(at: fromIndex)
+        if let targetIndex = displayOrder.firstIndex(of: targetID) {
+            displayOrder.insert(draggedID, at: targetIndex)
+        } else {
+            displayOrder.append(draggedID)
+        }
+        processes = processes.sorted { lhs, rhs in
+            (displayOrder.firstIndex(of: lhs.stableSourceID) ?? Int.max)
+                < (displayOrder.firstIndex(of: rhs.stableSourceID) ?? Int.max)
+        }
+    }
+
     func refresh() {
         isRefreshing = true
+        playbackStateOverrides.removeAll()
         let activeProcesses = provider.activeOutputProcesses()
-        let nextProcesses = processCache.merge(activeProcesses: activeProcesses)
-            .filter { !isHiddenSource($0) }
-        eqEngine.setSourceProcesses(nextProcesses)
-        recoverEQRouteIfNeeded()
+        let nextProcesses = orderedByFirstSeen(
+            processCache.merge(activeProcesses: activeProcesses)
+                .filter { !isHiddenSource($0) }
+        )
+        updateEQSourceProcesses(nextProcesses)
         processes = nextProcesses
+        applySafariMediaEQFallbackIfNeeded(for: nextProcesses)
         lastRefreshDate = Date()
         statusMessage = activeProcesses.isEmpty ? "No active output detected" : "\(activeProcesses.count) active"
         isRefreshing = false
@@ -124,7 +202,7 @@ final class AudioProcessStore: ObservableObject {
         updateHiddenSources()
         saveHiddenSources()
         processes.removeAll { isHiddenSource($0) }
-        eqEngine.setSourceProcesses(processes)
+        updateEQSourceProcesses(processes)
     }
 
     func restoreHiddenSource(_ sourceID: String) {
@@ -147,10 +225,13 @@ final class AudioProcessStore: ObservableObject {
         case .systemRoute:
             didSet = true
         case .scripted:
+            notifyExternalFocusCommandIfNeeded(for: process)
             didSet = volumeController.setVolume(volume, for: process.bundleID)
         case .webAppKeyboard:
+            notifyExternalFocusCommandIfNeeded(for: process)
             didSet = webAppVolumeController.setVolume(volume, for: process.volumeControlID)
         case .safariMedia:
+            notifyExternalFocusCommandIfNeeded(for: process)
             didSet = safariMediaVolumeController.setVolume(volume)
         case .unavailable:
             didSet = false
@@ -176,6 +257,37 @@ final class AudioProcessStore: ObservableObject {
         }
     }
 
+    func balance(for process: AudioProcess) -> Int {
+        sourceBalances[process.stableSourceID] ?? 0
+    }
+
+    func setBalance(for process: AudioProcess, to value: Double) {
+        let balance = Self.clampBalance(Int(value.rounded()))
+        sourceBalances[process.stableSourceID] = balance
+        eqEngineStatus = eqEngine.status
+        eqEngine.setSourceBalance(balance, for: process.audioObjectID)
+        applyDefaultOutputBalanceFallback(balance, for: process)
+        saveSourceBalances()
+    }
+
+    func isMono(for process: AudioProcess) -> Bool {
+        monoSourceIDs.contains(process.stableSourceID)
+    }
+
+    func channelModeLabel(for process: AudioProcess) -> String {
+        isMono(for: process) ? "Mono" : "Stereo"
+    }
+
+    func toggleChannelMode(for process: AudioProcess) {
+        if monoSourceIDs.contains(process.stableSourceID) {
+            monoSourceIDs.remove(process.stableSourceID)
+        } else {
+            monoSourceIDs.insert(process.stableSourceID)
+        }
+        eqEngine.setSourceMono(isMono(for: process), for: process.audioObjectID)
+        saveMonoSourceIDs()
+    }
+
     func togglePlayback(for process: AudioProcess) {
         guard process.playbackCapability.isControllable else {
             return
@@ -185,8 +297,9 @@ final class AudioProcessStore: ObservableObject {
             return
         }
 
-        playbackStateOverrides[process.stableSourceID] = !isPlaybackPlaying(process)
+        let intendedPlaying = !isPlaybackPlaying(process)
         refresh()
+        playbackStateOverrides[process.stableSourceID] = intendedPlaying
     }
 
     func rewindPlayback(for process: AudioProcess) {
@@ -195,6 +308,24 @@ final class AudioProcessStore: ObservableObject {
         }
 
         _ = playbackController.rewind15Seconds(for: process)
+    }
+
+    func previousTrack(for process: AudioProcess) {
+        guard process.playbackCapability.isControllable else {
+            return
+        }
+
+        notifyExternalFocusCommandIfNeeded(for: process)
+        _ = playbackController.previousTrack(for: process)
+    }
+
+    func nextTrack(for process: AudioProcess) {
+        guard process.playbackCapability.isControllable else {
+            return
+        }
+
+        notifyExternalFocusCommandIfNeeded(for: process)
+        _ = playbackController.nextTrack(for: process)
     }
 
     func isPlaybackPlaying(_ process: AudioProcess) -> Bool {
@@ -223,6 +354,7 @@ final class AudioProcessStore: ObservableObject {
     func setEQBypassed(_ isBypassed: Bool) {
         eqSettings.isBypassed = isBypassed
         saveEQSettings()
+        audioProcessStoreLogger.info("EQ bypass changed: \(isBypassed)")
         if isBypassed {
             updateEQEngine()
         } else {
@@ -281,18 +413,33 @@ final class AudioProcessStore: ObservableObject {
         }
         eqEngineStatus = .starting
         eqEngineStatus = eqEngine.start(settings: eqSettings)
+        resetDefaultOutputBalanceFallbackIfRouteIsAvailable()
         updateEQStreamSnapshot()
     }
 
     func stopEQEngine() {
         eqEngine.stop()
         eqEngineStatus = eqEngine.status
+        resetDefaultOutputBalanceFallbackIfNeeded()
         updateEQStreamSnapshot()
     }
 
     private func restartEQEngine() {
         eqEngine.stop()
         startEQEngine()
+    }
+
+    private func updateEQSourceProcesses(_ processes: [AudioProcess]) {
+        eqEngine.setSourceProcesses(processes)
+        for process in processes {
+            eqEngine.setSourceBalance(balance(for: process), for: process.audioObjectID)
+            eqEngine.setSourceMono(isMono(for: process), for: process.audioObjectID)
+        }
+        eqEngineStatus = eqEngine.status
+        resetDefaultOutputBalanceFallbackIfRouteIsAvailable()
+        applySafariMediaEQFallbackIfNeeded(for: processes)
+        recoverEQRouteIfNeeded()
+        updateEQStreamSnapshot()
     }
 
     private func updateEQEngine() {
@@ -315,6 +462,8 @@ final class AudioProcessStore: ObservableObject {
         }
         eqEngine.update(settings: eqSettings)
         eqEngineStatus = eqEngine.status
+        resetDefaultOutputBalanceFallbackIfRouteIsAvailable()
+        applySafariMediaEQFallbackIfNeeded(for: processes)
         updateEQStreamSnapshot()
     }
 
@@ -331,6 +480,85 @@ final class AudioProcessStore: ObservableObject {
 
     private func applyRouteVolume(_ volume: Int, for process: AudioProcess) {
         eqEngine.setSourceVolume(volume, for: process.audioObjectID)
+        eqEngineStatus = eqEngine.status
+        applyDefaultOutputVolumeFallback(volume, for: process)
+    }
+
+    private func applyDefaultOutputBalanceFallback(_ balance: Int, for process: AudioProcess) {
+        guard eqEngineStatus.isUnavailable else {
+            resetDefaultOutputBalanceFallbackIfNeeded()
+            return
+        }
+        if defaultOutputBalanceController.apply(balance: balance) {
+            defaultOutputBalanceFallbackSourceID = process.stableSourceID
+        }
+    }
+
+    private func applyDefaultOutputVolumeFallback(_ volume: Int, for process: AudioProcess) {
+        guard process.volumeCapability == .systemRoute else {
+            return
+        }
+        guard eqEngineStatus.isUnavailable else {
+            return
+        }
+        _ = defaultOutputBalanceController.apply(volume: volume, balance: balance(for: process))
+    }
+
+    private func resetDefaultOutputBalanceFallbackIfNeeded() {
+        guard defaultOutputBalanceFallbackSourceID != nil else {
+            return
+        }
+        _ = defaultOutputBalanceController.apply(balance: 0)
+        defaultOutputBalanceFallbackSourceID = nil
+    }
+
+    private func resetDefaultOutputBalanceFallbackIfRouteIsAvailable() {
+        guard !eqEngineStatus.isUnavailable else {
+            return
+        }
+        resetDefaultOutputBalanceFallbackIfNeeded()
+    }
+
+    private func applySafariMediaEQFallbackIfNeeded(for processes: [AudioProcess]) {
+        guard eqEngineStatus.isUnavailable else {
+            resetSafariMediaEQFallbackIfNeeded()
+            return
+        }
+        guard processes.contains(where: { $0.volumeCapability == .safariMedia }) else {
+            resetSafariMediaEQFallbackIfNeeded()
+            return
+        }
+        if eqSettings.isBypassed {
+            resetSafariMediaEQFallbackIfNeeded()
+            return
+        }
+        if safariMediaEQController.apply(settings: eqSettings) {
+            isSafariMediaEQFallbackActive = true
+        }
+    }
+
+    private func resetSafariMediaEQFallbackIfNeeded() {
+        guard isSafariMediaEQFallbackActive else {
+            return
+        }
+        _ = safariMediaEQController.reset()
+        isSafariMediaEQFallbackActive = false
+    }
+
+    private func notifyExternalFocusCommandIfNeeded(for process: AudioProcess) {
+        switch process.volumeCapability {
+        case .scripted, .webAppKeyboard, .safariMedia:
+            NotificationCenter.default.post(name: .audioBarWillRunExternalFocusCommand, object: self)
+        case .systemRoute, .unavailable:
+            break
+        }
+    }
+
+    func requestPermissions() {
+        requestGuidedPermissions()
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     private func requestGuidedPermissions() {
@@ -371,6 +599,20 @@ final class AudioProcessStore: ObservableObject {
         userDefaults.set(data, forKey: sourceVolumesKey)
     }
 
+    private func saveSourceBalances() {
+        guard let data = try? JSONEncoder().encode(sourceBalances) else {
+            return
+        }
+        userDefaults.set(data, forKey: sourceBalancesKey)
+    }
+
+    private func saveMonoSourceIDs() {
+        guard let data = try? JSONEncoder().encode(monoSourceIDs) else {
+            return
+        }
+        userDefaults.set(data, forKey: monoSourceIDsKey)
+    }
+
     private func saveHiddenSources() {
         guard let data = try? JSONEncoder().encode(hiddenSourceNames) else {
             return
@@ -407,6 +649,28 @@ final class AudioProcessStore: ObservableObject {
             return [:]
         }
         return volumes.mapValues { min(100, max(0, $0)) }
+    }
+
+    private static func loadSourceBalances(from userDefaults: UserDefaults, key: String) -> [String: Int] {
+        guard let data = userDefaults.data(forKey: key),
+              let balances = try? JSONDecoder().decode([String: Int].self, from: data)
+        else {
+            return [:]
+        }
+        return balances.mapValues(clampBalance)
+    }
+
+    private static func loadMonoSourceIDs(from userDefaults: UserDefaults, key: String) -> Set<String> {
+        guard let data = userDefaults.data(forKey: key),
+              let sourceIDs = try? JSONDecoder().decode(Set<String>.self, from: data)
+        else {
+            return []
+        }
+        return sourceIDs
+    }
+
+    private static func clampBalance(_ balance: Int) -> Int {
+        min(100, max(-100, balance))
     }
 
     private static func loadHiddenSources(from userDefaults: UserDefaults, key: String) -> [String: String] {

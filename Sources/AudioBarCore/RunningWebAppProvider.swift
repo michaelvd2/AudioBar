@@ -1,15 +1,18 @@
 import AppKit
+import ApplicationServices
+import CoreGraphics
 import Foundation
 
 public struct RunningWebAppProvider {
+    private static let accessibilityPromptState = AccessibilityPromptState()
+
     public init() {}
 
     public func runningWebApps() -> [WebAppDescriptor] {
         NSWorkspace.shared.runningApplications.compactMap { app in
             guard let bundleID = app.bundleIdentifier,
                   bundleID.hasPrefix("com.apple.Safari.WebApp."),
-                  let displayName = app.localizedName?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !displayName.isEmpty
+                  let displayName = Self.displayName(localizedName: app.localizedName, bundleURL: app.bundleURL)
             else {
                 return nil
             }
@@ -22,10 +25,104 @@ public struct RunningWebAppProvider {
         }
     }
 
+    static func displayName(localizedName: String?, bundleURL: URL?) -> String? {
+        let bundleName = bundleURL?
+            .deletingPathExtension()
+            .lastPathComponent
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nilIfBlank
+        if let bundleName, bundleName != "Web App" {
+            return bundleName
+        }
+        return localizedName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+    }
+
     private func windowTitle(forPID pid: pid_t) -> String? {
         #if APP_STORE
         return nil
         #else
+        if let title = accessibilityWindowTitle(forPID: pid) {
+            return title
+        }
+        if let title = cgWindowTitle(forPID: pid) {
+            return title
+        }
+        return appleScriptWindowTitle(forPID: pid)
+        #endif
+    }
+
+    private func accessibilityWindowTitle(forPID pid: pid_t) -> String? {
+        guard Self.isAccessibilityTrusted() else {
+            return nil
+        }
+
+        let appElement = AXUIElementCreateApplication(pid)
+        var windowsValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            appElement,
+            kAXWindowsAttribute as CFString,
+            &windowsValue
+        ) == .success,
+              let windows = windowsValue as? [AXUIElement],
+              let firstWindow = windows.first
+        else {
+            return nil
+        }
+
+        var titleValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            firstWindow,
+            kAXTitleAttribute as CFString,
+            &titleValue
+        ) == .success else {
+            return nil
+        }
+        return (titleValue as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+    }
+
+    private static func isAccessibilityTrusted() -> Bool {
+        if AXIsProcessTrusted() {
+            return true
+        }
+        guard Self.accessibilityPromptState.shouldRequestPrompt() else {
+            return false
+        }
+        let options = [
+            "AXTrustedCheckOptionPrompt": true
+        ] as CFDictionary
+        return AXIsProcessTrustedWithOptions(options)
+    }
+
+    private func cgWindowTitle(forPID pid: pid_t) -> String? {
+        guard let windowInfo = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]] else {
+            return nil
+        }
+
+        return Self.visibleWindowTitle(in: windowInfo, forPID: pid)
+    }
+
+    static func visibleWindowTitle(in windowInfo: [[String: Any]], forPID pid: pid_t) -> String? {
+        for window in windowInfo {
+            let ownerPID = (window[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value
+            let layer = (window[kCGWindowLayer as String] as? NSNumber)?.intValue
+            guard ownerPID == pid, layer == 0 else {
+                continue
+            }
+
+            if let title = (window[kCGWindowName as String] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .nilIfBlank {
+                return title
+            }
+        }
+
+        return nil
+    }
+
+    private func appleScriptWindowTitle(forPID pid: pid_t) -> String? {
         let script = """
         tell application "System Events"
             tell (first process whose unix id is \(pid))
@@ -43,7 +140,22 @@ public struct RunningWebAppProvider {
             return nil
         }
         return descriptor.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
-        #endif
+    }
+}
+
+private final class AccessibilityPromptState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var didRequest = false
+
+    func shouldRequestPrompt() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard !didRequest else {
+            return false
+        }
+        didRequest = true
+        return true
     }
 }
 

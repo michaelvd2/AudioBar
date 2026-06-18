@@ -56,7 +56,21 @@ cat >"$INFO_PLIST" <<PLIST
 </plist>
 PLIST
 
-/usr/bin/codesign --force --sign - --entitlements "$ENTITLEMENTS_PLIST" "$APP_BUNDLE" >/dev/null 2>&1 || true
+SIGN_IDENTITY="${AUDIOBAR_DEV_SIGN_IDENTITY:-}"
+if [[ -z "$SIGN_IDENTITY" ]]; then
+  SIGN_IDENTITY="$(
+    security find-identity -v -p codesigning 2>/dev/null |
+      sed -n 's/.*"\(Apple Development: [^"]*\)".*/\1/p' |
+      head -n 1
+  )"
+fi
+if [[ -z "$SIGN_IDENTITY" ]]; then
+  SIGN_IDENTITY="-"
+fi
+
+if ! /usr/bin/codesign --force --sign "$SIGN_IDENTITY" --entitlements "$ENTITLEMENTS_PLIST" "$APP_BUNDLE" >/dev/null 2>&1; then
+  /usr/bin/codesign --force --sign - --entitlements "$ENTITLEMENTS_PLIST" "$APP_BUNDLE" >/dev/null 2>&1 || true
+fi
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"

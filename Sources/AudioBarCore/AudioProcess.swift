@@ -55,22 +55,7 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
     }
 
     public var shouldRemainVisibleWhenPaused: Bool {
-        switch volumeCapability {
-        case .scripted, .webAppKeyboard, .safariMedia:
-            return true
-        case .systemRoute, .unavailable:
-            break
-        }
-
-        if isSystemSoundsSource {
-            return true
-        }
-
-        guard let bundleID else {
-            return false
-        }
-        return bundleID == "com.apple.Safari"
-            || bundleID.hasPrefix("com.apple.Safari.WebApp.")
+        true
     }
 
     public var playbackCapability: PlaybackCapability {
@@ -112,6 +97,9 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
     }
 
     public var displayTitle: String {
+        if isSafariWebAppSource {
+            return displayAppName
+        }
         guard !normalizedTrackTitle.isEmpty else {
             return displayAppName
         }
@@ -122,6 +110,9 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
         guard isActiveOutput else {
             return "Paused"
         }
+        if isSafariWebAppSource, !normalizedTrackTitle.isEmpty {
+            return normalizedTrackTitle
+        }
         if !normalizedTrackTitle.isEmpty {
             return displayAppName
         }
@@ -129,6 +120,14 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
             return sourceKind
         }
         return "PID \(pid)"
+    }
+
+    public var appDisplayName: String {
+        displayAppName
+    }
+
+    public var sourceDetailLabel: String {
+        normalizedTrackTitle
     }
 
     private var normalizedTrackTitle: String {
@@ -149,13 +148,17 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
         guard let bundleID, !bundleID.isEmpty else {
             return nil
         }
-        if bundleID.hasPrefix("com.apple.Safari.WebApp.") {
+        if isSafariWebAppSource {
             return "Safari web app"
         }
         if isSystemSoundsSource {
             return "System audio"
         }
         return "App audio"
+    }
+
+    private var isSafariWebAppSource: Bool {
+        bundleID?.hasPrefix("com.apple.Safari.WebApp.") == true
     }
 
     private var isSystemSoundsSource: Bool {

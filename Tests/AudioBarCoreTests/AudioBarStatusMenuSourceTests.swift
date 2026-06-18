@@ -28,6 +28,24 @@ final class AudioBarStatusMenuSourceTests: XCTestCase {
         XCTAssertFalse(source.contains("popover.behavior = .transient"))
     }
 
+    func testStatusItemIconReflectsEffectiveEQOutputState() throws {
+        let source = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("import Combine"))
+        XCTAssertTrue(source.contains("private var cancellables: Set<AnyCancellable> = []"))
+        XCTAssertTrue(source.contains("observeEQStatusIcon()"))
+        XCTAssertTrue(source.contains("store.$eqEngineStatus"))
+        XCTAssertTrue(source.contains("store.$eqSettings"))
+        XCTAssertTrue(source.contains("Publishers.CombineLatest(store.$eqEngineStatus, store.$eqSettings)"))
+        XCTAssertTrue(source.contains("updateStatusIcon(status: status, settings: settings)"))
+        XCTAssertTrue(source.contains("updateStatusIcon(status: store.eqEngineStatus, settings: store.eqSettings)"))
+        XCTAssertTrue(source.contains("static func isEQAudible(status: SystemEQEngineStatus, settings: EQSettings) -> Bool"))
+        XCTAssertTrue(source.contains("status == .active && !settings.isBypassed"))
+        XCTAssertTrue(source.contains("static func statusIconSymbolName(status: SystemEQEngineStatus, settings: EQSettings) -> String"))
+        XCTAssertTrue(source.contains("isEQAudible(status: status, settings: settings) ? \"speaker.wave.2.fill\" : \"speaker.wave.2\""))
+        XCTAssertFalse(source.contains("button.image = NSImage(systemSymbolName: \"speaker.wave.2\", accessibilityDescription: \"AudioBar\")"))
+    }
+
     func testPopoverClosesWhenAppMovesToBackground() throws {
         let source = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
 
@@ -35,6 +53,18 @@ final class AudioBarStatusMenuSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("#selector(closePopoverWhenAppResignsActive)"))
         XCTAssertTrue(source.contains("@objc private func closePopoverWhenAppResignsActive"))
         XCTAssertTrue(source.contains("popover.performClose(nil)"))
+    }
+
+    func testPopoverDoesNotCloseWhenAudioBarVolumeCommandMovesFocus() throws {
+        let source = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("Notification.Name.audioBarWillRunExternalFocusCommand"))
+        XCTAssertTrue(source.contains("#selector(retainPopoverForExternalVolumeCommand)"))
+        XCTAssertTrue(source.contains("private var suppressResignActiveCloseUntil"))
+        XCTAssertTrue(source.contains("@objc private func retainPopoverForExternalVolumeCommand"))
+        XCTAssertTrue(source.contains("suppressResignActiveCloseUntil = Date().addingTimeInterval(1.2)"))
+        XCTAssertTrue(source.contains("if shouldSuppressResignActiveClose()"))
+        XCTAssertTrue(source.contains("private func shouldSuppressResignActiveClose() -> Bool"))
     }
 
     func testPopoverClosesWhenClickingOutsideStatusItemAndPopover() throws {
