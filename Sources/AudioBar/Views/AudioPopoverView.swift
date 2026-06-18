@@ -78,17 +78,7 @@ struct AudioPopoverView: View {
 
             Spacer()
 
-            Button {
-                store.requestPermissions()
-            } label: {
-                Image(systemName: "lock.shield")
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-            }
-            .buttonStyle(.plain)
-            .background(.tertiary.opacity(0.15), in: RoundedRectangle(cornerRadius: 6))
-            .help("Re-request permissions (Accessibility · Input Monitoring)")
+            PermissionButton(store: store)
 
             FooterButton(title: "Restart", help: "Restart AudioBar") {
                 restartAudioBar()
@@ -556,6 +546,33 @@ private struct FooterButton: View {
     }
 }
 
+private struct PermissionButton: View {
+    @ObservedObject var store: AudioProcessStore
+
+    var body: some View {
+        let granted = store.hasRequiredPermissions()
+        return Button {
+            store.requestPermissions()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: granted ? "checkmark.shield" : "exclamationmark.shield.fill")
+                if !granted {
+                    Text("Permissions")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(granted ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+        }
+        .buttonStyle(.plain)
+        .background(.tertiary.opacity(0.15), in: RoundedRectangle(cornerRadius: 6))
+        .help(granted
+            ? "Permissions granted — Accessibility and Input Monitoring"
+            : "Permissions needed — click to grant Accessibility and Input Monitoring (for EQ and web media controls)")
+    }
+}
+
 private struct EQBaseline: View {
     var body: some View {
         VStack(spacing: 0) {
@@ -596,17 +613,11 @@ private struct PreampSlider: View {
                 .foregroundStyle(.secondary)
                 .frame(height: 14)
 
-            Slider(
-                value: Binding(
-                    get: { store.eqSettings.preampDB },
-                    set: { store.setEQPreamp($0) }
-                ),
-                in: EQSettings.gainRange,
-                step: 1
+            VerticalGainSlider(
+                value: store.eqSettings.preampDB,
+                range: EQSettings.gainRange,
+                onChange: { store.setEQPreamp($0) }
             )
-            .frame(width: 100, height: 18)
-            .rotationEffect(.degrees(-90))
-            .frame(width: 26, height: 104)
 
             Text("Pre")
                 .font(.caption2)
@@ -629,23 +640,62 @@ private struct EQBandSlider: View {
                 .foregroundStyle(.secondary)
                 .frame(height: 14)
 
-            Slider(
-                value: Binding(
-                    get: { store.eqSettings.gain(for: band.frequencyHz) },
-                    set: { store.setEQGain($0, for: band.frequencyHz) }
-                ),
-                in: EQSettings.gainRange,
-                step: 1
+            VerticalGainSlider(
+                value: store.eqSettings.gain(for: band.frequencyHz),
+                range: EQSettings.gainRange,
+                onChange: { store.setEQGain($0, for: band.frequencyHz) }
             )
-            .frame(width: 100, height: 18)
-            .rotationEffect(.degrees(-90))
-            .frame(width: 26, height: 104)
 
             Text(band.label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .frame(width: 30)
         }
+    }
+}
+
+private struct VerticalGainSlider: View {
+    let value: Double
+    let range: ClosedRange<Double>
+    let onChange: (Double) -> Void
+
+    private let knob: CGFloat = 15
+
+    var body: some View {
+        GeometryReader { proxy in
+            let h = proxy.size.height
+            let span = range.upperBound - range.lowerBound
+            let usable = max(1, h - knob)
+            let clampedValue = min(range.upperBound, max(range.lowerBound, value))
+            let fraction = span > 0 ? (clampedValue - range.lowerBound) / span : 0.5
+            let knobY = knob / 2 + (1 - fraction) * usable
+
+            ZStack {
+                Capsule()
+                    .fill(.tertiary.opacity(0.3))
+                    .frame(width: 3, height: h)
+                Circle()
+                    .fill(Color.primary.opacity(0.92))
+                    .frame(width: knob, height: knob)
+                    .shadow(color: .black.opacity(0.2), radius: 1.5, y: 1)
+                    .position(x: proxy.size.width / 2, y: knobY)
+            }
+            .frame(width: proxy.size.width, height: h)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { emit($0.location.y, height: h, usable: usable, span: span) }
+                    .onEnded { emit($0.location.y, height: h, usable: usable, span: span) }
+            )
+        }
+        .frame(width: 26, height: 104)
+    }
+
+    private func emit(_ y: CGFloat, height: CGFloat, usable: CGFloat, span: Double) {
+        let clampedY = min(height - knob / 2, max(knob / 2, y))
+        let fraction = 1 - Double((clampedY - knob / 2) / usable)
+        let stepped = (range.lowerBound + fraction * span).rounded()
+        onChange(min(range.upperBound, max(range.lowerBound, stepped)))
     }
 }
 
