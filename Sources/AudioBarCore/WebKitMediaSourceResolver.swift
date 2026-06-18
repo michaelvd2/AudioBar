@@ -13,6 +13,13 @@ public struct WebAppDescriptor: Equatable, Sendable {
 }
 
 public enum WebKitMediaSourceResolver {
+    /// True for internal WebKit XPC helper bundle IDs (GPU, WebContent, Networking).
+    /// These are never user-facing apps; if one reaches the source list unattributed
+    /// it should be skipped rather than shown by its raw helper name (e.g. "GPU").
+    public static func isWebKitHelperBundleID(_ bundleID: String?) -> Bool {
+        bundleID?.hasPrefix("com.apple.WebKit.") == true
+    }
+
     public static func resolve(
         helperAudioObjectID: UInt32,
         helperPID: Int32,
