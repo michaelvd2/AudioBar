@@ -165,19 +165,25 @@ final class VolumeScriptBuilderTests: XCTestCase {
         let script = SafariMediaPlaybackCommandBuilder.togglePlaybackScript()
 
         XCTAssertTrue(script.contains("tell application id \"com.apple.Safari\""))
-        XCTAssertTrue(script.contains("current tab of front window"))
+        XCTAssertTrue(script.contains("repeat with safariWindow in windows"))
+        XCTAssertTrue(script.contains("repeat with safariTab in tabs of safariWindow"))
+        XCTAssertTrue(script.contains("in safariTab"))
         XCTAssertTrue(script.contains("document.querySelectorAll('audio,video')"))
-        XCTAssertTrue(script.contains("target.pause()"))
-        XCTAssertTrue(script.contains("target.play()"))
+        XCTAssertTrue(script.contains("m.pause()"))
+        XCTAssertTrue(script.contains("m.play()"))
+        XCTAssertFalse(script.contains("current tab of front window"))
     }
 
     func testSafariPlaybackRewindScriptMovesMediaBackFifteenSeconds() {
         let script = SafariMediaPlaybackCommandBuilder.rewind15SecondsScript()
 
         XCTAssertTrue(script.contains("tell application id \"com.apple.Safari\""))
-        XCTAssertTrue(script.contains("current tab of front window"))
+        XCTAssertTrue(script.contains("repeat with safariWindow in windows"))
+        XCTAssertTrue(script.contains("repeat with safariTab in tabs of safariWindow"))
+        XCTAssertTrue(script.contains("in safariTab"))
         XCTAssertTrue(script.contains("document.querySelectorAll('audio,video')"))
         XCTAssertTrue(script.contains("target.currentTime = Math.max(0, target.currentTime - 15)"))
+        XCTAssertFalse(script.contains("current tab of front window"))
     }
 
 }

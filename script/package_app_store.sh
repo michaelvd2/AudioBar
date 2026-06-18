@@ -5,7 +5,7 @@ APP_NAME="AudioBar"
 BUNDLE_ID="com.michaelvandijk.AudioBar"
 MIN_SYSTEM_VERSION="14.2"
 APP_VERSION="${APP_VERSION:-0.1.7}"
-APP_BUILD="${APP_BUILD:-8}"
+APP_BUILD="${APP_BUILD:-9}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -25,13 +25,14 @@ APP_STORE_APP_SIGN_IDENTITY="${APP_STORE_APP_SIGN_IDENTITY:-}"
 APP_STORE_INSTALLER_SIGN_IDENTITY="${APP_STORE_INSTALLER_SIGN_IDENTITY:-}"
 APP_STORE_CONNECT_USERNAME="${APP_STORE_CONNECT_USERNAME:-}"
 APP_STORE_CONNECT_PASSWORD="${APP_STORE_CONNECT_PASSWORD:-}"
+APP_STORE_CONNECT_PROVIDER_PUBLIC_ID="${APP_STORE_CONNECT_PROVIDER_PUBLIC_ID:-}"
 
 cd "$ROOT_DIR"
 
 if [[ -z "$APP_STORE_APP_SIGN_IDENTITY" ]]; then
   APP_STORE_APP_SIGN_IDENTITY="$(
     security find-identity -v -p codesigning |
-      sed -n 's/.*"\(3rd Party Mac Developer Application: [^"]*\)".*/\1/p; s/.*"\(Apple Distribution: [^"]*\)".*/\1/p' |
+      sed -n 's/.*"\(Mac App Distribution: [^"]*\)".*/\1/p; s/.*"\(3rd Party Mac Developer Application: [^"]*\)".*/\1/p; s/.*"\(Apple Distribution: [^"]*\)".*/\1/p' |
       head -n 1
   )"
 fi
@@ -39,7 +40,7 @@ fi
 if [[ -z "$APP_STORE_INSTALLER_SIGN_IDENTITY" ]]; then
   APP_STORE_INSTALLER_SIGN_IDENTITY="$(
     security find-identity -v -p basic |
-      sed -n 's/.*"\(3rd Party Mac Developer Installer: [^"]*\)".*/\1/p; s/.*"\(Mac Installer Distribution: [^"]*\)".*/\1/p' |
+      sed -n 's/.*"\(Mac Installer Distribution: [^"]*\)".*/\1/p; s/.*"\(3rd Party Mac Developer Installer: [^"]*\)".*/\1/p' |
       head -n 1
   )"
 fi
@@ -49,7 +50,7 @@ if [[ -z "$APP_STORE_APP_SIGN_IDENTITY" ]]; then
 Missing App Store application signing identity.
 
 Install a Mac App Store application distribution certificate, or pass:
-  APP_STORE_APP_SIGN_IDENTITY="3rd Party Mac Developer Application: Your Name (TEAMID)" $0
+  APP_STORE_APP_SIGN_IDENTITY="Mac App Distribution: Your Name (TEAMID)" $0
 ERROR
   exit 2
 fi
@@ -59,7 +60,7 @@ if [[ -z "$APP_STORE_INSTALLER_SIGN_IDENTITY" ]]; then
 Missing App Store installer signing identity.
 
 Install a Mac App Store installer distribution certificate, or pass:
-  APP_STORE_INSTALLER_SIGN_IDENTITY="3rd Party Mac Developer Installer: Your Name (TEAMID)" $0
+  APP_STORE_INSTALLER_SIGN_IDENTITY="Mac Installer Distribution: Your Name (TEAMID)" $0
 ERROR
   exit 2
 fi
@@ -126,6 +127,8 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$APP_BUILD</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.utilities</string>
   <key>LSUIElement</key>
   <true/>
   <key>NSAppleEventsUsageDescription</key>
@@ -137,6 +140,12 @@ cat >"$INFO_PLIST" <<PLIST
 </dict>
 </plist>
 PLIST
+
+xattr -cr "$APP_BUNDLE"
+if xattr -lr "$APP_BUNDLE" | grep -q 'com.apple.quarantine'; then
+  echo "App bundle still contains com.apple.quarantine extended attributes." >&2
+  exit 2
+fi
 
 codesign \
   --force \
@@ -152,13 +161,23 @@ productbuild \
   "$PKG_PATH"
 
 if [[ -n "$APP_STORE_CONNECT_USERNAME" && -n "$APP_STORE_CONNECT_PASSWORD" ]]; then
-  xcrun altool --validate-app "$PKG_PATH" \
-    --username "$APP_STORE_CONNECT_USERNAME" \
-    --password "$APP_STORE_CONNECT_PASSWORD"
+  VALIDATE_ARGS=(
+    --validate-app
+    --file "$PKG_PATH"
+    --type macos
+    --username "$APP_STORE_CONNECT_USERNAME"
+    --app-password "$APP_STORE_CONNECT_PASSWORD"
+  )
+
+  if [[ -n "$APP_STORE_CONNECT_PROVIDER_PUBLIC_ID" ]]; then
+    VALIDATE_ARGS+=(--provider-public-id "$APP_STORE_CONNECT_PROVIDER_PUBLIC_ID")
+  fi
+
+  xcrun altool "${VALIDATE_ARGS[@]}"
 else
   echo "Skipping App Store validation because App Store Connect credentials were not provided."
   echo "Run validation with:"
-  echo "  APP_STORE_CONNECT_USERNAME=<apple-id> APP_STORE_CONNECT_PASSWORD=<app-specific-password-or-keychain-ref> $0"
+  echo "  APP_STORE_CONNECT_USERNAME=<apple-id> APP_STORE_CONNECT_PASSWORD=<app-specific-password-or-keychain-ref> APP_STORE_CONNECT_PROVIDER_PUBLIC_ID=<provider-public-id> $0"
 fi
 
 echo "Created App Store candidate package:"

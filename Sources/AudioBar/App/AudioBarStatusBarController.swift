@@ -8,6 +8,7 @@ final class AudioBarStatusBarController: NSObject {
     private let statusItem: NSStatusItem
     private let store: AudioProcessStore
     private let popover = NSPopover()
+    private var expandedInterfaceBridge: StatusItemExpandedInterfaceBridge?
     private var outsideClickMonitor: Any?
     private var localClickMonitor: Any?
     private var suppressResignActiveCloseUntil: Date?
@@ -19,6 +20,7 @@ final class AudioBarStatusBarController: NSObject {
         super.init()
         configureButton()
         configurePopover()
+        installExpandedInterfaceBridge()
         observeEQStatusIcon()
         observeAppDeactivation()
         observeVolumeCommandRetention()
@@ -82,6 +84,23 @@ final class AudioBarStatusBarController: NSObject {
         popover.contentViewController = hostingController
     }
 
+    private func installExpandedInterfaceBridge() {
+        expandedInterfaceBridge = StatusItemExpandedInterfaceBridge(
+            statusItem: statusItem,
+            onBegin: { [weak self] in
+                guard let self, let button = self.statusItem.button else {
+                    return
+                }
+
+                self.showSettingsIfNeeded(relativeTo: button)
+            },
+            onEnd: { [weak self] in
+                self?.closePopoverFromExpandedInterfaceSession()
+            }
+        )
+        expandedInterfaceBridge?.installIfAvailable()
+    }
+
     private func observeAppDeactivation() {
         NotificationCenter.default.addObserver(
             self,
@@ -123,7 +142,7 @@ final class AudioBarStatusBarController: NSObject {
             return
         }
 
-        showSettings(relativeTo: button)
+        showSettingsIfNeeded(relativeTo: button)
     }
 
     private func showContextMenu(for button: NSStatusBarButton) {
@@ -137,7 +156,11 @@ final class AudioBarStatusBarController: NSObject {
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height), in: button)
     }
 
-    private func showSettings(relativeTo button: NSStatusBarButton) {
+    private func showSettingsIfNeeded(relativeTo button: NSStatusBarButton) {
+        guard !popover.isShown else {
+            return
+        }
+
         let anchorRect = NSRect(x: 0, y: 0, width: button.bounds.width, height: button.bounds.height)
         popover.show(relativeTo: anchorRect, of: button, preferredEdge: .minY)
         installOutsideClickMonitors()
@@ -149,7 +172,7 @@ final class AudioBarStatusBarController: NSObject {
             return
         }
 
-        showSettings(relativeTo: button)
+        showSettingsIfNeeded(relativeTo: button)
     }
 
     @objc private func quitFromMenu() {
@@ -180,6 +203,15 @@ final class AudioBarStatusBarController: NSObject {
     }
 
     private func closePopover() {
+        expandedInterfaceBridge?.cancelSessionIfAvailable()
+        closePopoverWithoutCancelingExpandedInterface()
+    }
+
+    private func closePopoverFromExpandedInterfaceSession() {
+        closePopoverWithoutCancelingExpandedInterface()
+    }
+
+    private func closePopoverWithoutCancelingExpandedInterface() {
         popover.performClose(nil)
         removeOutsideClickMonitors()
     }

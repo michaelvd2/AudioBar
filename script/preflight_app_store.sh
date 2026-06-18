@@ -7,6 +7,7 @@ APP_STORE_APP_SIGN_IDENTITY="${APP_STORE_APP_SIGN_IDENTITY:-}"
 APP_STORE_INSTALLER_SIGN_IDENTITY="${APP_STORE_INSTALLER_SIGN_IDENTITY:-}"
 APP_STORE_CONNECT_USERNAME="${APP_STORE_CONNECT_USERNAME:-}"
 APP_STORE_CONNECT_PASSWORD="${APP_STORE_CONNECT_PASSWORD:-}"
+APP_STORE_CONNECT_PROVIDER_PUBLIC_ID="${APP_STORE_CONNECT_PROVIDER_PUBLIC_ID:-}"
 CHECK_PUBLIC_URLS="${CHECK_PUBLIC_URLS:-0}"
 SUPPORT_URL="${SUPPORT_URL:-https://michaelvd2.github.io/AudioBar/support.html}"
 PRIVACY_URL="${PRIVACY_URL:-https://michaelvd2.github.io/AudioBar/privacy.html}"
@@ -27,7 +28,7 @@ check_fail() {
 if [[ -z "$APP_STORE_APP_SIGN_IDENTITY" ]]; then
   APP_STORE_APP_SIGN_IDENTITY="$(
     security find-identity -v -p codesigning |
-      sed -n 's/.*"\(3rd Party Mac Developer Application: [^"]*\)".*/\1/p; s/.*"\(Apple Distribution: [^"]*\)".*/\1/p' |
+      sed -n 's/.*"\(Mac App Distribution: [^"]*\)".*/\1/p; s/.*"\(3rd Party Mac Developer Application: [^"]*\)".*/\1/p; s/.*"\(Apple Distribution: [^"]*\)".*/\1/p' |
       head -n 1
   )"
 fi
@@ -41,7 +42,7 @@ fi
 if [[ -z "$APP_STORE_INSTALLER_SIGN_IDENTITY" ]]; then
   APP_STORE_INSTALLER_SIGN_IDENTITY="$(
     security find-identity -v -p basic |
-      sed -n 's/.*"\(3rd Party Mac Developer Installer: [^"]*\)".*/\1/p; s/.*"\(Mac Installer Distribution: [^"]*\)".*/\1/p' |
+      sed -n 's/.*"\(Mac Installer Distribution: [^"]*\)".*/\1/p; s/.*"\(3rd Party Mac Developer Installer: [^"]*\)".*/\1/p' |
       head -n 1
   )"
 fi
@@ -82,6 +83,12 @@ else
   check_fail "Missing APP_STORE_CONNECT_USERNAME or APP_STORE_CONNECT_PASSWORD"
 fi
 
+if [[ -n "$APP_STORE_CONNECT_PROVIDER_PUBLIC_ID" ]]; then
+  check_pass "App Store Connect provider public ID is configured"
+else
+  check_fail "Missing APP_STORE_CONNECT_PROVIDER_PUBLIC_ID"
+fi
+
 if [[ "$CHECK_PUBLIC_URLS" == "1" ]]; then
   if curl -fsI "$SUPPORT_URL" >/dev/null; then
     check_pass "Public support URL is reachable"
@@ -99,9 +106,9 @@ else
 fi
 
 printf '\nNext package command:\n'
-printf '  APP_STORE_PROVISIONING_PROFILE=<profile.provisionprofile> APP_STORE_CONNECT_USERNAME=<apple-id> APP_STORE_CONNECT_PASSWORD=<password-or-keychain-ref> script/package_app_store.sh\n'
+printf '  APP_STORE_PROVISIONING_PROFILE=<profile.provisionprofile> APP_STORE_CONNECT_USERNAME=<apple-id> APP_STORE_CONNECT_PASSWORD=<password-or-keychain-ref> APP_STORE_CONNECT_PROVIDER_PUBLIC_ID=<provider-public-id> script/package_app_store.sh\n'
 printf '\nValidation command produced by the package lane:\n'
-printf '  xcrun altool --validate-app dist/app-store/AudioBar-AppStore.pkg --username "$APP_STORE_CONNECT_USERNAME" --password "$APP_STORE_CONNECT_PASSWORD"\n'
+printf '  xcrun altool --validate-app --file dist/app-store/AudioBar-AppStore.pkg --type macos --username "$APP_STORE_CONNECT_USERNAME" --app-password "$APP_STORE_CONNECT_PASSWORD" --provider-public-id "$APP_STORE_CONNECT_PROVIDER_PUBLIC_ID"\n'
 
 if [[ "$failures" -gt 0 ]]; then
   printf '\nApp Store preflight failed with %d blocker(s).\n' "$failures" >&2

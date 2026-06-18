@@ -2,6 +2,8 @@
 
 Small macOS menu-bar app for seeing active audio-output processes.
 
+Website and download: https://michaelvd2.github.io/AudioBar/
+
 ## What It Can Control
 
 macOS public APIs expose active CoreAudio output processes, but not universal per-app volume sliders. AudioBar therefore lists all active output processes and exposes sliders only for known scriptable apps:
@@ -30,7 +32,7 @@ control may still trigger a macOS Automation prompt for that specific app.
 
 ## EQ
 
-AudioBar includes a compact 10-band EQ tuner with classic bands:
+AudioBar includes a compact 11-band EQ tuner with preamp and classic bands:
 
 `31`, `62`, `125`, `250`, `500`, `1k`, `2k`, `4k`, `8k`, `16k`.
 
