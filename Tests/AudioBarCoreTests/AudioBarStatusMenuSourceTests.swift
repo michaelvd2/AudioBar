@@ -87,6 +87,19 @@ final class AudioBarStatusMenuSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("eventWindow === button.window"))
     }
 
+    func testStatusItemUsesRuntimeExpandedInterfaceBridgeForMacOS27() throws {
+        let controllerSource = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
+        let bridgeSource = try String(contentsOf: statusItemBridgeURL(), encoding: .utf8)
+
+        XCTAssertTrue(controllerSource.contains("private var expandedInterfaceBridge: StatusItemExpandedInterfaceBridge?"))
+        XCTAssertTrue(controllerSource.contains("installExpandedInterfaceBridge()"))
+        XCTAssertTrue(controllerSource.contains("expandedInterfaceBridge?.cancelSessionIfAvailable()"))
+        XCTAssertTrue(bridgeSource.contains("setExpandedInterfaceDelegate:"))
+        XCTAssertTrue(bridgeSource.contains("statusItem:didBeginExpandedInterfaceSession:"))
+        XCTAssertTrue(bridgeSource.contains("statusItemDidEndExpandedInterfaceSession:animated:"))
+        XCTAssertFalse(bridgeSource.contains("NSStatusItemExpandedInterfaceDelegate"))
+    }
+
     private func audioBarAppURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -101,5 +114,13 @@ final class AudioBarStatusMenuSourceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/AudioBar/App/AudioBarStatusBarController.swift")
+    }
+
+    private func statusItemBridgeURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/AudioBar/App/StatusItemExpandedInterfaceBridge.swift")
     }
 }
