@@ -300,7 +300,8 @@ final class AudioProcessStoreSourceTests: XCTestCase {
 
         XCTAssertTrue(source.contains("private var playbackStateOverrides: [String: Bool]"))
         XCTAssertTrue(togglePlaybackFunction.contains("guard playbackController.togglePlayback(for: process) else"))
-        XCTAssertTrue(togglePlaybackFunction.contains("playbackStateOverrides[process.stableSourceID] = !isPlaybackPlaying(process)"))
+        XCTAssertTrue(togglePlaybackFunction.contains("let intendedPlaying = !isPlaybackPlaying(process)"))
+        XCTAssertTrue(togglePlaybackFunction.contains("playbackStateOverrides[process.stableSourceID] = intendedPlaying"))
         XCTAssertTrue(isPlayingFunction.contains("playbackStateOverrides[process.stableSourceID] ?? process.isActiveOutput"))
     }
 
