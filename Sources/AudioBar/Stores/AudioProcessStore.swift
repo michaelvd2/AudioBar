@@ -212,6 +212,24 @@ final class AudioProcessStore: ObservableObject {
         refresh()
     }
 
+    private var preMuteVolumes: [String: Int] = [:]
+
+    func isMuted(_ process: AudioProcess) -> Bool {
+        preMuteVolumes[process.stableSourceID] != nil
+    }
+
+    func toggleMute(for process: AudioProcess) {
+        guard process.volumeCapability.isAdjustable else { return }
+        let id = process.stableSourceID
+        if let restored = preMuteVolumes[id] {
+            preMuteVolumes.removeValue(forKey: id)
+            setVolume(for: process, to: Double(restored))
+        } else {
+            preMuteVolumes[id] = min(100, max(0, process.currentVolume ?? 100))
+            setVolume(for: process, to: 0)
+        }
+    }
+
     func setVolume(for process: AudioProcess, to value: Double) {
         let volume = Int(value.rounded())
         guard process.volumeCapability.isAdjustable else {
@@ -242,6 +260,9 @@ final class AudioProcessStore: ObservableObject {
         saveSourceVolumes()
         if let index = processes.firstIndex(where: { $0.id == process.id }) {
             processes[index].currentVolume = min(100, max(0, volume))
+        }
+        if volume > 0 {
+            preMuteVolumes.removeValue(forKey: process.stableSourceID)
         }
     }
 

@@ -482,48 +482,70 @@ private struct MarqueeText: View {
 
     @State private var textWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
-    @State private var animating = false
+    @State private var offsetX: CGFloat = 0
+
+    private let gap: CGFloat = 44
+    private let pointsPerSecond: Double = 32
+
+    private var shouldScroll: Bool {
+        isPlaying && textWidth > containerWidth + 1
+    }
 
     var body: some View {
-        let overflow = max(0, textWidth - containerWidth)
         GeometryReader { container in
-            Text(text)
-                .font(font)
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .fixedSize()
-                .background(
-                    GeometryReader { measure in
-                        Color.clear
-                            .onAppear {
-                                textWidth = measure.size.width
-                                containerWidth = container.size.width
-                            }
-                            .onChange(of: text) { _, _ in
-                                textWidth = measure.size.width
-                                containerWidth = container.size.width
-                            }
+            Group {
+                if shouldScroll {
+                    HStack(spacing: gap) {
+                        Text(text)
+                        Text(text)
                     }
-                )
-                .offset(x: animating ? -overflow : 0)
-                .frame(width: container.size.width, height: container.size.height, alignment: .leading)
-                .clipped()
-                .animation(
-                    overflow > 0
-                        ? .linear(duration: max(3, Double(overflow) / 30)).repeatForever(autoreverses: false)
-                        : .default,
-                    value: animating
-                )
+                    .fixedSize()
+                    .offset(x: offsetX)
+                    .onAppear { restartScroll() }
+                    .id("\(text)#\(Int(textWidth))")
+                } else {
+                    Text(text)
+                        .truncationMode(.tail)
+                }
+            }
+            .font(font)
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .frame(width: container.size.width, height: container.size.height, alignment: .leading)
+            .clipped()
+            .background(
+                Text(text)
+                    .font(font)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .hidden()
+                    .background(
+                        GeometryReader { measure in
+                            Color.clear
+                                .onAppear {
+                                    textWidth = measure.size.width
+                                    containerWidth = container.size.width
+                                }
+                                .onChange(of: text) { _, _ in
+                                    textWidth = measure.size.width
+                                    containerWidth = container.size.width
+                                }
+                                .onChange(of: container.size.width) { _, newValue in
+                                    containerWidth = newValue
+                                }
+                        }
+                    )
+            )
         }
         .frame(height: 16)
-        .onChange(of: overflow) { _, newValue in
-            animating = isPlaying && newValue > 0
-        }
-        .onChange(of: isPlaying) { _, newValue in
-            animating = newValue && overflow > 0
-        }
-        .onAppear {
-            animating = isPlaying && overflow > 0
+    }
+
+    private func restartScroll() {
+        let distance = textWidth + gap
+        offsetX = 0
+        guard distance > 0 else { return }
+        withAnimation(.linear(duration: Double(distance) / pointsPerSecond).repeatForever(autoreverses: false)) {
+            offsetX = -distance
         }
     }
 }
@@ -659,7 +681,7 @@ private struct VerticalGainSlider: View {
     let range: ClosedRange<Double>
     let onChange: (Double) -> Void
 
-    private let knob: CGFloat = 15
+    private let knob: CGFloat = 14
 
     var body: some View {
         GeometryReader { proxy in
@@ -669,11 +691,16 @@ private struct VerticalGainSlider: View {
             let clampedValue = min(range.upperBound, max(range.lowerBound, value))
             let fraction = span > 0 ? (clampedValue - range.lowerBound) / span : 0.5
             let knobY = knob / 2 + (1 - fraction) * usable
+            let centerY = knob / 2 + 0.5 * usable
 
             ZStack {
                 Capsule()
-                    .fill(.tertiary.opacity(0.3))
-                    .frame(width: 3, height: h)
+                    .fill(.tertiary.opacity(0.28))
+                    .frame(width: 4, height: h)
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.9))
+                    .frame(width: 4, height: abs(knobY - centerY))
+                    .position(x: proxy.size.width / 2, y: (knobY + centerY) / 2)
                 Circle()
                     .fill(Color.primary.opacity(0.92))
                     .frame(width: knob, height: knob)
@@ -797,6 +824,18 @@ private struct AudioProcessRow: View {
                 .frame(width: 38, alignment: .leading)
 
             Button {
+                store.toggleMute(for: process)
+            } label: {
+                Image(systemName: store.isMuted(process) ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(store.isMuted(process) ? .primary : .tertiary)
+                    .frame(width: 16, height: 16)
+            }
+            .buttonStyle(.plain)
+            .disabled(!process.volumeCapability.isAdjustable)
+            .help(store.isMuted(process) ? "Unmute" : "Mute")
+
+            Button {
                 isExpanded.toggle()
             } label: {
                 Image(systemName: "chevron.right")
@@ -831,6 +870,9 @@ private struct AudioProcessRow: View {
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 38, alignment: .leading)
+
+            Color.clear
+                .frame(width: 16, height: 1)
 
             Color.clear
                 .frame(width: 16, height: 1)
@@ -959,11 +1001,11 @@ private struct BalanceDragBar: View {
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(.tertiary.opacity(isEnabled ? 0.24 : 0.12))
-                    .frame(height: 5)
+                    .frame(height: 4)
 
                 Capsule()
-                    .fill(.secondary.opacity(isEnabled ? 0.5 : 0.2))
-                    .frame(width: fillWidth, height: 5)
+                    .fill(isEnabled ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.2))
+                    .frame(width: fillWidth, height: 4)
                     .offset(x: fillOffset)
 
                 Rectangle()
@@ -1123,11 +1165,11 @@ private struct VolumeDragBar: View {
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(.tertiary.opacity(isEnabled ? 0.28 : 0.14))
-                    .frame(height: 5)
+                    .frame(height: 4)
 
                 Capsule()
-                    .fill(.secondary.opacity(isEnabled ? 0.58 : 0.22))
-                    .frame(width: max(0, proxy.size.width * fraction), height: 5)
+                    .fill(isEnabled ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.22))
+                    .frame(width: max(0, proxy.size.width * fraction), height: 4)
 
                 Circle()
                     .fill(isEnabled ? Color.primary.opacity(0.92) : Color.secondary.opacity(0.42))

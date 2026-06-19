@@ -54,6 +54,14 @@ public struct CoreAudioProcessProvider: AudioProcessProviding {
                 return webAppSource
             }
 
+            // A com.apple.WebKit.* helper whose owning app couldn't be resolved
+            // (e.g. localizedName momentarily nil before LaunchServices registers
+            // it). Skip it rather than surfacing the raw helper name like "GPU";
+            // it reappears correctly named on a later refresh.
+            if WebKitMediaSourceResolver.isWebKitHelperBundleID(bundleID) {
+                return nil
+            }
+
             let trackTitle = volumeController.currentTrackTitle(for: bundleID)
             let currentVolume = volumeController.currentVolume(for: bundleID)
 
