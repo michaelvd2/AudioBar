@@ -368,41 +368,39 @@ final class AudioProcessStore: ObservableObject {
         if stabilizeCallAudio {
             return
         }
+        let callActive = !microphoneHolders.isEmpty
+
         if outputLockMode != .off, let uid = lockedOutputDeviceUID {
-            let locked = AudioDeviceController.device(withUID: uid, for: .output)
-            let present = locked != nil
-            if let locked, AudioDeviceController.defaultDeviceID(for: .output) != locked.id,
-               outputLockMode == .strict || (present && !lastOutputLockedDevicePresent) {
-                AudioDeviceController.setDefaultDevice(locked.id, for: .output)
-                currentOutputDeviceID = locked.id
+            if let locked = AudioDeviceController.device(withUID: uid, for: .output) {
+                let hold = outputLockMode == .strict || !callActive
+                if hold, AudioDeviceController.defaultDeviceID(for: .output) != locked.id {
+                    AudioDeviceController.setDefaultDevice(locked.id, for: .output)
+                    currentOutputDeviceID = locked.id
+                }
+            } else {
+                // Locked device disconnected — break the lock.
+                setOutputLock(.off)
             }
-            lastOutputLockedDevicePresent = present
-        } else {
-            lastOutputLockedDevicePresent = false
         }
 
-        if !microphoneHolders.isEmpty {
-            // An app is actively using the mic (a live call/recording). Never
-            // reroute the input here — moving someone's mic mid-call is the
-            // exact disruptive switching this is meant to prevent.
-        } else if keepOutputHiFi {
-            if let mic = AudioDeviceController.builtInInputDevice(),
+        if keepOutputHiFi {
+            // Pin the built-in mic, but only when idle — never yank a live call.
+            if !callActive,
+               let mic = AudioDeviceController.builtInInputDevice(),
                AudioDeviceController.defaultDeviceID(for: .input) != mic.id {
                 AudioDeviceController.setDefaultDevice(mic.id, for: .input)
                 currentInputDeviceID = mic.id
             }
-            lastInputLockedDevicePresent = false
         } else if inputLockMode != .off, let uid = lockedInputDeviceUID {
-            let locked = AudioDeviceController.device(withUID: uid, for: .input)
-            let present = locked != nil
-            if let locked, AudioDeviceController.defaultDeviceID(for: .input) != locked.id,
-               inputLockMode == .strict || (present && !lastInputLockedDevicePresent) {
-                AudioDeviceController.setDefaultDevice(locked.id, for: .input)
-                currentInputDeviceID = locked.id
+            if let locked = AudioDeviceController.device(withUID: uid, for: .input) {
+                let hold = inputLockMode == .strict || !callActive
+                if hold, AudioDeviceController.defaultDeviceID(for: .input) != locked.id {
+                    AudioDeviceController.setDefaultDevice(locked.id, for: .input)
+                    currentInputDeviceID = locked.id
+                }
+            } else {
+                setInputLock(.off)
             }
-            lastInputLockedDevicePresent = present
-        } else {
-            lastInputLockedDevicePresent = false
         }
     }
 
@@ -457,6 +455,21 @@ final class AudioProcessStore: ObservableObject {
 
     private func enforceStabilize() {
         guard stabilizeCallAudio else { return }
+        // A held device that disconnected can't be stabilized — drop it.
+        if let uid = stabilizedOutputUID, AudioDeviceController.device(withUID: uid, for: .output) == nil {
+            stabilizedOutputUID = nil
+            saveStabilize()
+        }
+        if let uid = stabilizedInputUID, AudioDeviceController.device(withUID: uid, for: .input) == nil {
+            stabilizedInputUID = nil
+            saveStabilize()
+        }
+        if stabilizedOutputUID == nil, stabilizedInputUID == nil {
+            stabilizeCallAudio = false
+            userDefaults.set(false, forKey: stabilizeCallAudioKey)
+            stopStabilizeTimer()
+            return
+        }
         let now = Date()
         if !stabilizeOutputBackedOff, let uid = stabilizedOutputUID,
            let device = AudioDeviceController.device(withUID: uid, for: .output),

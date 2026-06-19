@@ -305,17 +305,17 @@ private struct SourceSettingsView: View {
                     .frame(width: 16)
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Stabilize call audio")
+                    Text("Lock devices")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("Hold output & mic if an app switches them mid-call")
+                    Text("Keep output & input from being switched by apps or macOS")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
 
                 Spacer()
 
-                Toggle("Stabilize call audio", isOn: Binding(
+                Toggle("Lock devices", isOn: Binding(
                     get: { store.stabilizeCallAudio },
                     set: { _ in store.toggleStabilizeCallAudio() }
                 ))
@@ -325,7 +325,7 @@ private struct SourceSettingsView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
-            .help("Remembers your current output and microphone and snaps them back if an app changes them during a call")
+            .help("Remembers your current output and microphone and snaps them back whenever an app or macOS tries to change them")
 
             if !store.hiddenSources.isEmpty {
                 DisclosureGroup(isExpanded: $isExpanded) {
@@ -542,29 +542,28 @@ private struct DeviceMenu: View {
     private var currentID: AudioDeviceID? {
         scope == .output ? store.currentOutputDeviceID : store.currentInputDeviceID
     }
-    private var lockMode: DeviceLockMode {
-        scope == .output ? store.outputLockMode : store.inputLockMode
-    }
     private var currentName: String {
         devices.first(where: { $0.id == currentID })?.name ?? (scope == .output ? "No output" : "No input")
     }
-    private var deviceIcon: String {
+    private var deviceIcon: String { icon(for: currentName) }
+
+    private func icon(for deviceName: String) -> String {
+        let name = deviceName.lowercased()
+        if name.contains("airpods max") { return "airpodsmax" }
+        if name.contains("airpods pro") { return "airpodspro" }
+        if name.contains("airpod") { return "airpods" }
+        if name.contains("beats") || name.contains("headphone") || name.contains("buds") { return "headphones" }
+        if name.contains("ipad") { return "ipad" }
+        if name.contains("iphone") { return "iphone" }
+        if name.contains("display") || name.contains("monitor") || name.contains("tv") { return "display" }
         if scope == .input { return "mic.fill" }
-        let name = currentName.lowercased()
-        if name.contains("airpod") || name.contains("headphone") || name.contains("buds") || name.contains("beats") {
-            return "headphones"
-        }
-        if name.contains("display") || name.contains("monitor") {
-            return "display"
-        }
+        if name.contains("macbook") || name.contains("built-in") { return "laptopcomputer" }
         return "hifispeaker.fill"
     }
-    private var lockColor: Color {
-        switch lockMode {
-        case .off: return .clear
-        case .soft: return .accentColor
-        case .strict: return .red
-        }
+
+    // Subtle pastel tint when devices are locked (held against switching).
+    private var chipBackground: Color {
+        store.stabilizeCallAudio ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.12)
     }
 
     private var iconColor: Color {
@@ -596,14 +595,6 @@ private struct DeviceMenu: View {
             store.selectInputDevice(device)
         }
     }
-    private func setLock(_ mode: DeviceLockMode) {
-        if scope == .output {
-            store.setOutputLock(mode)
-        } else {
-            store.setInputLock(mode)
-        }
-    }
-
     var body: some View {
         Menu {
             if let qualityText {
@@ -626,32 +617,25 @@ private struct DeviceMenu: View {
             } else {
                 Picker("Device", selection: deviceSelection) {
                     ForEach(devices) { device in
-                        Text(device.name).tag(Optional(device.id))
+                        Label(device.name, systemImage: icon(for: device.name)).tag(Optional(device.id))
                     }
                 }
                 .pickerStyle(.inline)
                 .labelsHidden()
             }
-            Divider()
-            lockItem("Don’t keep", mode: .off)
-            lockItem("Keep — re-select when it reconnects", mode: .soft)
-            lockItem("Strict — block apps & manual changes", mode: .strict)
         } label: {
-            ZStack(alignment: .bottomTrailing) {
+            HStack(spacing: 4) {
                 Image(systemName: deviceIcon)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(iconColor)
-                    .frame(width: 28, height: 24)
-                    .background(.tertiary.opacity(0.14), in: RoundedRectangle(cornerRadius: 7))
-                if lockMode != .off {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(lockColor)
-                        .padding(1.5)
-                        .background(Color(nsColor: .windowBackgroundColor), in: Circle())
-                        .offset(x: 3, y: 2)
-                }
+                Text(scope == .output ? "out" : "in")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.tertiary)
             }
+            .padding(.horizontal, 7)
+            .padding(.vertical, 5)
+            .background(chipBackground, in: RoundedRectangle(cornerRadius: 7))
+            .contentShape(RoundedRectangle(cornerRadius: 7))
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -659,26 +643,11 @@ private struct DeviceMenu: View {
         .help(helpText)
     }
 
-    @ViewBuilder
-    private func lockItem(_ title: String, mode: DeviceLockMode) -> some View {
-        Button {
-            setLock(mode)
-        } label: {
-            if lockMode == mode {
-                Label(title, systemImage: "checkmark")
-            } else {
-                Text(title)
-            }
-        }
-    }
 
     private var helpText: String {
         let kind = scope == .output ? "Output" : "Input"
-        switch lockMode {
-        case .off: return "\(kind): \(currentName)"
-        case .soft: return "\(kind): \(currentName) — kept (re-selected on reconnect)"
-        case .strict: return "\(kind): \(currentName) — strict lock (overrides everything)"
-        }
+        let lockNote = store.stabilizeCallAudio ? " — locked" : ""
+        return "\(kind): \(currentName)\(lockNote)"
     }
 }
 
