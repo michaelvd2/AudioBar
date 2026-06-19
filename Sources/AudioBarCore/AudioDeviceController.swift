@@ -1,3 +1,4 @@
+import AppKit
 import CoreAudio
 import Foundation
 
@@ -70,6 +71,25 @@ public enum AudioDeviceController {
         devices(for: scope).first { $0.uid == uid }
     }
 
+    /// The Mac's built-in microphone, if present — used to keep a Bluetooth
+    /// output out of call/headset mode by recording from the built-in mic.
+    public static func builtInInputDevice() -> AudioDevice? {
+        devices(for: .input).first { transportType(of: $0.id) == kAudioDeviceTransportTypeBuiltIn }
+    }
+
+    private static func transportType(of id: AudioDeviceID) -> UInt32 {
+        var addr = address(kAudioDevicePropertyTransportType)
+        guard AudioObjectHasProperty(id, &addr) else {
+            return 0
+        }
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        let status = withUnsafeMutableBytes(of: &value) {
+            AudioObjectGetPropertyData(id, &addr, 0, nil, &size, $0.baseAddress!)
+        }
+        return status == noErr ? value : 0
+    }
+
     /// Current operating format of the default output device. The sample rate +
     /// channel count reveal real fidelity (e.g. Bluetooth A2DP 48 kHz stereo vs
     /// the degraded ~16 kHz mono call/headset profile).
@@ -95,6 +115,75 @@ public enum AudioDeviceController {
             AudioObjectGetPropertyData(id, &addr, 0, nil, &size, $0.baseAddress!)
         }
         return status == noErr ? value : nil
+    }
+
+    /// Display names of apps currently holding the microphone open. On Bluetooth
+    /// this is what forces the headset/call (HFP) profile and degrades output.
+    /// `excludedBundleID` skips AudioBar's own audio tap.
+    public static func microphoneHoldingAppNames(excludingBundleID excludedBundleID: String?) -> [String] {
+        var names: [String] = []
+        var seen = Set<String>()
+        for object in processObjectIDs() where processUInt32(object, kAudioProcessPropertyIsRunningInput) == 1 {
+            let bundleID = stringProperty(object, kAudioProcessPropertyBundleID)
+            if let bundleID, let excludedBundleID,
+               bundleID == excludedBundleID || bundleID.hasPrefix(excludedBundleID + ".") {
+                continue
+            }
+            let pid = processPID(object)
+            var name = (pid > 0 ? NSRunningApplication(processIdentifier: pid)?.localizedName : nil)
+                ?? bundleID ?? "An app"
+            if let range = name.range(of: " Helper") {
+                name = String(name[..<range.lowerBound])
+            }
+            if !seen.contains(name) {
+                seen.insert(name)
+                names.append(name)
+            }
+        }
+        return names
+    }
+
+    private static func processObjectIDs() -> [AudioObjectID] {
+        var addr = address(kAudioHardwarePropertyProcessObjectList)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(systemObject, &addr, 0, nil, &size) == noErr else {
+            return []
+        }
+        let count = Int(size) / MemoryLayout<AudioObjectID>.size
+        guard count > 0 else {
+            return []
+        }
+        var ids = [AudioObjectID](repeating: 0, count: count)
+        let status = ids.withUnsafeMutableBufferPointer {
+            AudioObjectGetPropertyData(systemObject, &addr, 0, nil, &size, $0.baseAddress!)
+        }
+        return status == noErr ? ids : []
+    }
+
+    private static func processUInt32(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector) -> UInt32 {
+        var addr = address(selector)
+        guard AudioObjectHasProperty(object, &addr) else {
+            return 0
+        }
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        let status = withUnsafeMutableBytes(of: &value) {
+            AudioObjectGetPropertyData(object, &addr, 0, nil, &size, $0.baseAddress!)
+        }
+        return status == noErr ? value : 0
+    }
+
+    private static func processPID(_ object: AudioObjectID) -> pid_t {
+        var addr = address(kAudioProcessPropertyPID)
+        guard AudioObjectHasProperty(object, &addr) else {
+            return -1
+        }
+        var value = pid_t(0)
+        var size = UInt32(MemoryLayout<pid_t>.size)
+        let status = withUnsafeMutableBytes(of: &value) {
+            AudioObjectGetPropertyData(object, &addr, 0, nil, &size, $0.baseAddress!)
+        }
+        return status == noErr ? value : -1
     }
 
     public static func defaultDeviceID(for scope: AudioDeviceScope) -> AudioDeviceID? {

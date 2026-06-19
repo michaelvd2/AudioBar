@@ -55,12 +55,27 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var outputLockMode: DeviceLockMode = .off
     @Published private(set) var inputLockMode: DeviceLockMode = .off
     @Published private(set) var outputFormat: AudioOutputFormat?
+    @Published private(set) var microphoneHolders: [String] = []
+    @Published private(set) var keepOutputHiFi = false
+    @Published private(set) var stabilizeCallAudio = false
+    @Published private(set) var stabilizeWarning: String?
 
     /// True (and assumed true when unknown) when the output runs at full fidelity.
     /// Bluetooth call/headset mode drops to ~16 kHz mono, which trips this false.
     var outputIsHiFi: Bool {
         guard let outputFormat else { return true }
         return outputFormat.sampleRate >= 44_100 && outputFormat.channels >= 2
+    }
+
+    /// Set when the output is degraded AND an app is holding the mic — i.e. a
+    /// Bluetooth device forced into call/headset mode. Names the culprit.
+    var outputQualityWarning: String? {
+        guard !outputIsHiFi, let outputFormat, !microphoneHolders.isEmpty else {
+            return nil
+        }
+        let who = ListFormatter.localizedString(byJoining: microphoneHolders)
+        let khz = Int((outputFormat.sampleRate / 1000).rounded())
+        return "\(who) is using the mic — forcing call quality (\(khz) kHz). Switch its input off these headphones for hi-fi."
     }
 
     private var lastOutputLockedDevicePresent = false
@@ -78,6 +93,13 @@ final class AudioProcessStore: ObservableObject {
     private let userDefaults: UserDefaults
     private var timer: Timer?
     private var streamTimer: Timer?
+    private var stabilizeTimer: Timer?
+    private var stabilizedOutputUID: String?
+    private var stabilizedInputUID: String?
+    private var stabilizeOutputCorrections: [Date] = []
+    private var stabilizeInputCorrections: [Date] = []
+    private var stabilizeOutputBackedOff = false
+    private var stabilizeInputBackedOff = false
     private let eqSettingsKey = "AudioBar.eqSettings"
     private let savedEQPresetsKey = "AudioBar.savedEQPresets"
     private let sourceVolumesKey = "AudioBar.sourceVolumes"
@@ -89,6 +111,10 @@ final class AudioProcessStore: ObservableObject {
     private let lockedInputDeviceUIDKey = "AudioBar.lockedInputDeviceUID"
     private let outputLockModeKey = "AudioBar.outputLockMode"
     private let inputLockModeKey = "AudioBar.inputLockMode"
+    private let keepOutputHiFiKey = "AudioBar.keepOutputHiFi"
+    private let stabilizeCallAudioKey = "AudioBar.stabilizeCallAudio"
+    private let stabilizedOutputUIDKey = "AudioBar.stabilizedOutputUID"
+    private let stabilizedInputUIDKey = "AudioBar.stabilizedInputUID"
     private var processCache: AudioProcessListCache
     private var hiddenSourceNames: [String: String]
     private var playbackStateOverrides: [String: Bool] = [:]
@@ -132,6 +158,10 @@ final class AudioProcessStore: ObservableObject {
         self.lockedInputDeviceUID = userDefaults.string(forKey: lockedInputDeviceUIDKey)
         self.outputLockMode = userDefaults.string(forKey: outputLockModeKey).flatMap(DeviceLockMode.init) ?? .off
         self.inputLockMode = userDefaults.string(forKey: inputLockModeKey).flatMap(DeviceLockMode.init) ?? .off
+        self.keepOutputHiFi = userDefaults.bool(forKey: keepOutputHiFiKey)
+        self.stabilizeCallAudio = userDefaults.bool(forKey: stabilizeCallAudioKey)
+        self.stabilizedOutputUID = userDefaults.string(forKey: stabilizedOutputUIDKey)
+        self.stabilizedInputUID = userDefaults.string(forKey: stabilizedInputUIDKey)
     }
 
     deinit {
@@ -155,6 +185,9 @@ final class AudioProcessStore: ObservableObject {
             Task { @MainActor in
                 self?.refresh()
             }
+        }
+        if stabilizeCallAudio {
+            startStabilizeTimer()
         }
         streamTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -243,6 +276,9 @@ final class AudioProcessStore: ObservableObject {
         currentOutputDeviceID = AudioDeviceController.defaultDeviceID(for: .output)
         currentInputDeviceID = AudioDeviceController.defaultDeviceID(for: .input)
         outputFormat = AudioDeviceController.currentOutputFormat()
+        microphoneHolders = AudioDeviceController.microphoneHoldingAppNames(
+            excludingBundleID: Bundle.main.bundleIdentifier
+        )
     }
 
     func selectOutputDevice(_ device: AudioDevice) {
@@ -256,6 +292,13 @@ final class AudioProcessStore: ObservableObject {
             lastOutputLockedDevicePresent = true
             saveDeviceLocks()
         }
+        if stabilizeCallAudio {
+            stabilizedOutputUID = device.uid
+            stabilizeOutputCorrections = []
+            stabilizeOutputBackedOff = false
+            stabilizeWarning = nil
+            saveStabilize()
+        }
     }
 
     func selectInputDevice(_ device: AudioDevice) {
@@ -267,6 +310,13 @@ final class AudioProcessStore: ObservableObject {
             lockedInputDeviceUID = device.uid
             lastInputLockedDevicePresent = true
             saveDeviceLocks()
+        }
+        if stabilizeCallAudio {
+            stabilizedInputUID = device.uid
+            stabilizeInputCorrections = []
+            stabilizeInputBackedOff = false
+            stabilizeWarning = nil
+            saveStabilize()
         }
     }
 
@@ -292,9 +342,32 @@ final class AudioProcessStore: ObservableObject {
         saveDeviceLocks()
     }
 
+    func toggleKeepOutputHiFi() {
+        keepOutputHiFi.toggle()
+        userDefaults.set(keepOutputHiFi, forKey: keepOutputHiFiKey)
+        // Only pin immediately when no call is in progress; never yank a live mic.
+        if keepOutputHiFi && microphoneHolders.isEmpty {
+            useBuiltInMic()
+        }
+    }
+
+    /// Move the default input to the built-in mic, freeing a Bluetooth output
+    /// from call/headset mode. Backs the warning banner's one-click fix.
+    func useBuiltInMic() {
+        guard let mic = AudioDeviceController.builtInInputDevice() else { return }
+        if AudioDeviceController.setDefaultDevice(mic.id, for: .input) {
+            currentInputDeviceID = mic.id
+        }
+    }
+
     /// soft → re-select the locked device only when it (re)appears; a manual
     /// switch to another present device wins. strict → always re-assert it.
+    /// "Keep output hi-fi" pins the input to the built-in mic, overriding the
+    /// input lock so Bluetooth output stays in A2DP.
     private func enforceDeviceLocks() {
+        if stabilizeCallAudio {
+            return
+        }
         if outputLockMode != .off, let uid = lockedOutputDeviceUID {
             let locked = AudioDeviceController.device(withUID: uid, for: .output)
             let present = locked != nil
@@ -308,7 +381,18 @@ final class AudioProcessStore: ObservableObject {
             lastOutputLockedDevicePresent = false
         }
 
-        if inputLockMode != .off, let uid = lockedInputDeviceUID {
+        if !microphoneHolders.isEmpty {
+            // An app is actively using the mic (a live call/recording). Never
+            // reroute the input here — moving someone's mic mid-call is the
+            // exact disruptive switching this is meant to prevent.
+        } else if keepOutputHiFi {
+            if let mic = AudioDeviceController.builtInInputDevice(),
+               AudioDeviceController.defaultDeviceID(for: .input) != mic.id {
+                AudioDeviceController.setDefaultDevice(mic.id, for: .input)
+                currentInputDeviceID = mic.id
+            }
+            lastInputLockedDevicePresent = false
+        } else if inputLockMode != .off, let uid = lockedInputDeviceUID {
             let locked = AudioDeviceController.device(withUID: uid, for: .input)
             let present = locked != nil
             if let locked, AudioDeviceController.defaultDeviceID(for: .input) != locked.id,
@@ -327,6 +411,82 @@ final class AudioProcessStore: ObservableObject {
         userDefaults.set(lockedInputDeviceUID, forKey: lockedInputDeviceUIDKey)
         userDefaults.set(outputLockMode.rawValue, forKey: outputLockModeKey)
         userDefaults.set(inputLockMode.rawValue, forKey: inputLockModeKey)
+    }
+
+    // MARK: - Stabilize call audio
+
+    /// One-tap call stability: remembers the current output + input devices and
+    /// snaps them back the instant Meet/Discord/macOS switches them — with a
+    /// back-off so it won't flicker-fight an app that keeps re-grabbing.
+    func toggleStabilizeCallAudio() {
+        stabilizeCallAudio.toggle()
+        if stabilizeCallAudio {
+            captureStabilizedDevices()
+            startStabilizeTimer()
+        } else {
+            stopStabilizeTimer()
+            stabilizeWarning = nil
+        }
+        userDefaults.set(stabilizeCallAudio, forKey: stabilizeCallAudioKey)
+    }
+
+    private func captureStabilizedDevices() {
+        stabilizedOutputUID = outputDevices.first(where: { $0.id == currentOutputDeviceID })?.uid
+        stabilizedInputUID = inputDevices.first(where: { $0.id == currentInputDeviceID })?.uid
+        stabilizeOutputCorrections = []
+        stabilizeInputCorrections = []
+        stabilizeOutputBackedOff = false
+        stabilizeInputBackedOff = false
+        stabilizeWarning = nil
+        saveStabilize()
+    }
+
+    private func startStabilizeTimer() {
+        stabilizeTimer?.invalidate()
+        stabilizeTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.enforceStabilize()
+            }
+        }
+    }
+
+    private func stopStabilizeTimer() {
+        stabilizeTimer?.invalidate()
+        stabilizeTimer = nil
+    }
+
+    private func enforceStabilize() {
+        guard stabilizeCallAudio else { return }
+        let now = Date()
+        if !stabilizeOutputBackedOff, let uid = stabilizedOutputUID,
+           let device = AudioDeviceController.device(withUID: uid, for: .output),
+           AudioDeviceController.defaultDeviceID(for: .output) != device.id {
+            AudioDeviceController.setDefaultDevice(device.id, for: .output)
+            currentOutputDeviceID = device.id
+            stabilizeOutputCorrections.append(now)
+            stabilizeOutputCorrections = stabilizeOutputCorrections.filter { now.timeIntervalSince($0) < 10 }
+            if stabilizeOutputCorrections.count >= 4 {
+                stabilizeOutputBackedOff = true
+                stabilizeWarning = "An app keeps changing your output — AudioBar stopped fighting it. Set the output inside that app instead."
+            }
+        }
+        if !stabilizeInputBackedOff, let uid = stabilizedInputUID,
+           let device = AudioDeviceController.device(withUID: uid, for: .input),
+           AudioDeviceController.defaultDeviceID(for: .input) != device.id {
+            AudioDeviceController.setDefaultDevice(device.id, for: .input)
+            currentInputDeviceID = device.id
+            stabilizeInputCorrections.append(now)
+            stabilizeInputCorrections = stabilizeInputCorrections.filter { now.timeIntervalSince($0) < 10 }
+            if stabilizeInputCorrections.count >= 4 {
+                stabilizeInputBackedOff = true
+                stabilizeWarning = "An app keeps changing your microphone — AudioBar stopped fighting it. Set the mic inside that app instead."
+            }
+        }
+    }
+
+    private func saveStabilize() {
+        userDefaults.set(stabilizedOutputUID, forKey: stabilizedOutputUIDKey)
+        userDefaults.set(stabilizedInputUID, forKey: stabilizedInputUIDKey)
     }
 
     func hideSource(_ process: AudioProcess) {

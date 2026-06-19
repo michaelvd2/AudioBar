@@ -15,6 +15,14 @@ struct AudioPopoverView: View {
             }
             .background(Color.primary.opacity(0.05))
             Divider()
+            if let warning = store.outputQualityWarning {
+                WarningBanner(text: warning, actionTitle: "Use built-in mic", action: { store.useBuiltInMic() })
+                Divider()
+            }
+            if let warning = store.stabilizeWarning {
+                WarningBanner(text: warning)
+                Divider()
+            }
             if store.needsFirstUseSetup {
                 FirstUseSetupView(store: store)
                 Divider()
@@ -290,6 +298,35 @@ private struct SourceSettingsView: View {
             .padding(.vertical, 9)
             .help("Open AudioBar automatically when you sign in")
 
+            HStack(spacing: 10) {
+                Image(systemName: "lock.shield")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(store.stabilizeCallAudio ? Color.accentColor : .secondary)
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Stabilize call audio")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Hold output & mic if an app switches them mid-call")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Spacer()
+
+                Toggle("Stabilize call audio", isOn: Binding(
+                    get: { store.stabilizeCallAudio },
+                    set: { _ in store.toggleStabilizeCallAudio() }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .help("Remembers your current output and microphone and snaps them back if an app changes them during a call")
+
             if !store.hiddenSources.isEmpty {
                 DisclosureGroup(isExpanded: $isExpanded) {
                     VStack(spacing: 0) {
@@ -465,6 +502,36 @@ private struct CaptureStripView: View {
     }
 }
 
+private struct WarningBanner: View {
+    let text: String
+    var actionTitle: String?
+    var action: (() -> Void)?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(.orange)
+                .offset(y: 1)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(text)
+                    .font(.caption)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let actionTitle, let action {
+                    Button(actionTitle, action: action)
+                        .font(.caption2)
+                        .buttonStyle(.borderless)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.12))
+    }
+}
+
 private struct DeviceMenu: View {
     @ObservedObject var store: AudioProcessStore
     let scope: AudioDeviceScope
@@ -484,13 +551,13 @@ private struct DeviceMenu: View {
     private var deviceIcon: String {
         if scope == .input { return "mic.fill" }
         let name = currentName.lowercased()
-        if name.contains("airpod") || name.contains("headphone") || name.contains("buds") {
+        if name.contains("airpod") || name.contains("headphone") || name.contains("buds") || name.contains("beats") {
             return "headphones"
         }
         if name.contains("display") || name.contains("monitor") {
             return "display"
         }
-        return "speaker.wave.2.fill"
+        return "hifispeaker.fill"
     }
     private var lockColor: Color {
         switch lockMode {
@@ -542,6 +609,18 @@ private struct DeviceMenu: View {
             if let qualityText {
                 Text(qualityText)
             }
+            if scope == .output {
+                Button {
+                    store.toggleKeepOutputHiFi()
+                } label: {
+                    if store.keepOutputHiFi {
+                        Label("Keep hi-fi (use built-in mic)", systemImage: "checkmark")
+                    } else {
+                        Text("Keep hi-fi (use built-in mic)")
+                    }
+                }
+                Divider()
+            }
             if devices.isEmpty {
                 Text(currentName)
             } else {
@@ -560,9 +639,10 @@ private struct DeviceMenu: View {
         } label: {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: deviceIcon)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(iconColor)
-                    .frame(width: 26, height: 24)
+                    .frame(width: 28, height: 24)
+                    .background(.tertiary.opacity(0.14), in: RoundedRectangle(cornerRadius: 7))
                 if lockMode != .off {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 8, weight: .bold))
