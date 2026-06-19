@@ -14,6 +14,16 @@ public struct AudioDevice: Identifiable, Equatable, Sendable {
     }
 }
 
+public struct AudioOutputFormat: Equatable, Sendable {
+    public let sampleRate: Double
+    public let channels: Int
+
+    public init(sampleRate: Double, channels: Int) {
+        self.sampleRate = sampleRate
+        self.channels = channels
+    }
+}
+
 public enum AudioDeviceScope {
     case output
     case input
@@ -58,6 +68,33 @@ public enum AudioDeviceController {
     /// The currently-present device matching a stable UID, if any.
     public static func device(withUID uid: String, for scope: AudioDeviceScope) -> AudioDevice? {
         devices(for: scope).first { $0.uid == uid }
+    }
+
+    /// Current operating format of the default output device. The sample rate +
+    /// channel count reveal real fidelity (e.g. Bluetooth A2DP 48 kHz stereo vs
+    /// the degraded ~16 kHz mono call/headset profile).
+    public static func currentOutputFormat() -> AudioOutputFormat? {
+        guard let id = defaultDeviceID(for: .output) else {
+            return nil
+        }
+        let channels = channelCount(of: id, scope: kAudioDevicePropertyScopeOutput)
+        guard let rate = nominalSampleRate(of: id), channels > 0 else {
+            return nil
+        }
+        return AudioOutputFormat(sampleRate: rate, channels: channels)
+    }
+
+    private static func nominalSampleRate(of id: AudioDeviceID) -> Double? {
+        var addr = address(kAudioDevicePropertyNominalSampleRate)
+        guard AudioObjectHasProperty(id, &addr) else {
+            return nil
+        }
+        var value: Float64 = 0
+        var size = UInt32(MemoryLayout<Float64>.size)
+        let status = withUnsafeMutableBytes(of: &value) {
+            AudioObjectGetPropertyData(id, &addr, 0, nil, &size, $0.baseAddress!)
+        }
+        return status == noErr ? value : nil
     }
 
     public static func defaultDeviceID(for scope: AudioDeviceScope) -> AudioDeviceID? {

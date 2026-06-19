@@ -54,6 +54,14 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var lockedInputDeviceUID: String?
     @Published private(set) var outputLockMode: DeviceLockMode = .off
     @Published private(set) var inputLockMode: DeviceLockMode = .off
+    @Published private(set) var outputFormat: AudioOutputFormat?
+
+    /// True (and assumed true when unknown) when the output runs at full fidelity.
+    /// Bluetooth call/headset mode drops to ~16 kHz mono, which trips this false.
+    var outputIsHiFi: Bool {
+        guard let outputFormat else { return true }
+        return outputFormat.sampleRate >= 44_100 && outputFormat.channels >= 2
+    }
 
     private var lastOutputLockedDevicePresent = false
     private var lastInputLockedDevicePresent = false
@@ -234,6 +242,7 @@ final class AudioProcessStore: ObservableObject {
         inputDevices = AudioDeviceController.devices(for: .input)
         currentOutputDeviceID = AudioDeviceController.defaultDeviceID(for: .output)
         currentInputDeviceID = AudioDeviceController.defaultDeviceID(for: .input)
+        outputFormat = AudioDeviceController.currentOutputFormat()
     }
 
     func selectOutputDevice(_ device: AudioDevice) {

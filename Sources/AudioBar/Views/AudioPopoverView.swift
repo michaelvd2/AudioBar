@@ -500,6 +500,28 @@ private struct DeviceMenu: View {
         }
     }
 
+    private var iconColor: Color {
+        (scope == .output && !store.outputIsHiFi) ? .orange : .secondary
+    }
+
+    private var qualityText: String? {
+        guard scope == .output, let format = store.outputFormat else { return nil }
+        let khz = format.sampleRate / 1000
+        let khzText = khz == khz.rounded() ? String(format: "%.0f", khz) : String(format: "%.1f", khz)
+        let channelText = format.channels >= 2 ? "\(format.channels) ch" : "mono"
+        return "\(khzText) kHz · \(channelText) · \(store.outputIsHiFi ? "Hi-Fi" : "reduced quality")"
+    }
+
+    private var deviceSelection: Binding<AudioDeviceID?> {
+        Binding(
+            get: { currentID },
+            set: { newID in
+                guard let newID, let device = devices.first(where: { $0.id == newID }) else { return }
+                select(device)
+            }
+        )
+    }
+
     private func select(_ device: AudioDevice) {
         if scope == .output {
             store.selectOutputDevice(device)
@@ -517,20 +539,19 @@ private struct DeviceMenu: View {
 
     var body: some View {
         Menu {
+            if let qualityText {
+                Text(qualityText)
+            }
             if devices.isEmpty {
                 Text(currentName)
             } else {
-                ForEach(devices) { device in
-                    Button {
-                        select(device)
-                    } label: {
-                        if device.id == currentID {
-                            Label(device.name, systemImage: "checkmark")
-                        } else {
-                            Text(device.name)
-                        }
+                Picker("Device", selection: deviceSelection) {
+                    ForEach(devices) { device in
+                        Text(device.name).tag(Optional(device.id))
                     }
                 }
+                .pickerStyle(.inline)
+                .labelsHidden()
             }
             Divider()
             lockItem("Don’t keep", mode: .off)
@@ -540,7 +561,7 @@ private struct DeviceMenu: View {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: deviceIcon)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(iconColor)
                     .frame(width: 26, height: 24)
                 if lockMode != .off {
                     Image(systemName: "lock.fill")
