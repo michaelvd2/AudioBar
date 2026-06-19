@@ -478,9 +478,9 @@ final class AudioProcessStore: ObservableObject {
             currentOutputDeviceID = device.id
             stabilizeOutputCorrections.append(now)
             stabilizeOutputCorrections = stabilizeOutputCorrections.filter { now.timeIntervalSince($0) < 10 }
-            if stabilizeOutputCorrections.count >= 4 {
+            if stabilizeOutputCorrections.count >= 3 {
                 stabilizeOutputBackedOff = true
-                stabilizeWarning = "An app keeps changing your output — AudioBar stopped fighting it. Set the output inside that app instead."
+                stabilizeWarning = "Your output kept changing — AudioBar stopped re-asserting it. Pick it again here to re-lock."
             }
         }
         if !stabilizeInputBackedOff, let uid = stabilizedInputUID,
@@ -490,9 +490,9 @@ final class AudioProcessStore: ObservableObject {
             currentInputDeviceID = device.id
             stabilizeInputCorrections.append(now)
             stabilizeInputCorrections = stabilizeInputCorrections.filter { now.timeIntervalSince($0) < 10 }
-            if stabilizeInputCorrections.count >= 4 {
+            if stabilizeInputCorrections.count >= 3 {
                 stabilizeInputBackedOff = true
-                stabilizeWarning = "An app keeps changing your microphone — AudioBar stopped fighting it. Set the mic inside that app instead."
+                stabilizeWarning = "Your microphone kept changing — AudioBar stopped re-asserting it. Pick it again here to re-lock."
             }
         }
     }
