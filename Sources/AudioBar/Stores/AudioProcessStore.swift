@@ -2,6 +2,7 @@ import AppKit
 import AudioBarCore
 import ApplicationServices
 import Combine
+import CoreAudio
 import CoreGraphics
 import Foundation
 import OSLog
@@ -20,6 +21,16 @@ struct HiddenAudioSource: Equatable, Identifiable {
     let name: String
 }
 
+/// How aggressively AudioBar holds a chosen output/input device.
+/// - off: no enforcement.
+/// - soft: re-select the device only when it reconnects; a manual switch always wins.
+/// - strict: always re-assert it (apps and manual changes get reverted).
+enum DeviceLockMode: String {
+    case off
+    case soft
+    case strict
+}
+
 @MainActor
 final class AudioProcessStore: ObservableObject {
     @Published private(set) var processes: [AudioProcess] = []
@@ -35,6 +46,17 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var hiddenSources: [HiddenAudioSource]
     @Published private(set) var sourceBalances: [String: Int]
     @Published private(set) var monoSourceIDs: Set<String>
+    @Published private(set) var outputDevices: [AudioDevice] = []
+    @Published private(set) var inputDevices: [AudioDevice] = []
+    @Published private(set) var currentOutputDeviceID: AudioDeviceID?
+    @Published private(set) var currentInputDeviceID: AudioDeviceID?
+    @Published private(set) var lockedOutputDeviceUID: String?
+    @Published private(set) var lockedInputDeviceUID: String?
+    @Published private(set) var outputLockMode: DeviceLockMode = .off
+    @Published private(set) var inputLockMode: DeviceLockMode = .off
+
+    private var lastOutputLockedDevicePresent = false
+    private var lastInputLockedDevicePresent = false
 
     private let provider: AudioProcessProviding
     private let volumeController: AppVolumeControlling
@@ -55,6 +77,10 @@ final class AudioProcessStore: ObservableObject {
     private let monoSourceIDsKey = "AudioBar.monoSourceIDs"
     private let hiddenSourcesKey = "AudioBar.hiddenSources"
     private let firstUseSetupCompletedKey = "AudioBar.firstUseSetupCompleted"
+    private let lockedOutputDeviceUIDKey = "AudioBar.lockedOutputDeviceUID"
+    private let lockedInputDeviceUIDKey = "AudioBar.lockedInputDeviceUID"
+    private let outputLockModeKey = "AudioBar.outputLockMode"
+    private let inputLockModeKey = "AudioBar.inputLockMode"
     private var processCache: AudioProcessListCache
     private var hiddenSourceNames: [String: String]
     private var playbackStateOverrides: [String: Bool] = [:]
@@ -94,6 +120,10 @@ final class AudioProcessStore: ObservableObject {
         self.processCache = AudioProcessListCache(
             persistedVolumes: Self.loadSourceVolumes(from: userDefaults, key: sourceVolumesKey)
         )
+        self.lockedOutputDeviceUID = userDefaults.string(forKey: lockedOutputDeviceUIDKey)
+        self.lockedInputDeviceUID = userDefaults.string(forKey: lockedInputDeviceUIDKey)
+        self.outputLockMode = userDefaults.string(forKey: outputLockModeKey).flatMap(DeviceLockMode.init) ?? .off
+        self.inputLockMode = userDefaults.string(forKey: inputLockModeKey).flatMap(DeviceLockMode.init) ?? .off
     }
 
     deinit {
@@ -194,7 +224,100 @@ final class AudioProcessStore: ObservableObject {
         applySafariMediaEQFallbackIfNeeded(for: nextProcesses)
         lastRefreshDate = Date()
         statusMessage = activeProcesses.isEmpty ? "No active output detected" : "\(activeProcesses.count) active"
+        refreshAudioDevices()
+        enforceDeviceLocks()
         isRefreshing = false
+    }
+
+    func refreshAudioDevices() {
+        outputDevices = AudioDeviceController.devices(for: .output)
+        inputDevices = AudioDeviceController.devices(for: .input)
+        currentOutputDeviceID = AudioDeviceController.defaultDeviceID(for: .output)
+        currentInputDeviceID = AudioDeviceController.defaultDeviceID(for: .input)
+    }
+
+    func selectOutputDevice(_ device: AudioDevice) {
+        guard AudioDeviceController.setDefaultDevice(device.id, for: .output) else {
+            return
+        }
+        currentOutputDeviceID = device.id
+        // An explicit pick moves the lock to the chosen device.
+        if outputLockMode != .off {
+            lockedOutputDeviceUID = device.uid
+            lastOutputLockedDevicePresent = true
+            saveDeviceLocks()
+        }
+    }
+
+    func selectInputDevice(_ device: AudioDevice) {
+        guard AudioDeviceController.setDefaultDevice(device.id, for: .input) else {
+            return
+        }
+        currentInputDeviceID = device.id
+        if inputLockMode != .off {
+            lockedInputDeviceUID = device.uid
+            lastInputLockedDevicePresent = true
+            saveDeviceLocks()
+        }
+    }
+
+    func setOutputLock(_ mode: DeviceLockMode) {
+        outputLockMode = mode
+        if mode == .off {
+            lockedOutputDeviceUID = nil
+        } else {
+            lockedOutputDeviceUID = outputDevices.first(where: { $0.id == currentOutputDeviceID })?.uid
+            lastOutputLockedDevicePresent = true
+        }
+        saveDeviceLocks()
+    }
+
+    func setInputLock(_ mode: DeviceLockMode) {
+        inputLockMode = mode
+        if mode == .off {
+            lockedInputDeviceUID = nil
+        } else {
+            lockedInputDeviceUID = inputDevices.first(where: { $0.id == currentInputDeviceID })?.uid
+            lastInputLockedDevicePresent = true
+        }
+        saveDeviceLocks()
+    }
+
+    /// soft → re-select the locked device only when it (re)appears; a manual
+    /// switch to another present device wins. strict → always re-assert it.
+    private func enforceDeviceLocks() {
+        if outputLockMode != .off, let uid = lockedOutputDeviceUID {
+            let locked = AudioDeviceController.device(withUID: uid, for: .output)
+            let present = locked != nil
+            if let locked, AudioDeviceController.defaultDeviceID(for: .output) != locked.id,
+               outputLockMode == .strict || (present && !lastOutputLockedDevicePresent) {
+                AudioDeviceController.setDefaultDevice(locked.id, for: .output)
+                currentOutputDeviceID = locked.id
+            }
+            lastOutputLockedDevicePresent = present
+        } else {
+            lastOutputLockedDevicePresent = false
+        }
+
+        if inputLockMode != .off, let uid = lockedInputDeviceUID {
+            let locked = AudioDeviceController.device(withUID: uid, for: .input)
+            let present = locked != nil
+            if let locked, AudioDeviceController.defaultDeviceID(for: .input) != locked.id,
+               inputLockMode == .strict || (present && !lastInputLockedDevicePresent) {
+                AudioDeviceController.setDefaultDevice(locked.id, for: .input)
+                currentInputDeviceID = locked.id
+            }
+            lastInputLockedDevicePresent = present
+        } else {
+            lastInputLockedDevicePresent = false
+        }
+    }
+
+    private func saveDeviceLocks() {
+        userDefaults.set(lockedOutputDeviceUID, forKey: lockedOutputDeviceUIDKey)
+        userDefaults.set(lockedInputDeviceUID, forKey: lockedInputDeviceUIDKey)
+        userDefaults.set(outputLockMode.rawValue, forKey: outputLockModeKey)
+        userDefaults.set(inputLockMode.rawValue, forKey: inputLockModeKey)
     }
 
     func hideSource(_ process: AudioProcess) {

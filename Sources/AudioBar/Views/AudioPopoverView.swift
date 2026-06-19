@@ -1,5 +1,6 @@
 import AppKit
 import AudioBarCore
+import CoreAudio
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -45,6 +46,9 @@ struct AudioPopoverView: View {
             }
 
             Spacer()
+
+            DeviceMenu(store: store, scope: .output)
+            DeviceMenu(store: store, scope: .input)
 
             Button {
                 store.refresh()
@@ -458,6 +462,122 @@ private struct CaptureStripView: View {
         .padding(.horizontal, 14)
         .padding(.top, 2)
         .padding(.bottom, 11)
+    }
+}
+
+private struct DeviceMenu: View {
+    @ObservedObject var store: AudioProcessStore
+    let scope: AudioDeviceScope
+
+    private var devices: [AudioDevice] {
+        scope == .output ? store.outputDevices : store.inputDevices
+    }
+    private var currentID: AudioDeviceID? {
+        scope == .output ? store.currentOutputDeviceID : store.currentInputDeviceID
+    }
+    private var lockMode: DeviceLockMode {
+        scope == .output ? store.outputLockMode : store.inputLockMode
+    }
+    private var currentName: String {
+        devices.first(where: { $0.id == currentID })?.name ?? (scope == .output ? "No output" : "No input")
+    }
+    private var deviceIcon: String {
+        if scope == .input { return "mic.fill" }
+        let name = currentName.lowercased()
+        if name.contains("airpod") || name.contains("headphone") || name.contains("buds") {
+            return "headphones"
+        }
+        if name.contains("display") || name.contains("monitor") {
+            return "display"
+        }
+        return "speaker.wave.2.fill"
+    }
+    private var lockColor: Color {
+        switch lockMode {
+        case .off: return .clear
+        case .soft: return .accentColor
+        case .strict: return .red
+        }
+    }
+
+    private func select(_ device: AudioDevice) {
+        if scope == .output {
+            store.selectOutputDevice(device)
+        } else {
+            store.selectInputDevice(device)
+        }
+    }
+    private func setLock(_ mode: DeviceLockMode) {
+        if scope == .output {
+            store.setOutputLock(mode)
+        } else {
+            store.setInputLock(mode)
+        }
+    }
+
+    var body: some View {
+        Menu {
+            if devices.isEmpty {
+                Text(currentName)
+            } else {
+                ForEach(devices) { device in
+                    Button {
+                        select(device)
+                    } label: {
+                        if device.id == currentID {
+                            Label(device.name, systemImage: "checkmark")
+                        } else {
+                            Text(device.name)
+                        }
+                    }
+                }
+            }
+            Divider()
+            lockItem("Don’t keep", mode: .off)
+            lockItem("Keep — re-select when it reconnects", mode: .soft)
+            lockItem("Strict — block apps & manual changes", mode: .strict)
+        } label: {
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: deviceIcon)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 26, height: 24)
+                if lockMode != .off {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(lockColor)
+                        .padding(1.5)
+                        .background(Color(nsColor: .windowBackgroundColor), in: Circle())
+                        .offset(x: 3, y: 2)
+                }
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(helpText)
+    }
+
+    @ViewBuilder
+    private func lockItem(_ title: String, mode: DeviceLockMode) -> some View {
+        Button {
+            setLock(mode)
+        } label: {
+            if lockMode == mode {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
+    }
+
+    private var helpText: String {
+        let kind = scope == .output ? "Output" : "Input"
+        switch lockMode {
+        case .off: return "\(kind): \(currentName)"
+        case .soft: return "\(kind): \(currentName) — kept (re-selected on reconnect)"
+        case .strict: return "\(kind): \(currentName) — strict lock (overrides everything)"
+        }
     }
 }
 
