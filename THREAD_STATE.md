@@ -1,38 +1,34 @@
-# EQ Route Dropout
+# AudioBar App Store Page Refresh
 
 ## State
 
 - Owner: Codex
 - Repo: AudioBar
-- Worktree: `/Users/michaelvandijk/.config/superpowers/worktrees/AudioBar/track-navigation-controls`
-- Branch: `v2/stereo-lr`
-- Base observed: `de34f8c` (`Redesign AudioBar popover UI (v2)`)
-- Current EQ candidate accepted for local commit after live Bluetooth/system-sound validation.
-- Dirty state before commit: `Sources/AudioBarCore/SystemEQEngine.swift`, `Tests/AudioBarCoreTests/SystemEQEngineTests.swift`, this state file, `artifacts/eq-route-dropout-report.md`; unrelated `Sources/AudioBar/Views/AudioPopoverView.swift` is also dirty and should not be included in the EQ commit; pre-existing `tmp/` remains untracked.
+- Worktree: `/Users/michaelvandijk/Developer/AudioBar`
+- Branch: `main`
+- Base observed: `01cc8c9` (`Green redesign source tests`)
+- Current scope: public landing page copy and screenshot assets for the v2 source controls/EQ view.
+- Dirty tracked files: `docs/index.html`, eight screenshot PNG assets under `docs/assets/`.
+- Existing untracked files left untouched: `THREAD_STATE.premerge-backup.md`, `docs/app-store-readiness-2026-06-10.md`, `tmp/`.
 
 ## Goal
 
-Remove the audible Bluetooth EQ dropout/gain drop caused by transient source-list churn on the CoreAudio EQ route.
+Update the public page first so Michael can judge whether the app is App Store v2 ready.
 
-## Decision
+## Delta
 
-Rejected candidate: deferring `restartLocked(settings:)` when the dedicated source set changes. Live validation reported a gain drop again, likely because desired source metadata diverged from the already-created tap/aggregate layout.
-
-Current candidate: keep `restartLocked(settings:)` for real dedicated-tap changes, but remove Bluetooth's `keepsAvailableSourcesDedicated` behavior so ordinary active/transient sources do not become dedicated taps merely because the output device is Bluetooth. Dedicated taps are now only for non-default source controls: volume below full, non-centered balance, or mono.
+- Replaced stale page and App Store screenshots with clean public-facing assets showing per-source volume, L/R balance, mono/stereo controls, track controls, system stream meter, custom vertical EQ sliders, hidden sources, and footer permission state.
+- Updated `docs/index.html` title, metadata, feature list, hero text, gallery alt text, captions, and install notes to match the current v2 UI.
+- Corrected the App Store badge image dimensions in HTML to match the SVG's intrinsic 120x40 size; CSS still displays the badge at 132px wide.
 
 ## Evidence
 
-- Red test first for current candidate: `swift test --filter SystemEQEngineTests` failed before production edit with failures proving the deferred-rebuild mutation was still present and Bluetooth still dedicated every available source.
-- EQ suite after current candidate: `swift test --filter SystemEQEngineTests` passed, 21 tests.
-- Fresh EQ suite before commit: `swift test --filter SystemEQEngineTests` passed, 21 tests.
-- Fresh build before commit: `swift build` passed.
-- Live validation: Michael reported another system sound came in and the Bluetooth output sounded fine.
-- Previous full suite result: `swift test` failed with 23 existing `AudioPopoverViewSourceTests` redesign-stale failures.
-
-## Caveats
-
-- `script/build_and_run.sh run` was not used because it starts with `pkill -x AudioBar`, which could kill an active app session.
+- Static asset check passed: every `docs/index.html` image exists, dimensions match, and JSON-LD parses.
+- Screenshot dimensions confirmed with `sips`: App Store assets are 2880x1800; website gallery assets are 1080x620, 1160x615, and 1600x1000; raw popover assets are 860x1068 and 864x1058.
+- `swift test` passed: 165 tests, 0 failures.
+- `swift build` passed.
+- In-app Browser refused direct `file://` page navigation under URL policy, so no browser render workaround was attempted.
 
 ## Next
 
-Commit only the scoped engine/test/state/report changes; keep the dirty popover view and stale popover tests as separate work.
+Michael reviews `/Users/michaelvandijk/Developer/AudioBar/docs/index.html` and the refreshed screenshot assets; if accepted, commit and then decide the App Store v2 submission/update lane.
