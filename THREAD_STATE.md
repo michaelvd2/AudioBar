@@ -6,9 +6,10 @@
 - Repo: AudioBar
 - Worktree: `/Users/michaelvandijk/Developer/AudioBar`
 - Branch: `main`
-- Current local HEAD before final screenshot commit: `4be33e2` (`Merge remote-tracking branch 'origin/v2/stereo-lr'`)
+- Current local HEAD: `ec2c53c` (`Refresh screenshots for final v2 UI`)
 - Integrated branch: `origin/v2/stereo-lr` at `11a13e5`
 - Local page-refresh checkpoint: `da50c00` (`Refresh App Store page for v2 UI`)
+- Local v2 merge checkpoint: `4be33e2` (`Merge remote-tracking branch 'origin/v2/stereo-lr'`)
 - Existing untracked files left untouched: `THREAD_STATE.premerge-backup.md`, `docs/app-store-readiness-2026-06-10.md`, `tmp/`.
 
 ## Goal
@@ -23,8 +24,13 @@ Prepare the combined v2 app/page state so Michael can decide whether it is App S
   - `dfe9d65` source mute button and stable marquee.
   - `dc720f4` 4pt volume/balance tracks.
   - `0a072f1` accent-filled slider family and EQ 0 dB center-fill.
+- Committed the final screenshot/page refresh as `ec2c53c`.
 - Re-shot public-facing App Store and website screenshots against the final combined UI: mute icon, accent fills, EQ center-fill, and Safari source naming.
 - Updated `docs/index.html` copy, metadata, alt text, captions, and feature bullets for quick mute, accent fills, Safari media, and final EQ/source controls.
+- Bumped release metadata for the v2 lane:
+  - Developer ID release script: `APP_VERSION=0.2.0`, `BUILD_NUMBER=9`.
+  - App Store package and local smoke scripts: `APP_VERSION=0.2.0`, `APP_BUILD=10`.
+  - Website direct-download URL and JSON-LD software version: `v0.2.0`.
 
 ## Evidence
 
@@ -36,13 +42,14 @@ Prepare the combined v2 app/page state so Michael can decide whether it is App S
 - Visual spot checks inspected the website overview, source crop, and EQ crop.
 - `swift test` passed: 165 tests, 0 failures.
 - `swift build` passed.
+- `swift test --filter ReleasePackagingScriptTests` passed after the `0.2.0` metadata bump.
+- Static page asset check passed after the `0.2.0` metadata bump: every local image exists, declared dimensions match, and JSON-LD parses with softwareVersion `0.2.0`.
 - In-app Browser refused direct `file://` page navigation under URL policy earlier; no browser-render workaround was attempted.
 
 ## Risks / Caveats
 
-- Current public direct-download metadata still points at `v0.1.7`; tagging or release artifact/version bump for `v0.2.0` has not been finalized in this interrupted slice.
 - No push/tag has been performed in this continuation yet.
 
 ## Next
 
-Commit the final screenshot/page refresh, inspect final status/log, then decide whether the now-green combined local `main` should be tagged `v0.2.0` and pushed.
+Run full `swift test` and `swift build` after the `0.2.0` metadata bump, commit the intended metadata changes if green, inspect final status/log, then decide whether local `main` should be tagged `v0.2.0` and pushed.

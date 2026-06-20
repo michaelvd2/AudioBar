@@ -31,8 +31,8 @@ final class ReleasePackagingScriptTests: XCTestCase {
     func testReleasePackagingCarriesCurrentBundleVersion() throws {
         let script = try String(contentsOf: packageReleaseScriptURL(), encoding: .utf8)
 
-        XCTAssertTrue(script.contains("APP_VERSION=\"0.1.7\""))
-        XCTAssertTrue(script.contains("BUILD_NUMBER=\"8\""))
+        XCTAssertTrue(script.contains("APP_VERSION=\"0.2.0\""))
+        XCTAssertTrue(script.contains("BUILD_NUMBER=\"9\""))
         XCTAssertTrue(script.contains("CFBundleShortVersionString"))
         XCTAssertTrue(script.contains("<string>$APP_VERSION</string>"))
         XCTAssertTrue(script.contains("CFBundleVersion"))
@@ -42,7 +42,8 @@ final class ReleasePackagingScriptTests: XCTestCase {
     func testDownloadPageLinksToCurrentRelease() throws {
         let page = try String(contentsOf: docsIndexURL(), encoding: .utf8)
 
-        XCTAssertTrue(page.contains("/releases/download/v0.1.7/AudioBar-notarized.zip"))
+        XCTAssertTrue(page.contains("/releases/download/v0.2.0/AudioBar-notarized.zip"))
+        XCTAssertFalse(page.contains("/releases/download/v0.1.7/AudioBar-notarized.zip"))
         XCTAssertFalse(page.contains("/releases/download/v0.1.6/AudioBar-notarized.zip"))
     }
 
@@ -91,9 +92,9 @@ final class ReleasePackagingScriptTests: XCTestCase {
         let script = try String(contentsOf: appStorePackageScriptURL(), encoding: .utf8)
 
         XCTAssertTrue(script.contains("CFBundleShortVersionString"))
-        XCTAssertTrue(script.contains("APP_VERSION=\"${APP_VERSION:-0.1.7}\""))
+        XCTAssertTrue(script.contains("APP_VERSION=\"${APP_VERSION:-0.2.0}\""))
         XCTAssertTrue(script.contains("CFBundleVersion"))
-        XCTAssertTrue(script.contains("APP_BUILD=\"${APP_BUILD:-9}\""))
+        XCTAssertTrue(script.contains("APP_BUILD=\"${APP_BUILD:-10}\""))
         XCTAssertTrue(script.contains("LSMinimumSystemVersion"))
         XCTAssertTrue(script.contains("MIN_SYSTEM_VERSION=\"14.2\""))
         XCTAssertTrue(script.contains("CFBundleDisplayName"))
@@ -156,8 +157,8 @@ final class ReleasePackagingScriptTests: XCTestCase {
         let script = try String(contentsOf: localAppStoreSmokeScriptURL(), encoding: .utf8)
 
         XCTAssertTrue(script.contains("-DAPP_STORE"))
-        XCTAssertTrue(script.contains("APP_VERSION=\"${APP_VERSION:-0.1.7}\""))
-        XCTAssertTrue(script.contains("APP_BUILD=\"${APP_BUILD:-8}\""))
+        XCTAssertTrue(script.contains("APP_VERSION=\"${APP_VERSION:-0.2.0}\""))
+        XCTAssertTrue(script.contains("APP_BUILD=\"${APP_BUILD:-10}\""))
         XCTAssertTrue(script.contains("MIN_SYSTEM_VERSION=\"14.2\""))
         XCTAssertTrue(script.contains("Resources/AudioBar-AppStore.entitlements"))
         XCTAssertTrue(script.contains("docs/assets/audiobar-app-icon.png"))
