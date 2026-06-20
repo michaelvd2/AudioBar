@@ -2,6 +2,7 @@ import AppKit
 import AudioBarCore
 import ApplicationServices
 import Combine
+import CoreAudio
 import CoreGraphics
 import Foundation
 import OSLog
@@ -35,6 +36,33 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var hiddenSources: [HiddenAudioSource]
     @Published private(set) var sourceBalances: [String: Int]
     @Published private(set) var monoSourceIDs: Set<String>
+    @Published private(set) var outputDevices: [AudioDevice] = []
+    @Published private(set) var inputDevices: [AudioDevice] = []
+    @Published private(set) var currentOutputDeviceID: AudioDeviceID?
+    @Published private(set) var currentInputDeviceID: AudioDeviceID?
+    @Published private(set) var outputFormat: AudioOutputFormat?
+    @Published private(set) var microphoneHolders: [String] = []
+    @Published private(set) var stabilizeCallAudio = false
+    @Published private(set) var stabilizeWarning: String?
+
+    /// True (and assumed true when unknown) when the output runs at full fidelity.
+    /// Bluetooth call/headset mode drops to ~16 kHz mono, which trips this false.
+    var outputIsHiFi: Bool {
+        guard let outputFormat else { return true }
+        return outputFormat.sampleRate >= 44_100 && outputFormat.channels >= 2
+    }
+
+    /// Set when the output is degraded AND an app is holding the mic — i.e. a
+    /// Bluetooth device forced into call/headset mode. Names the culprit.
+    var outputQualityWarning: String? {
+        guard !outputIsHiFi, let outputFormat, !microphoneHolders.isEmpty else {
+            return nil
+        }
+        let who = ListFormatter.localizedString(byJoining: microphoneHolders)
+        let khz = Int((outputFormat.sampleRate / 1000).rounded())
+        return "\(who) is using the mic — forcing call quality (\(khz) kHz). Switch its input off these headphones for hi-fi."
+    }
+
 
     private let provider: AudioProcessProviding
     private let volumeController: AppVolumeControlling
@@ -48,6 +76,13 @@ final class AudioProcessStore: ObservableObject {
     private let userDefaults: UserDefaults
     private var timer: Timer?
     private var streamTimer: Timer?
+    private var stabilizeTimer: Timer?
+    private var stabilizedOutputUID: String?
+    private var stabilizedInputUID: String?
+    private var stabilizeOutputCorrections: [Date] = []
+    private var stabilizeInputCorrections: [Date] = []
+    private var stabilizeOutputBackedOff = false
+    private var stabilizeInputBackedOff = false
     private let eqSettingsKey = "AudioBar.eqSettings"
     private let savedEQPresetsKey = "AudioBar.savedEQPresets"
     private let sourceVolumesKey = "AudioBar.sourceVolumes"
@@ -55,6 +90,9 @@ final class AudioProcessStore: ObservableObject {
     private let monoSourceIDsKey = "AudioBar.monoSourceIDs"
     private let hiddenSourcesKey = "AudioBar.hiddenSources"
     private let firstUseSetupCompletedKey = "AudioBar.firstUseSetupCompleted"
+    private let stabilizeCallAudioKey = "AudioBar.stabilizeCallAudio"
+    private let stabilizedOutputUIDKey = "AudioBar.stabilizedOutputUID"
+    private let stabilizedInputUIDKey = "AudioBar.stabilizedInputUID"
     private var processCache: AudioProcessListCache
     private var hiddenSourceNames: [String: String]
     private var playbackStateOverrides: [String: Bool] = [:]
@@ -94,6 +132,9 @@ final class AudioProcessStore: ObservableObject {
         self.processCache = AudioProcessListCache(
             persistedVolumes: Self.loadSourceVolumes(from: userDefaults, key: sourceVolumesKey)
         )
+        self.stabilizeCallAudio = userDefaults.bool(forKey: stabilizeCallAudioKey)
+        self.stabilizedOutputUID = userDefaults.string(forKey: stabilizedOutputUIDKey)
+        self.stabilizedInputUID = userDefaults.string(forKey: stabilizedInputUIDKey)
     }
 
     deinit {
@@ -117,6 +158,9 @@ final class AudioProcessStore: ObservableObject {
             Task { @MainActor in
                 self?.refresh()
             }
+        }
+        if stabilizeCallAudio {
+            startStabilizeTimer()
         }
         streamTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -194,7 +238,147 @@ final class AudioProcessStore: ObservableObject {
         applySafariMediaEQFallbackIfNeeded(for: nextProcesses)
         lastRefreshDate = Date()
         statusMessage = activeProcesses.isEmpty ? "No active output detected" : "\(activeProcesses.count) active"
+        refreshAudioDevices()
         isRefreshing = false
+    }
+
+    func refreshAudioDevices() {
+        outputDevices = AudioDeviceController.devices(for: .output)
+        inputDevices = AudioDeviceController.devices(for: .input)
+        currentOutputDeviceID = AudioDeviceController.defaultDeviceID(for: .output)
+        currentInputDeviceID = AudioDeviceController.defaultDeviceID(for: .input)
+        outputFormat = AudioDeviceController.currentOutputFormat()
+        microphoneHolders = AudioDeviceController.microphoneHoldingAppNames(
+            excludingBundleID: Bundle.main.bundleIdentifier
+        )
+    }
+
+    func selectOutputDevice(_ device: AudioDevice) {
+        guard AudioDeviceController.setDefaultDevice(device.id, for: .output) else {
+            return
+        }
+        currentOutputDeviceID = device.id
+        if stabilizeCallAudio {
+            stabilizedOutputUID = device.uid
+            stabilizeOutputCorrections = []
+            stabilizeOutputBackedOff = false
+            stabilizeWarning = nil
+            saveStabilize()
+        }
+    }
+
+    func selectInputDevice(_ device: AudioDevice) {
+        guard AudioDeviceController.setDefaultDevice(device.id, for: .input) else {
+            return
+        }
+        currentInputDeviceID = device.id
+        if stabilizeCallAudio {
+            stabilizedInputUID = device.uid
+            stabilizeInputCorrections = []
+            stabilizeInputBackedOff = false
+            stabilizeWarning = nil
+            saveStabilize()
+        }
+    }
+
+    /// Move the default input to the built-in mic, freeing a Bluetooth output
+    /// from call/headset mode. Backs the warning banner's one-click fix.
+    func useBuiltInMic() {
+        guard let mic = AudioDeviceController.builtInInputDevice() else { return }
+        if AudioDeviceController.setDefaultDevice(mic.id, for: .input) {
+            currentInputDeviceID = mic.id
+        }
+    }
+
+    // MARK: - Stabilize call audio
+
+    /// One-tap call stability: remembers the current output + input devices and
+    /// snaps them back the instant Meet/Discord/macOS switches them — with a
+    /// back-off so it won't flicker-fight an app that keeps re-grabbing.
+    func toggleStabilizeCallAudio() {
+        stabilizeCallAudio.toggle()
+        if stabilizeCallAudio {
+            captureStabilizedDevices()
+            startStabilizeTimer()
+        } else {
+            stopStabilizeTimer()
+            stabilizeWarning = nil
+        }
+        userDefaults.set(stabilizeCallAudio, forKey: stabilizeCallAudioKey)
+    }
+
+    private func captureStabilizedDevices() {
+        stabilizedOutputUID = outputDevices.first(where: { $0.id == currentOutputDeviceID })?.uid
+        stabilizedInputUID = inputDevices.first(where: { $0.id == currentInputDeviceID })?.uid
+        stabilizeOutputCorrections = []
+        stabilizeInputCorrections = []
+        stabilizeOutputBackedOff = false
+        stabilizeInputBackedOff = false
+        stabilizeWarning = nil
+        saveStabilize()
+    }
+
+    private func startStabilizeTimer() {
+        stabilizeTimer?.invalidate()
+        stabilizeTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.enforceStabilize()
+            }
+        }
+    }
+
+    private func stopStabilizeTimer() {
+        stabilizeTimer?.invalidate()
+        stabilizeTimer = nil
+    }
+
+    private func enforceStabilize() {
+        guard stabilizeCallAudio else { return }
+        // A held device that disconnected can't be stabilized — drop it.
+        if let uid = stabilizedOutputUID, AudioDeviceController.device(withUID: uid, for: .output) == nil {
+            stabilizedOutputUID = nil
+            saveStabilize()
+        }
+        if let uid = stabilizedInputUID, AudioDeviceController.device(withUID: uid, for: .input) == nil {
+            stabilizedInputUID = nil
+            saveStabilize()
+        }
+        if stabilizedOutputUID == nil, stabilizedInputUID == nil {
+            stabilizeCallAudio = false
+            userDefaults.set(false, forKey: stabilizeCallAudioKey)
+            stopStabilizeTimer()
+            return
+        }
+        let now = Date()
+        if !stabilizeOutputBackedOff, let uid = stabilizedOutputUID,
+           let device = AudioDeviceController.device(withUID: uid, for: .output),
+           AudioDeviceController.defaultDeviceID(for: .output) != device.id {
+            AudioDeviceController.setDefaultDevice(device.id, for: .output)
+            currentOutputDeviceID = device.id
+            stabilizeOutputCorrections.append(now)
+            stabilizeOutputCorrections = stabilizeOutputCorrections.filter { now.timeIntervalSince($0) < 10 }
+            if stabilizeOutputCorrections.count >= 3 {
+                stabilizeOutputBackedOff = true
+                stabilizeWarning = "Your output kept changing — AudioBar stopped re-asserting it. Pick it again here to re-lock."
+            }
+        }
+        if !stabilizeInputBackedOff, let uid = stabilizedInputUID,
+           let device = AudioDeviceController.device(withUID: uid, for: .input),
+           AudioDeviceController.defaultDeviceID(for: .input) != device.id {
+            AudioDeviceController.setDefaultDevice(device.id, for: .input)
+            currentInputDeviceID = device.id
+            stabilizeInputCorrections.append(now)
+            stabilizeInputCorrections = stabilizeInputCorrections.filter { now.timeIntervalSince($0) < 10 }
+            if stabilizeInputCorrections.count >= 3 {
+                stabilizeInputBackedOff = true
+                stabilizeWarning = "Your microphone kept changing — AudioBar stopped re-asserting it. Pick it again here to re-lock."
+            }
+        }
+    }
+
+    private func saveStabilize() {
+        userDefaults.set(stabilizedOutputUID, forKey: stabilizedOutputUIDKey)
+        userDefaults.set(stabilizedInputUID, forKey: stabilizedInputUIDKey)
     }
 
     func hideSource(_ process: AudioProcess) {
@@ -496,6 +680,14 @@ final class AudioProcessStore: ObservableObject {
     }
 
     private func updateEQStreamSnapshot() {
+        // Drives the engine's liveness watchdog: if the muting route has gone
+        // dead it tears down (un-muting the system) and rebuilds, so a device
+        // change can't leave the whole Mac silent until relaunch.
+        eqEngine.recoverIfRouteStalled()
+        let engineStatus = eqEngine.status
+        if engineStatus != eqEngineStatus {
+            eqEngineStatus = engineStatus
+        }
         eqStreamSnapshot = eqEngine.streamSnapshot
     }
 

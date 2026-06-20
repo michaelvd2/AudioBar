@@ -1,5 +1,6 @@
 import AppKit
 import AudioBarCore
+import CoreAudio
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -14,6 +15,14 @@ struct AudioPopoverView: View {
             }
             .background(Color.primary.opacity(0.05))
             Divider()
+            if let warning = store.outputQualityWarning {
+                WarningBanner(text: warning, actionTitle: "Use built-in mic", action: { store.useBuiltInMic() })
+                Divider()
+            }
+            if let warning = store.stabilizeWarning {
+                WarningBanner(text: warning)
+                Divider()
+            }
             if store.needsFirstUseSetup {
                 FirstUseSetupView(store: store)
                 Divider()
@@ -45,6 +54,9 @@ struct AudioPopoverView: View {
             }
 
             Spacer()
+
+            DeviceMenu(store: store, scope: .output)
+            DeviceMenu(store: store, scope: .input)
 
             Button {
                 store.refresh()
@@ -286,6 +298,35 @@ private struct SourceSettingsView: View {
             .padding(.vertical, 9)
             .help("Open AudioBar automatically when you sign in")
 
+            HStack(spacing: 10) {
+                Image(systemName: "lock.shield")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(store.stabilizeCallAudio ? Color.accentColor : .secondary)
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Lock devices")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Keep output & input from being switched by apps or macOS")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Spacer()
+
+                Toggle("Lock devices", isOn: Binding(
+                    get: { store.stabilizeCallAudio },
+                    set: { _ in store.toggleStabilizeCallAudio() }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .help("Remembers your current output and microphone and snaps them back whenever an app or macOS tries to change them")
+
             if !store.hiddenSources.isEmpty {
                 DisclosureGroup(isExpanded: $isExpanded) {
                     VStack(spacing: 0) {
@@ -458,6 +499,213 @@ private struct CaptureStripView: View {
         .padding(.horizontal, 14)
         .padding(.top, 2)
         .padding(.bottom, 11)
+    }
+}
+
+private struct WarningBanner: View {
+    let text: String
+    var actionTitle: String?
+    var action: (() -> Void)?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(.orange)
+                .offset(y: 1)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(text)
+                    .font(.caption)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let actionTitle, let action {
+                    Button(actionTitle, action: action)
+                        .font(.caption2)
+                        .buttonStyle(.borderless)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.12))
+    }
+}
+
+private struct DeviceMenu: View {
+    @ObservedObject var store: AudioProcessStore
+    let scope: AudioDeviceScope
+
+    private var devices: [AudioDevice] {
+        scope == .output ? store.outputDevices : store.inputDevices
+    }
+    private var currentID: AudioDeviceID? {
+        scope == .output ? store.currentOutputDeviceID : store.currentInputDeviceID
+    }
+    private var currentName: String {
+        devices.first(where: { $0.id == currentID })?.name ?? (scope == .output ? "No output" : "No input")
+    }
+    private var deviceIcon: String { icon(for: currentName) }
+
+    private func icon(for deviceName: String) -> String {
+        let name = deviceName.lowercased()
+        if name.contains("airpods max") { return "airpodsmax" }
+        if name.contains("airpods pro") { return "airpodspro" }
+        if name.contains("airpod") { return "airpods" }
+        if name.contains("beats") || name.contains("headphone") || name.contains("buds") { return "headphones" }
+        if name.contains("ipad") { return "ipad" }
+        if name.contains("iphone") { return "iphone" }
+        if name.contains("display") || name.contains("monitor") || name.contains("tv") { return "display" }
+        if scope == .input { return "mic.fill" }
+        if name.contains("macbook") || name.contains("built-in") { return "laptopcomputer" }
+        return "hifispeaker.fill"
+    }
+
+    // Subtle pastel tint when devices are locked (held against switching).
+    private var chipBackground: Color {
+        store.stabilizeCallAudio ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.12)
+    }
+
+    private var iconColor: Color {
+        (scope == .output && !store.outputIsHiFi) ? .orange : .secondary
+    }
+
+    private var qualityText: String? {
+        guard scope == .output, let format = store.outputFormat else { return nil }
+        let khz = format.sampleRate / 1000
+        let khzText = khz == khz.rounded() ? String(format: "%.0f", khz) : String(format: "%.1f", khz)
+        let channelText = format.channels >= 2 ? "\(format.channels) ch" : "mono"
+        return "\(khzText) kHz · \(channelText) · \(store.outputIsHiFi ? "Hi-Fi" : "reduced quality")"
+    }
+
+    private func select(_ device: AudioDevice) {
+        if scope == .output {
+            store.selectOutputDevice(device)
+        } else {
+            store.selectInputDevice(device)
+        }
+    }
+
+    @State private var isPresenting = false
+
+    var body: some View {
+        Button {
+            isPresenting.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: deviceIcon)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(iconColor)
+                Text(scope == .output ? "out" : "in")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 7)
+            .padding(.vertical, 5)
+            .background(chipBackground, in: RoundedRectangle(cornerRadius: 7))
+            .contentShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .help(helpText)
+        .popover(isPresented: $isPresenting, arrowEdge: .bottom) {
+            devicePicker
+        }
+    }
+
+    // A custom popup (not an NSMenu) so we control the row layout: a fixed-width
+    // circular icon column for even alignment, like the macOS Sound switcher.
+    private var devicePicker: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(scope == .output ? "Output" : "Input")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.top, 4)
+
+            if let qualityText {
+                Text(qualityText)
+                    .font(.system(size: 10))
+                    .foregroundStyle(store.outputIsHiFi ? Color.secondary : .orange)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 2)
+            }
+
+            if devices.isEmpty {
+                Text(currentName)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+            } else {
+                ForEach(devices) { device in
+                    DeviceRow(
+                        name: device.name,
+                        symbol: icon(for: device.name),
+                        isCurrent: device.id == currentID
+                    ) {
+                        select(device)
+                        isPresenting = false
+                    }
+                }
+            }
+        }
+        .padding(6)
+        .frame(width: 252)
+    }
+
+    private var helpText: String {
+        let kind = scope == .output ? "Output" : "Input"
+        let lockNote = store.stabilizeCallAudio ? " — locked" : ""
+        return "\(kind): \(currentName)\(lockNote)"
+    }
+}
+
+/// One row in the device switcher popup: a circular icon badge (accent-filled
+/// when active) in a fixed column so every device name lines up evenly.
+private struct DeviceRow: View {
+    let name: String
+    let symbol: String
+    let isCurrent: Bool
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(isCurrent ? Color.accentColor : Color.secondary.opacity(0.18))
+                    Image(systemName: symbol)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(isCurrent ? Color.white : Color.primary)
+                }
+                .frame(width: 26, height: 26)
+
+                Text(name)
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                    .foregroundStyle(.primary)
+
+                Spacer(minLength: 8)
+
+                if isCurrent {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                hovering ? Color.primary.opacity(0.08) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 7)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 

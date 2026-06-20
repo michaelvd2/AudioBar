@@ -71,6 +71,24 @@ public final class SystemEQEngine: @unchecked Sendable {
     private var didLogIOBufferLayout = false
     private var defaultOutputDeviceChangeToken: AudioObjectPropertyListenerBlock?
 
+    // Liveness watchdog. The global tap mutes the system's real audio and relies
+    // on our IOProc to play the replacement back. If the IOProc dies (e.g. a
+    // default-output-device change leaves the aggregate broken), the route still
+    // reports `.active`, so the whole system stays silent until relaunch. We
+    // stamp every IOProc callback; if callbacks stop arriving while we claim to
+    // be active, we tear the route down (which un-mutes the system) and rebuild.
+    private static let stallThresholdSeconds = 1.0
+    private static let maxStallRecoveryAttempts = 3
+    private static let stallBackoffResetSeconds = 5.0
+    private static let machTimebase: mach_timebase_info_data_t = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return info
+    }()
+    private var lastIOProcMachTime: UInt64 = 0
+    private var lastStallRestartMachTime: UInt64 = 0
+    private var stallRecoveryAttempts = 0
+
     public init() {
         registerDefaultOutputDeviceListener()
     }
@@ -116,6 +134,16 @@ public final class SystemEQEngine: @unchecked Sendable {
         }
 
         updateDedicatedSourceProcessesLocked()
+
+        guard hasActiveProcessing(settings) else {
+            // Nothing to process: don't install the global muting tap at all, so
+            // the system's audio path is entirely untouched. The route is built
+            // on demand the moment EQ or a per-source control becomes active.
+            currentStreamSnapshot = .inactive
+            status = .stopped
+            systemEQLogger.info("System EQ idle — flat/bypassed, no source adjustments; not intercepting system audio")
+            return status
+        }
 
         let muteBehavior = tapMuteBehavior(forOutputDeviceID: outputDeviceID)
         var processObjectIDsForInputBuffers: [AudioObjectID?] = []
@@ -200,13 +228,31 @@ public final class SystemEQEngine: @unchecked Sendable {
             return failLocked("IO start failed (\(operationStatus))")
         }
 
+        // Seed liveness so the watchdog doesn't fire before the first callback.
+        lastIOProcMachTime = mach_absolute_time()
         status = .active
         systemEQLogger.info("System EQ route active; outputDevice=\(outputDeviceUID, privacy: .public) tapCount=\(tapUIDs.count) tapFormat=\(self.formatSummary(tapFormat), privacy: .public)")
         return status
     }
 
     public func update(settings: EQSettings) {
+        lock.lock()
+        defer { lock.unlock() }
+
         processor.update(settings: settings)
+
+        // Engage or release the route as the need for processing changes — so
+        // turning EQ off (or flattening it) tears the muting tap down and hands
+        // audio straight back to the system, and turning it on rebuilds it.
+        if hasActiveProcessing(settings) {
+            if status != .active, status != .starting {
+                _ = start(settings: settings)
+                return
+            }
+        } else if status == .active {
+            stopLocked(updateStatus: true)
+        }
+
         systemEQLogger.info("System EQ settings updated: \(self.settingsSummary(settings), privacy: .public)")
     }
 
@@ -306,6 +352,9 @@ public final class SystemEQEngine: @unchecked Sendable {
         inputData: UnsafePointer<AudioBufferList>?,
         outputData: UnsafeMutablePointer<AudioBufferList>?
     ) {
+        // Liveness heartbeat for the watchdog (plain 64-bit store; the benign
+        // race with the reader is fine for a coarse staleness check).
+        lastIOProcMachTime = mach_absolute_time()
         guard let inputData, let outputData else {
             return
         }
@@ -523,8 +572,12 @@ public final class SystemEQEngine: @unchecked Sendable {
 
         sourceProcessObjectIDs = nextIDs
         if status == .active {
-            let settings = processor.currentSettings
-            _ = restartLocked(settings: settings)
+            _ = restartLocked(settings: processor.currentSettings)
+        } else if status == .stopped, !nextIDs.isEmpty {
+            // A source now needs per-app processing while we were idle — engage.
+            // (Guarded to `.stopped` so this never re-enters during start()'s own
+            // setup, where status is `.starting`.)
+            _ = start(settings: processor.currentSettings)
         }
     }
 
@@ -536,6 +589,23 @@ public final class SystemEQEngine: @unchecked Sendable {
             return true
         }
         return sourceMonoByProcessObjectID.contains(processObjectID)
+    }
+
+    /// True when the route actually has work to do — EQ is shaping audio, or a
+    /// source needs per-app volume/balance/mono. When false, we leave the system
+    /// audio completely untouched (no tap, no muting), so AudioBar can't affect
+    /// or silence playback at all unless you're genuinely using it.
+    private func hasActiveProcessing(_ settings: EQSettings) -> Bool {
+        if !sourceProcessObjectIDs.isEmpty {
+            return true
+        }
+        guard !settings.isBypassed else {
+            return false
+        }
+        if abs(settings.preampDB) > 0.01 {
+            return true
+        }
+        return settings.bandGainsDB.values.contains { abs($0) > 0.01 }
     }
 
     private func tapMuteBehavior(forOutputDeviceID outputDeviceID: AudioObjectID) -> CATapMuteBehavior {
@@ -609,6 +679,55 @@ public final class SystemEQEngine: @unchecked Sendable {
         let settings = processor.currentSettings
         systemEQLogger.info("Default output device changed; restarting system EQ route")
         _ = restartLocked(settings: settings)
+    }
+
+    /// Watchdog, driven off the audio thread by the host on a short timer. If the
+    /// route still claims `.active` but our IOProc has gone silent, the system's
+    /// real audio is muted with nothing replacing it — recover by tearing the
+    /// route down (which immediately un-mutes the system) and rebuilding, backing
+    /// off to native passthrough if rebuilds keep failing so audio is never lost.
+    public func recoverIfRouteStalled() {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard status == .active else {
+            return
+        }
+
+        guard elapsedSeconds(since: lastIOProcMachTime) > Self.stallThresholdSeconds else {
+            // Healthy — but only clear the backoff once we've been healthy a
+            // while, so a route that dies again right after a rebuild still
+            // counts toward giving up instead of flapping forever.
+            if elapsedSeconds(since: lastStallRestartMachTime) > Self.stallBackoffResetSeconds {
+                stallRecoveryAttempts = 0
+            }
+            return
+        }
+
+        guard stallRecoveryAttempts < Self.maxStallRecoveryAttempts else {
+            systemEQLogger.error("System EQ route stalled repeatedly; falling back to direct output")
+            stopLocked(updateStatus: false)
+            status = .unavailable(message: "System audio route lost — using direct output")
+            currentStreamSnapshot = .inactive
+            return
+        }
+
+        stallRecoveryAttempts += 1
+        lastStallRestartMachTime = mach_absolute_time()
+        systemEQLogger.error("System EQ route stalled without IO; rebuilding (attempt \(self.stallRecoveryAttempts, privacy: .public))")
+        _ = restartLocked(settings: processor.currentSettings)
+    }
+
+    private func elapsedSeconds(since machTime: UInt64) -> Double {
+        guard machTime != 0 else {
+            return .greatestFiniteMagnitude
+        }
+        let now = mach_absolute_time()
+        guard now > machTime else {
+            return 0
+        }
+        let nanos = (now - machTime) &* UInt64(Self.machTimebase.numer) / UInt64(Self.machTimebase.denom)
+        return Double(nanos) / 1_000_000_000
     }
 
     private func failLocked(_ message: String) -> SystemEQEngineStatus {
