@@ -6,7 +6,8 @@
 - Repo: AudioBar
 - Worktree: `/Users/michaelvandijk/Developer/AudioBar`
 - Branch: `main`
-- Current local HEAD: `909c0f4` (`Prepare v0.2.0 release metadata`)
+- Current local `main`: includes the v2 merge, final screenshot/page refresh, v0.2.0 metadata bump, and this release state update.
+- Local release tag: `v0.2.0` created, not pushed yet.
 - Integrated branch: `origin/v2/stereo-lr` at `11a13e5`
 - Local page-refresh checkpoint: `da50c00` (`Refresh App Store page for v2 UI`)
 - Local v2 merge checkpoint: `4be33e2` (`Merge remote-tracking branch 'origin/v2/stereo-lr'`)
@@ -32,6 +33,8 @@ Prepare the combined v2 app/page state so Michael can decide whether it is App S
   - App Store package and local smoke scripts: `APP_VERSION=0.2.0`, `APP_BUILD=10`.
   - Website direct-download URL and JSON-LD software version: `v0.2.0`.
 - Committed the release metadata bump locally as `909c0f4`.
+- Committed the release state refresh locally after the v0.2.0 metadata bump.
+- Created local annotated tag `v0.2.0`.
 
 ## Evidence
 
@@ -49,8 +52,8 @@ Prepare the combined v2 app/page state so Michael can decide whether it is App S
 
 ## Risks / Caveats
 
-- No push/tag has been performed in this continuation yet.
+- No push has been performed in this continuation yet.
 
 ## Next
 
-Inspect final remote/tag state, then tag `v0.2.0` and push only if the outbound boundary is explicitly open.
+Push local `main` and tag `v0.2.0` only if the outbound boundary is explicitly open.
