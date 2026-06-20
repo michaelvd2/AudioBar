@@ -578,16 +578,6 @@ private struct DeviceMenu: View {
         return "\(khzText) kHz · \(channelText) · \(store.outputIsHiFi ? "Hi-Fi" : "reduced quality")"
     }
 
-    private var deviceSelection: Binding<AudioDeviceID?> {
-        Binding(
-            get: { currentID },
-            set: { newID in
-                guard let newID, let device = devices.first(where: { $0.id == newID }) else { return }
-                select(device)
-            }
-        )
-    }
-
     private func select(_ device: AudioDevice) {
         if scope == .output {
             store.selectOutputDevice(device)
@@ -595,34 +585,12 @@ private struct DeviceMenu: View {
             store.selectInputDevice(device)
         }
     }
+
+    @State private var isPresenting = false
+
     var body: some View {
-        Menu {
-            if let qualityText {
-                Text(qualityText)
-            }
-            if scope == .output {
-                Button {
-                    store.toggleKeepOutputHiFi()
-                } label: {
-                    if store.keepOutputHiFi {
-                        Label("Keep hi-fi (use built-in mic)", systemImage: "checkmark")
-                    } else {
-                        Text("Keep hi-fi (use built-in mic)")
-                    }
-                }
-                Divider()
-            }
-            if devices.isEmpty {
-                Text(currentName)
-            } else {
-                Picker("Device", selection: deviceSelection) {
-                    ForEach(devices) { device in
-                        Label(device.name, systemImage: icon(for: device.name)).tag(Optional(device.id))
-                    }
-                }
-                .pickerStyle(.inline)
-                .labelsHidden()
-            }
+        Button {
+            isPresenting.toggle()
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: deviceIcon)
@@ -637,17 +605,107 @@ private struct DeviceMenu: View {
             .background(chipBackground, in: RoundedRectangle(cornerRadius: 7))
             .contentShape(RoundedRectangle(cornerRadius: 7))
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .buttonStyle(.plain)
         .help(helpText)
+        .popover(isPresented: $isPresenting, arrowEdge: .bottom) {
+            devicePicker
+        }
     }
 
+    // A custom popup (not an NSMenu) so we control the row layout: a fixed-width
+    // circular icon column for even alignment, like the macOS Sound switcher.
+    private var devicePicker: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(scope == .output ? "Output" : "Input")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.top, 4)
+
+            if let qualityText {
+                Text(qualityText)
+                    .font(.system(size: 10))
+                    .foregroundStyle(store.outputIsHiFi ? Color.secondary : .orange)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 2)
+            }
+
+            if devices.isEmpty {
+                Text(currentName)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+            } else {
+                ForEach(devices) { device in
+                    DeviceRow(
+                        name: device.name,
+                        symbol: icon(for: device.name),
+                        isCurrent: device.id == currentID
+                    ) {
+                        select(device)
+                        isPresenting = false
+                    }
+                }
+            }
+        }
+        .padding(6)
+        .frame(width: 252)
+    }
 
     private var helpText: String {
         let kind = scope == .output ? "Output" : "Input"
         let lockNote = store.stabilizeCallAudio ? " — locked" : ""
         return "\(kind): \(currentName)\(lockNote)"
+    }
+}
+
+/// One row in the device switcher popup: a circular icon badge (accent-filled
+/// when active) in a fixed column so every device name lines up evenly.
+private struct DeviceRow: View {
+    let name: String
+    let symbol: String
+    let isCurrent: Bool
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(isCurrent ? Color.accentColor : Color.secondary.opacity(0.18))
+                    Image(systemName: symbol)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(isCurrent ? Color.white : Color.primary)
+                }
+                .frame(width: 26, height: 26)
+
+                Text(name)
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                    .foregroundStyle(.primary)
+
+                Spacer(minLength: 8)
+
+                if isCurrent {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                hovering ? Color.primary.opacity(0.08) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 7)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 

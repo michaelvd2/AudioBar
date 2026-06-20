@@ -255,6 +255,15 @@ final class AudioBarStatusBarController: NSObject {
             return
         }
 
+        // A click inside a child popover we present from the main popover (e.g.
+        // the output/input device switcher) is not an "outside" click — keep the
+        // main popover open so picking a device doesn't dismiss everything.
+        if let eventWindow = event.window,
+           String(describing: type(of: eventWindow)).contains("Popover")
+        {
+            return
+        }
+
         let screenPoint = event.locationInWindow
         let clickPoint: NSPoint
         if let eventWindow = event.window {
