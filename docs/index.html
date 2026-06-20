@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AudioBar - macOS source mixer, stereo balance, and EQ</title>
-  <meta name="description" content="AudioBar is a macOS menu bar app for source volume, L/R balance, mono/stereo control, track controls, Safari media, and a compact 11-band system EQ.">
+  <meta name="description" content="AudioBar is a macOS menu bar app for source volume, quick mute, L/R balance, mono/stereo control, track controls, Safari media, and a compact 11-band system EQ.">
   <meta name="robots" content="index,follow">
   <meta name="theme-color" content="#1f6f5b">
   <link rel="canonical" href="https://michaelvd2.github.io/AudioBar/">
@@ -13,12 +13,12 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="AudioBar">
   <meta property="og:title" content="AudioBar - macOS source mixer">
-  <meta property="og:description" content="A macOS menu bar app for source volume, L/R balance, mono/stereo control, track controls, Safari media, and an 11-band system EQ.">
+  <meta property="og:description" content="A macOS menu bar app for source volume, quick mute, L/R balance, mono/stereo control, track controls, Safari media, and an 11-band system EQ.">
   <meta property="og:url" content="https://michaelvd2.github.io/AudioBar/">
   <meta property="og:image" content="https://michaelvd2.github.io/AudioBar/assets/app-store/03-overview.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="AudioBar - macOS source mixer">
-  <meta name="twitter:description" content="A macOS menu bar app for source volume, L/R balance, mono/stereo control, track controls, Safari media, and an 11-band system EQ.">
+  <meta name="twitter:description" content="A macOS menu bar app for source volume, quick mute, L/R balance, mono/stereo control, track controls, Safari media, and an 11-band system EQ.">
   <meta name="twitter:image" content="https://michaelvd2.github.io/AudioBar/assets/app-store/03-overview.png">
   <script type="application/ld+json">
     {
@@ -27,7 +27,7 @@
       "name": "AudioBar",
       "applicationCategory": "MultimediaApplication",
       "operatingSystem": "macOS 14.2 or newer",
-      "description": "AudioBar is a macOS menu bar app for source volume, L/R balance, mono/stereo control, track controls, Safari media, and a compact 11-band system EQ.",
+      "description": "AudioBar is a macOS menu bar app for source volume, quick mute, L/R balance, mono/stereo control, track controls, Safari media, and a compact 11-band system EQ.",
       "url": "https://michaelvd2.github.io/AudioBar/",
       "downloadUrl": "https://github.com/michaelvd2/AudioBar/releases/download/v0.1.7/AudioBar-notarized.zip",
       "softwareVersion": "0.1.7",
@@ -352,9 +352,9 @@
         <h1>AudioBar</h1>
         <p class="intro">
           Control source volume, web audio, and system sound from your menu bar.
-          AudioBar adds per-source L/R balance, mono or stereo playback, track
-          controls, Safari media control, and a compact 11-band EQ for routed
-          Mac audio.
+          AudioBar adds quick mute, per-source L/R balance, mono or stereo
+          playback, track controls, Safari media control, and a compact 11-band
+          EQ for routed Mac audio.
         </p>
         <div class="actions">
           <a class="app-store-badge" href="https://apps.apple.com/us/app/audiobar-volume-mixer-eq/id6779122908?mt=12" aria-label="Download AudioBar on the App Store">
@@ -368,7 +368,7 @@
       <div class="mock" aria-label="AudioBar interface preview">
         <header><span class="dot"></span> AudioBar</header>
         <div class="row">
-          <div><strong>YouTube</strong><span>Volume + balance</span></div>
+          <div><strong>YouTube</strong><span>Volume + mute</span></div>
           <div class="bar" style="--value: 86%"></div>
         </div>
         <div class="row">
@@ -397,10 +397,10 @@
     <section>
       <h2>What It Does</h2>
       <ul>
-        <li>Mixes active audio sources with per-source volume, L/R balance, and mono/stereo controls.</li>
+        <li>Mixes active audio sources with per-source volume, quick mute, L/R balance, and mono/stereo controls.</li>
         <li>Controls supported Music, Spotify, Safari, and Safari Web App media with play/pause, previous/next, and 15-second rewind controls.</li>
         <li>Shows the live system stream meter, keeps recently audible sources visible, and restores hidden rows from the footer.</li>
-        <li>Applies a custom vertical 11-band EQ to routed Mac sound with preamp, presets, reset, and a visible 0 dB baseline.</li>
+        <li>Applies a custom vertical 11-band EQ to routed Mac sound with preamp, presets, reset, accent fills, and a visible 0 dB baseline.</li>
         <li>Targets the actually playing Safari tab where supported, while keeping unsupported controls visibly unavailable.</li>
         <li>Shows permission state from the footer before Accessibility, Input Monitoring, Automation, or system audio prompts are needed.</li>
       </ul>
@@ -410,16 +410,16 @@
       <h2>How It Looks</h2>
       <div class="product-gallery">
         <figure class="product-shot">
-          <img src="assets/website/volume-mixer-zoom.png" width="1080" height="620" alt="Close-up of AudioBar source rows with track controls, volume sliders, mono/stereo pills, and L/R balance controls.">
-          <figcaption>Source controls: mix app volume, mono/stereo mode, L/R balance, play/pause, previous/next, and 15-second rewind in one row.</figcaption>
+          <img src="assets/website/volume-mixer-zoom.png" width="1080" height="620" alt="Close-up of AudioBar source rows with track controls, accent-filled volume sliders, mute buttons, mono/stereo pills, and L/R balance controls.">
+          <figcaption>Source controls: mix app volume, mute a source, switch mono/stereo mode, balance left/right, play or pause, skip tracks, and rewind 15 seconds in one row.</figcaption>
         </figure>
         <figure class="product-shot">
-          <img src="assets/website/eq-controls-zoom.png" width="1160" height="615" alt="Close-up of AudioBar custom vertical 11-band EQ controls with preamp, preset, reset, and 0 dB baseline.">
-          <figcaption>EQ controls: custom vertical sliders, presets, reset, preamp, and a 0 dB baseline for routed system audio.</figcaption>
+          <img src="assets/website/eq-controls-zoom.png" width="1160" height="615" alt="Close-up of AudioBar custom vertical 11-band EQ controls with preamp, preset, reset, accent center-fill, and 0 dB baseline.">
+          <figcaption>EQ controls: custom vertical sliders, presets, reset, preamp, and accent fill from the 0 dB baseline for routed system audio.</figcaption>
         </figure>
         <figure class="product-shot">
-          <img src="assets/website/overview-full.png" width="1600" height="1000" alt="AudioBar overview screenshot showing source controls, system stream, EQ, permission state, hidden sources, and footer actions.">
-          <figcaption>Full panel overview: system stream, source controls, EQ, permission state, hidden sources, restart, and quit stay together.</figcaption>
+          <img src="assets/website/overview-full.png" width="1600" height="1000" alt="AudioBar overview screenshot showing source controls, mute, Safari media, system stream, EQ, permission state, hidden sources, and footer actions.">
+          <figcaption>Full panel overview: system stream, source controls, mute, Safari media, EQ, permission state, hidden sources, restart, and quit stay together.</figcaption>
         </figure>
       </div>
     </section>
