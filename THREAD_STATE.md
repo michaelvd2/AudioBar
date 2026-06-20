@@ -6,7 +6,7 @@
 - Repo: AudioBar
 - Worktree: `/Users/michaelvandijk/Developer/AudioBar`
 - Branch: `main`
-- Current local HEAD: `ec2c53c` (`Refresh screenshots for final v2 UI`)
+- Current local HEAD: `909c0f4` (`Prepare v0.2.0 release metadata`)
 - Integrated branch: `origin/v2/stereo-lr` at `11a13e5`
 - Local page-refresh checkpoint: `da50c00` (`Refresh App Store page for v2 UI`)
 - Local v2 merge checkpoint: `4be33e2` (`Merge remote-tracking branch 'origin/v2/stereo-lr'`)
@@ -31,6 +31,7 @@ Prepare the combined v2 app/page state so Michael can decide whether it is App S
   - Developer ID release script: `APP_VERSION=0.2.0`, `BUILD_NUMBER=9`.
   - App Store package and local smoke scripts: `APP_VERSION=0.2.0`, `APP_BUILD=10`.
   - Website direct-download URL and JSON-LD software version: `v0.2.0`.
+- Committed the release metadata bump locally as `909c0f4`.
 
 ## Evidence
 
@@ -40,10 +41,10 @@ Prepare the combined v2 app/page state so Michael can decide whether it is App S
 - Static page asset check passed: every `docs/index.html` image exists, dimensions match, and JSON-LD parses.
 - Screenshot dimensions confirmed with `sips`: App Store assets are 2880x1800; website gallery assets are 1080x620, 1160x615, and 1600x1000; raw popover assets are 860x1068 and 864x1058.
 - Visual spot checks inspected the website overview, source crop, and EQ crop.
-- `swift test` passed: 165 tests, 0 failures.
-- `swift build` passed.
 - `swift test --filter ReleasePackagingScriptTests` passed after the `0.2.0` metadata bump.
 - Static page asset check passed after the `0.2.0` metadata bump: every local image exists, declared dimensions match, and JSON-LD parses with softwareVersion `0.2.0`.
+- Final `swift test` passed after the `0.2.0` metadata bump: 165 tests, 0 failures.
+- Final `swift build` passed after the `0.2.0` metadata bump.
 - In-app Browser refused direct `file://` page navigation under URL policy earlier; no browser-render workaround was attempted.
 
 ## Risks / Caveats
@@ -52,4 +53,4 @@ Prepare the combined v2 app/page state so Michael can decide whether it is App S
 
 ## Next
 
-Run full `swift test` and `swift build` after the `0.2.0` metadata bump, commit the intended metadata changes if green, inspect final status/log, then decide whether local `main` should be tagged `v0.2.0` and pushed.
+Inspect final remote/tag state, then tag `v0.2.0` and push only if the outbound boundary is explicitly open.
