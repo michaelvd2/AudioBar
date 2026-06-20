@@ -6,8 +6,8 @@
 - Repo: AudioBar
 - Worktree: `/Users/michaelvandijk/Developer/AudioBar`
 - Branch: `main`
-- Current local `main`: includes the v2 merge, final screenshot/page refresh, v0.2.0 metadata bump, and this release state update.
-- Local release tag: `v0.2.0` created, not pushed yet.
+- Current `main`: includes the v2 merge, final screenshot/page refresh, v0.2.0 metadata bump, and release state updates.
+- Release tag: `v0.2.0`.
 - Integrated branch: `origin/v2/stereo-lr` at `11a13e5`
 - Local page-refresh checkpoint: `da50c00` (`Refresh App Store page for v2 UI`)
 - Local v2 merge checkpoint: `4be33e2` (`Merge remote-tracking branch 'origin/v2/stereo-lr'`)
@@ -15,7 +15,7 @@
 
 ## Goal
 
-Prepare the combined v2 app/page state so Michael can decide whether it is App Store v2 ready, then tag/push only after the outbound boundary is explicitly open.
+Prepare the combined v2 app/page state so Michael can decide whether it is App Store v2 ready, with refreshed public screenshots, green tests, and v0.2.0 release metadata.
 
 ## Delta
 
@@ -52,8 +52,8 @@ Prepare the combined v2 app/page state so Michael can decide whether it is App S
 
 ## Risks / Caveats
 
-- No push has been performed in this continuation yet.
+- Final App Store upload still requires account-side signing/provisioning credentials and an App Store Connect submission pass.
 
 ## Next
 
-Push local `main` and tag `v0.2.0` only if the outbound boundary is explicitly open.
+Publish `main` and tag `v0.2.0` if not already pushed, then continue through the App Store submission lane.
