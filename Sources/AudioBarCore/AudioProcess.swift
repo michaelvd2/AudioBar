@@ -165,6 +165,14 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
         bundleID == "systemsoundserverd" || appName == "systemsoundserverd"
     }
 
+    /// A bare process with no bundle ID and no resolvable app name — e.g. `afplay`,
+    /// CLI tools, and one-shot sound helpers. These surface as "PID 12345" rows and
+    /// aren't user-controllable apps, so they're kept out of the source list. (If
+    /// the name resolves on a later refresh, the source reappears, named.)
+    var isUnidentifiedProcess: Bool {
+        (bundleID?.isEmpty ?? true) && appName == "PID \(pid)"
+    }
+
     private func humanReadableName(fromBundleID bundleID: String) -> String? {
         bundleID
             .split(separator: ".")
@@ -215,6 +223,6 @@ public struct AudioProcess: Equatable, Identifiable, Sendable {
     }
 
     public static func visibleUserSources(_ processes: [AudioProcess], currentPID: pid_t) -> [AudioProcess] {
-        sortedForDisplay(processes.filter { $0.pid != currentPID })
+        sortedForDisplay(processes.filter { $0.pid != currentPID && !$0.isUnidentifiedProcess })
     }
 }
