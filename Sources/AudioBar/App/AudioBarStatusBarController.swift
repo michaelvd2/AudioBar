@@ -177,6 +177,7 @@ final class AudioBarStatusBarController: NSObject {
         popover.show(relativeTo: anchorRect, of: button, preferredEdge: .minY)
         installOutsideClickMonitors()
         NSApp.activate(ignoringOtherApps: true)
+        store.startBPMAnalysis()
     }
 
     func showFirstUseSetup() {
@@ -231,6 +232,7 @@ final class AudioBarStatusBarController: NSObject {
         suppressExpandedBeginUntil = Date().addingTimeInterval(0.3)
         popover.performClose(nil)
         removeOutsideClickMonitors()
+        store.stopBPMAnalysisIfNotBackground()
     }
 
     private func installOutsideClickMonitors() {

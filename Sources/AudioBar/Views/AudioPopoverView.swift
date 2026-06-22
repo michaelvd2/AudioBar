@@ -102,6 +102,14 @@ struct AudioPopoverView: View {
                 store.toggleStabilizeCallAudio()
             }
 
+            FooterIconToggle(
+                systemImage: "metronome",
+                isOn: store.backgroundBPMEnabled,
+                help: "Background BPM — keep detecting tempo even when this window is closed (uses a little CPU)"
+            ) {
+                store.setBackgroundBPMEnabled(!store.backgroundBPMEnabled)
+            }
+
             PermissionButton(store: store)
 
             FooterButton(title: "Restart", help: "Restart AudioBar") {
@@ -836,6 +844,25 @@ private struct MarqueeText: View {
     }
 }
 
+/// Estimated tempo for a source, shown only when the detector is confident.
+/// `~` signals "estimate"; the full label lives in the tooltip.
+private struct BPMPill: View {
+    let reading: BPMReading
+
+    private var rounded: Int { Int(reading.bpm.rounded()) }
+
+    var body: some View {
+        Text("~\(rounded)")
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(.tertiary.opacity(0.15), in: Capsule())
+            .fixedSize()
+            .help("Estimated tempo: ~\(rounded) BPM (auto-detected from the audio)")
+    }
+}
+
 /// Compact icon toggle for the footer — accent-tinted when on, neutral when off,
 /// full meaning in the tooltip. Keeps settings present but unobtrusive.
 private struct FooterIconToggle: View {
@@ -1165,6 +1192,10 @@ private struct AudioProcessRow: View {
                     draggingID = process.stableSourceID
                     return NSItemProvider(object: process.stableSourceID as NSString)
                 }
+
+            if let reading = store.bpmBySourceID[process.stableSourceID] {
+                BPMPill(reading: reading)
+            }
 
             if !store.sourceDetail(for: process).isEmpty {
                 MarqueeText(text: store.sourceDetail(for: process), isPlaying: store.isPlaybackPlaying(process))
