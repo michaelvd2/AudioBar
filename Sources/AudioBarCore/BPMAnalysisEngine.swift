@@ -446,7 +446,9 @@ private final class BPMAnalysisCore: @unchecked Sendable {
     }
 }
 
-private let bpmAnalysisIOProc: AudioDeviceIOProc = { _, _, inputData, _, _, _, clientData in
+private let bpmAnalysisIOProc: AudioDeviceIOProc = { _, _, inputData, _, outputData, _, clientData in
+    silence(outputData: outputData)
+
     guard let clientData else {
         return noErr
     }
@@ -454,6 +456,20 @@ private let bpmAnalysisIOProc: AudioDeviceIOProc = { _, _, inputData, _, _, _, c
     let core = Unmanaged<BPMAnalysisCore>.fromOpaque(clientData).takeUnretainedValue()
     core.process(inputData: inputData)
     return noErr
+}
+
+private func silence(outputData: UnsafeMutablePointer<AudioBufferList>?) {
+    guard let outputData else {
+        return
+    }
+
+    let outputBuffers = UnsafeMutableAudioBufferListPointer(outputData)
+    for outputIndex in 0..<outputBuffers.count {
+        guard let outputData = outputBuffers[outputIndex].mData else {
+            continue
+        }
+        memset(outputData, 0, Int(outputBuffers[outputIndex].mDataByteSize))
+    }
 }
 
 private func propertyAddress(

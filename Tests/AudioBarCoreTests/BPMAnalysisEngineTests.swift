@@ -26,10 +26,12 @@ final class BPMAnalysisEngineTests: XCTestCase {
     func testBPMEngineReadsInputsWithoutReplayingOutput() throws {
         let source = try String(contentsOf: bpmEngineURL(), encoding: .utf8)
         let processFunction = try XCTUnwrap(source.function(named: "process"))
+        let ioProc = try XCTUnwrap(source.range(of: "private let bpmAnalysisIOProc"))
 
         XCTAssertTrue(source.contains("detectorsByProcessObjectID: [AudioObjectID: TempoDetector]"))
         XCTAssertTrue(processFunction.contains("append(monoSamples"))
         XCTAssertTrue(processFunction.contains("SystemEQInputBufferMap.processObjectID"))
+        XCTAssertTrue(source[ioProc.lowerBound...].contains("silence(outputData: outputData)"))
         XCTAssertFalse(source.contains("AudioSourceMixer.mixInterleaved"))
         XCTAssertFalse(source.contains("processor.processInterleaved"))
         XCTAssertFalse(source.contains("writeInterleaved"))
