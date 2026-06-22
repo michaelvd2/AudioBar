@@ -926,23 +926,25 @@ private struct PreampSlider: View {
     @ObservedObject var store: AudioProcessStore
 
     var body: some View {
+        let preamp = store.eqSettings.preampDB
+
         VStack(spacing: 5) {
-            Text(valueText(store.eqSettings.preampDB))
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(height: 14)
+            GainPlusValue(value: preamp) { adjust(from: preamp, by: 1) }
 
             VerticalGainSlider(
-                value: store.eqSettings.preampDB,
+                value: preamp,
                 range: EQSettings.gainRange,
                 onChange: { store.setEQPreamp($0) }
             )
 
-            Text("Pre")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .frame(width: 28)
+            GainMinusLabel(label: "Pre", width: 28) { adjust(from: preamp, by: -1) }
         }
+    }
+
+    private func adjust(from current: Double, by delta: Double) {
+        let next = (current + delta).rounded()
+        let clamped = min(EQSettings.gainRange.upperBound, max(EQSettings.gainRange.lowerBound, next))
+        store.setEQPreamp(clamped)
     }
 }
 
@@ -954,22 +956,85 @@ private struct EQBandSlider: View {
         let gain = store.eqSettings.gain(for: band.frequencyHz)
 
         VStack(spacing: 5) {
-            Text(valueText(gain))
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(height: 14)
+            GainPlusValue(value: gain) { adjust(from: gain, by: 1) }
 
             VerticalGainSlider(
-                value: store.eqSettings.gain(for: band.frequencyHz),
+                value: gain,
                 range: EQSettings.gainRange,
                 onChange: { store.setEQGain($0, for: band.frequencyHz) }
             )
 
-            Text(band.label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .frame(width: 30)
+            GainMinusLabel(label: band.label, width: 30) { adjust(from: gain, by: -1) }
         }
+    }
+
+    private func adjust(from current: Double, by delta: Double) {
+        let next = (current + delta).rounded()
+        let clamped = min(EQSettings.gainRange.upperBound, max(EQSettings.gainRange.lowerBound, next))
+        store.setEQGain(clamped, for: band.frequencyHz)
+    }
+}
+
+/// Top readout: shows the gain value, but on hover it turns into a clickable +
+/// (mirroring the − on the bottom label); clicking raises the band +1 dB.
+private struct GainPlusValue: View {
+    let value: Double
+    let onAdd: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: onAdd) {
+            ZStack {
+                if hovering {
+                    Image(systemName: "plus")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Color.primary)
+                } else {
+                    Text(valueText(value))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 30, height: 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.1), value: hovering)
+        .help("Click to raise +1 dB")
+    }
+}
+
+/// Bottom label (frequency / "Pre"): shows the label normally, but on hover it
+/// turns into a clickable −, and clicking lowers the band −1 dB.
+private struct GainMinusLabel: View {
+    let label: String
+    let width: CGFloat
+    let onLower: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: onLower) {
+            ZStack {
+                if hovering {
+                    Image(systemName: "minus")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Color.primary)
+                } else {
+                    Text(label)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: width, height: 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.1), value: hovering)
+        .help("Click to lower −1 dB")
     }
 }
 
