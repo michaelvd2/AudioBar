@@ -63,24 +63,24 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let body = try XCTUnwrap(source.slice(from: "var body: some View", to: "private var header"))
         let header = try XCTUnwrap(source.slice(from: "private var header", to: "private var footer"))
-        let captureIndex = try XCTUnwrap(body.range(of: "CaptureStripView(snapshot: store.eqStreamSnapshot)")?.lowerBound)
+        let captureIndex = try XCTUnwrap(body.range(of: "CaptureStripView(snapshot: store.eqStreamSnapshot")?.lowerBound)
         let contentIndex = try XCTUnwrap(body.range(of: "OutputSourceListView(store: store)")?.lowerBound)
         let eqIndex = try XCTUnwrap(body.range(of: "EQPanelView(store: store)")?.lowerBound)
 
         XCTAssertTrue(header.contains("store.refresh()"))
         XCTAssertLessThan(captureIndex, contentIndex)
         XCTAssertLessThan(contentIndex, eqIndex)
-        XCTAssertFalse(source.slice(from: "private struct EQPanelView", to: "private struct CaptureStripView")?.contains("CaptureStripView(snapshot: store.eqStreamSnapshot)") ?? true)
+        XCTAssertFalse(source.slice(from: "private struct EQPanelView", to: "private struct CaptureStripView")?.contains("CaptureStripView(snapshot: store.eqStreamSnapshot") ?? true)
     }
 
     func testCaptureStripShowsStreamTextBeforeLevelBar() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
         let meter = try XCTUnwrap(source.slice(from: "private struct CaptureStripView", to: "private struct CountBadge"))
         let titleIndex = try XCTUnwrap(meter.range(of: "Text(snapshot.title)")?.lowerBound)
-        let subtitleIndex = try XCTUnwrap(meter.range(of: "Text(snapshot.subtitle)")?.lowerBound)
+        let subtitleIndex = try XCTUnwrap(meter.range(of: "Text(subtitleText)")?.lowerBound)
         let barIndex = try XCTUnwrap(meter.range(of: "StreamLevelBar(value: snapshot.levelFraction)")?.lowerBound)
 
-        XCTAssertTrue(meter.contains("snapshot.isActive ? \"waveform\" : \"waveform.slash\""))
+        XCTAssertTrue(meter.contains("hasSignalPath ? \"waveform\" : \"waveform.slash\""))
         XCTAssertTrue(meter.contains(".frame(width: 150, height: 5)"))
         XCTAssertLessThan(titleIndex, subtitleIndex)
         XCTAssertLessThan(subtitleIndex, barIndex)
@@ -174,17 +174,19 @@ final class AudioPopoverViewSourceTests: XCTestCase {
         XCTAssertTrue(hiddenSourcesLabel.contains("isExpanded.toggle()"))
     }
 
-    func testSettingsShowsLaunchAtLoginToggleEvenWithoutHiddenSources() throws {
+    func testLaunchAtLoginToggleLivesInFooterAndIsAlwaysReachable() throws {
         let source = try String(contentsOf: audioPopoverViewURL(), encoding: .utf8)
+        let footer = try XCTUnwrap(source.slice(from: "private var footer", to: "private var footerText"))
         let settingsView = try XCTUnwrap(source.slice(
             from: "private struct SourceSettingsView",
             to: "private struct EQPanelView"
         ))
 
-        XCTAssertTrue(settingsView.contains("VStack(spacing: 0)"))
-        XCTAssertTrue(settingsView.contains("Toggle(\"Launch at Login\""))
-        XCTAssertTrue(settingsView.contains("get: { store.isLaunchAtLoginEnabled }"))
-        XCTAssertTrue(settingsView.contains("set: { store.setLaunchAtLoginEnabled($0) }"))
+        // Launch at Login is a compact footer toggle, reachable regardless of
+        // whether any sources are hidden.
+        XCTAssertTrue(footer.contains("isOn: store.isLaunchAtLoginEnabled"))
+        XCTAssertTrue(footer.contains("store.setLaunchAtLoginEnabled(!store.isLaunchAtLoginEnabled)"))
+        // The settings view is now only the hidden-sources section.
         XCTAssertTrue(settingsView.contains("if !store.hiddenSources.isEmpty"))
     }
 
