@@ -11,7 +11,7 @@ struct AudioPopoverView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: 0) {
                 header
-                CaptureStripView(snapshot: store.eqStreamSnapshot)
+                CaptureStripView(snapshot: store.eqStreamSnapshot, systemFormat: store.outputFormat)
             }
             .background(Color.primary.opacity(0.05))
             Divider()
@@ -85,6 +85,22 @@ struct AudioPopoverView: View {
             }
 
             Spacer()
+
+            FooterIconToggle(
+                systemImage: "power",
+                isOn: store.isLaunchAtLoginEnabled,
+                help: "Launch at Login — open AudioBar automatically when you sign in"
+            ) {
+                store.setLaunchAtLoginEnabled(!store.isLaunchAtLoginEnabled)
+            }
+
+            FooterIconToggle(
+                systemImage: "lock.shield",
+                isOn: store.stabilizeCallAudio,
+                help: "Lock devices — keep your output & input from being switched by apps or macOS"
+            ) {
+                store.toggleStabilizeCallAudio()
+            }
 
             PermissionButton(store: store)
 
@@ -268,62 +284,9 @@ private struct SourceSettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Divider()
-
-            HStack(spacing: 10) {
-                Image(systemName: "power")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 16)
-
-                Text("Launch at Login")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Toggle("Launch at Login", isOn: Binding(
-                    get: { store.isLaunchAtLoginEnabled },
-                    set: { store.setLaunchAtLoginEnabled($0) }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .help("Open AudioBar automatically when you sign in")
-
-            HStack(spacing: 10) {
-                Image(systemName: "lock.shield")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(store.stabilizeCallAudio ? Color.accentColor : .secondary)
-                    .frame(width: 16)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Lock devices")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("Keep output & input from being switched by apps or macOS")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-
-                Spacer()
-
-                Toggle("Lock devices", isOn: Binding(
-                    get: { store.stabilizeCallAudio },
-                    set: { _ in store.toggleStabilizeCallAudio() }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .help("Remembers your current output and microphone and snaps them back whenever an app or macOS tries to change them")
-
             if !store.hiddenSources.isEmpty {
+                Divider()
+
                 DisclosureGroup(isExpanded: $isExpanded) {
                     VStack(spacing: 0) {
                         ForEach(store.hiddenSources) { source in
@@ -469,10 +432,36 @@ private struct EQPanelView: View {
 
 private struct CaptureStripView: View {
     let snapshot: SystemAudioStreamSnapshot
+    let systemFormat: AudioOutputFormat?
+
+    // Whether there's a system audio path to describe at all. We show the format
+    // even when EQ isn't tapping (idle) so the strip doesn't flip to "No stream"
+    // every time EQ toggles — only the live level meter goes quiet when idle.
+    private var hasSignalPath: Bool {
+        snapshot.isActive || systemFormat != nil
+    }
+
+    private var subtitleText: String {
+        if snapshot.isActive {
+            return snapshot.subtitle
+        }
+        if let systemFormat {
+            return formatSummary(systemFormat)
+        }
+        return snapshot.subtitle
+    }
+
+    private func formatSummary(_ format: AudioOutputFormat) -> String {
+        let kilohertz = format.sampleRate / 1_000
+        let khzText = kilohertz.rounded() == kilohertz
+            ? "\(Int(kilohertz))"
+            : String(format: "%.1f", kilohertz)
+        return "\(format.channels)ch \(khzText) kHz"
+    }
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: snapshot.isActive ? "waveform" : "waveform.slash")
+            Image(systemName: hasSignalPath ? "waveform" : "waveform.slash")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
                 .frame(width: 16)
@@ -482,7 +471,7 @@ private struct CaptureStripView: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
 
-            Text(snapshot.subtitle)
+            Text(subtitleText)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -844,6 +833,31 @@ private struct MarqueeText: View {
         withAnimation(.linear(duration: Double(distance) / pointsPerSecond).repeatForever(autoreverses: false)) {
             offsetX = -distance
         }
+    }
+}
+
+/// Compact icon toggle for the footer — accent-tinted when on, neutral when off,
+/// full meaning in the tooltip. Keeps settings present but unobtrusive.
+private struct FooterIconToggle: View {
+    let systemImage: String
+    let isOn: Bool
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.caption)
+                .foregroundStyle(isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+        }
+        .buttonStyle(.plain)
+        .background(
+            isOn ? AnyShapeStyle(Color.accentColor.opacity(0.16)) : AnyShapeStyle(.tertiary.opacity(0.15)),
+            in: RoundedRectangle(cornerRadius: 6)
+        )
+        .help(help)
     }
 }
 
