@@ -151,6 +151,21 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertTrue(retryFunction.contains("System EQ IO setup retry"))
     }
 
+    func testEngineTargetsLowLatencyBufferBeforeStartingIO() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let startFunction = try XCTUnwrap(source.function(named: "start"))
+        let bufferFunction = try XCTUnwrap(source.function(named: "applyLowLatencyBufferLocked"))
+
+        XCTAssertTrue(source.contains("private static let targetBufferFrameSize: UInt32 = 256"))
+        XCTAssertTrue(bufferFunction.contains("kAudioDevicePropertyBufferFrameSizeRange"))
+        XCTAssertTrue(bufferFunction.contains("kAudioDevicePropertyBufferFrameSize"))
+        XCTAssertTrue(bufferFunction.contains("writeUInt32"))
+
+        let bufferRequest = try XCTUnwrap(startFunction.range(of: "applyLowLatencyBufferLocked(to: aggregateID)"))
+        let startRequest = try XCTUnwrap(startFunction.range(of: "AudioDeviceStart(aggregateID, newIOProcID)"))
+        XCTAssertLessThan(bufferRequest.lowerBound, startRequest.lowerBound)
+    }
+
     func testEngineKeepsSourceTapGainStateForRouteMixer() throws {
         let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
 

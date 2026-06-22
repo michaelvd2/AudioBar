@@ -19,10 +19,6 @@ struct AudioPopoverView: View {
                 WarningBanner(text: warning, actionTitle: "Use built-in mic", action: { store.useBuiltInMic() })
                 Divider()
             }
-            if let warning = store.stabilizeWarning {
-                WarningBanner(text: warning)
-                Divider()
-            }
             if store.needsFirstUseSetup {
                 FirstUseSetupView(store: store)
                 Divider()
@@ -561,13 +557,26 @@ private struct DeviceMenu: View {
         return "hifispeaker.fill"
     }
 
-    // Subtle pastel tint when devices are locked (held against switching).
+    // True once AudioBar gave up holding this scope's locked device (it kept
+    // getting switched away) — surfaced as a subtle orange highlight on the chip.
+    private var isBackedOff: Bool {
+        scope == .output ? store.stabilizeOutputBackedOff : store.stabilizeInputBackedOff
+    }
+
+    // Orange when the lock was lost, accent pastel while actively holding,
+    // otherwise a neutral tint.
     private var chipBackground: Color {
-        store.stabilizeCallAudio ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.12)
+        if isBackedOff {
+            return Color.orange.opacity(0.2)
+        }
+        return store.stabilizeCallAudio ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.12)
     }
 
     private var iconColor: Color {
-        (scope == .output && !store.outputIsHiFi) ? .orange : .secondary
+        if isBackedOff {
+            return .orange
+        }
+        return (scope == .output && !store.outputIsHiFi) ? .orange : .secondary
     }
 
     private var qualityText: String? {
@@ -630,6 +639,10 @@ private struct DeviceMenu: View {
                     .padding(.bottom, 2)
             }
 
+            if isBackedOff {
+                backoffNote
+            }
+
             if devices.isEmpty {
                 Text(currentName)
                     .font(.system(size: 12))
@@ -653,9 +666,45 @@ private struct DeviceMenu: View {
         .frame(width: 252)
     }
 
+    // Shown at the top of the switcher when the lock was lost: explains why and
+    // offers to stop holding. Re-locking is just picking a device in the list.
+    private var backoffNote: some View {
+        let noun = scope == .output ? "output" : "mic"
+        return HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(.orange)
+                .offset(y: 1)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Your \(noun) kept getting switched, so AudioBar stopped holding it. Pick one below to re-lock.")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Stop holding the \(noun)") {
+                    store.stopHoldingStabilizedDevice(for: scope)
+                }
+                .font(.system(size: 10))
+                .buttonStyle(.borderless)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+        .padding(.horizontal, 2)
+        .padding(.bottom, 2)
+    }
+
     private var helpText: String {
         let kind = scope == .output ? "Output" : "Input"
-        let lockNote = store.stabilizeCallAudio ? " — locked" : ""
+        let lockNote: String
+        if isBackedOff {
+            lockNote = " — lock lost"
+        } else if store.stabilizeCallAudio {
+            lockNote = " — locked"
+        } else {
+            lockNote = ""
+        }
         return "\(kind): \(currentName)\(lockNote)"
     }
 }
@@ -877,23 +926,25 @@ private struct PreampSlider: View {
     @ObservedObject var store: AudioProcessStore
 
     var body: some View {
+        let preamp = store.eqSettings.preampDB
+
         VStack(spacing: 5) {
-            Text(valueText(store.eqSettings.preampDB))
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(height: 14)
+            GainPlusValue(value: preamp) { adjust(from: preamp, by: 1) }
 
             VerticalGainSlider(
-                value: store.eqSettings.preampDB,
+                value: preamp,
                 range: EQSettings.gainRange,
                 onChange: { store.setEQPreamp($0) }
             )
 
-            Text("Pre")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .frame(width: 28)
+            GainMinusLabel(label: "Pre", width: 28) { adjust(from: preamp, by: -1) }
         }
+    }
+
+    private func adjust(from current: Double, by delta: Double) {
+        let next = (current + delta).rounded()
+        let clamped = min(EQSettings.gainRange.upperBound, max(EQSettings.gainRange.lowerBound, next))
+        store.setEQPreamp(clamped)
     }
 }
 
@@ -905,22 +956,85 @@ private struct EQBandSlider: View {
         let gain = store.eqSettings.gain(for: band.frequencyHz)
 
         VStack(spacing: 5) {
-            Text(valueText(gain))
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(height: 14)
+            GainPlusValue(value: gain) { adjust(from: gain, by: 1) }
 
             VerticalGainSlider(
-                value: store.eqSettings.gain(for: band.frequencyHz),
+                value: gain,
                 range: EQSettings.gainRange,
                 onChange: { store.setEQGain($0, for: band.frequencyHz) }
             )
 
-            Text(band.label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .frame(width: 30)
+            GainMinusLabel(label: band.label, width: 30) { adjust(from: gain, by: -1) }
         }
+    }
+
+    private func adjust(from current: Double, by delta: Double) {
+        let next = (current + delta).rounded()
+        let clamped = min(EQSettings.gainRange.upperBound, max(EQSettings.gainRange.lowerBound, next))
+        store.setEQGain(clamped, for: band.frequencyHz)
+    }
+}
+
+/// Top readout: shows the gain value, but on hover it turns into a clickable +
+/// (mirroring the − on the bottom label); clicking raises the band +1 dB.
+private struct GainPlusValue: View {
+    let value: Double
+    let onAdd: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: onAdd) {
+            ZStack {
+                if hovering {
+                    Image(systemName: "plus")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Color.primary)
+                } else {
+                    Text(valueText(value))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 30, height: 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.1), value: hovering)
+        .help("Click to raise +1 dB")
+    }
+}
+
+/// Bottom label (frequency / "Pre"): shows the label normally, but on hover it
+/// turns into a clickable −, and clicking lowers the band −1 dB.
+private struct GainMinusLabel: View {
+    let label: String
+    let width: CGFloat
+    let onLower: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: onLower) {
+            ZStack {
+                if hovering {
+                    Image(systemName: "minus")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Color.primary)
+                } else {
+                    Text(label)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: width, height: 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.1), value: hovering)
+        .help("Click to lower −1 dB")
     }
 }
 

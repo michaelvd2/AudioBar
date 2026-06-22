@@ -43,7 +43,6 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var outputFormat: AudioOutputFormat?
     @Published private(set) var microphoneHolders: [String] = []
     @Published private(set) var stabilizeCallAudio = false
-    @Published private(set) var stabilizeWarning: String?
 
     /// True (and assumed true when unknown) when the output runs at full fidelity.
     /// Bluetooth call/headset mode drops to ~16 kHz mono, which trips this false.
@@ -81,8 +80,11 @@ final class AudioProcessStore: ObservableObject {
     private var stabilizedInputUID: String?
     private var stabilizeOutputCorrections: [Date] = []
     private var stabilizeInputCorrections: [Date] = []
-    private var stabilizeOutputBackedOff = false
-    private var stabilizeInputBackedOff = false
+    /// True once AudioBar has given up re-asserting the held device for a scope
+    /// (it kept getting switched away). Drives the orange chip highlight + the
+    /// in-switcher "lock lost" note; cleared by re-picking a device.
+    @Published private(set) var stabilizeOutputBackedOff = false
+    @Published private(set) var stabilizeInputBackedOff = false
     private let eqSettingsKey = "AudioBar.eqSettings"
     private let savedEQPresetsKey = "AudioBar.savedEQPresets"
     private let sourceVolumesKey = "AudioBar.sourceVolumes"
@@ -262,7 +264,6 @@ final class AudioProcessStore: ObservableObject {
             stabilizedOutputUID = device.uid
             stabilizeOutputCorrections = []
             stabilizeOutputBackedOff = false
-            stabilizeWarning = nil
             saveStabilize()
         }
     }
@@ -276,7 +277,6 @@ final class AudioProcessStore: ObservableObject {
             stabilizedInputUID = device.uid
             stabilizeInputCorrections = []
             stabilizeInputBackedOff = false
-            stabilizeWarning = nil
             saveStabilize()
         }
     }
@@ -287,6 +287,28 @@ final class AudioProcessStore: ObservableObject {
         guard let mic = AudioDeviceController.builtInInputDevice() else { return }
         if AudioDeviceController.setDefaultDevice(mic.id, for: .input) {
             currentInputDeviceID = mic.id
+        }
+    }
+
+    /// Stop holding the locked device for one scope after a back-off (the "kept
+    /// changing" state). Clears the held device + orange highlight without
+    /// re-locking; if neither scope is held anymore, stabilize turns itself off.
+    func stopHoldingStabilizedDevice(for scope: AudioDeviceScope) {
+        switch scope {
+        case .output:
+            stabilizedOutputUID = nil
+            stabilizeOutputCorrections = []
+            stabilizeOutputBackedOff = false
+        case .input:
+            stabilizedInputUID = nil
+            stabilizeInputCorrections = []
+            stabilizeInputBackedOff = false
+        }
+        saveStabilize()
+        if stabilizedOutputUID == nil, stabilizedInputUID == nil {
+            stabilizeCallAudio = false
+            userDefaults.set(false, forKey: stabilizeCallAudioKey)
+            stopStabilizeTimer()
         }
     }
 
@@ -302,7 +324,8 @@ final class AudioProcessStore: ObservableObject {
             startStabilizeTimer()
         } else {
             stopStabilizeTimer()
-            stabilizeWarning = nil
+            stabilizeOutputBackedOff = false
+            stabilizeInputBackedOff = false
         }
         userDefaults.set(stabilizeCallAudio, forKey: stabilizeCallAudioKey)
     }
@@ -314,7 +337,6 @@ final class AudioProcessStore: ObservableObject {
         stabilizeInputCorrections = []
         stabilizeOutputBackedOff = false
         stabilizeInputBackedOff = false
-        stabilizeWarning = nil
         saveStabilize()
     }
 
@@ -359,7 +381,6 @@ final class AudioProcessStore: ObservableObject {
             stabilizeOutputCorrections = stabilizeOutputCorrections.filter { now.timeIntervalSince($0) < 10 }
             if stabilizeOutputCorrections.count >= 3 {
                 stabilizeOutputBackedOff = true
-                stabilizeWarning = "Your output kept changing — AudioBar stopped re-asserting it. Pick it again here to re-lock."
             }
         }
         if !stabilizeInputBackedOff, let uid = stabilizedInputUID,
@@ -371,7 +392,6 @@ final class AudioProcessStore: ObservableObject {
             stabilizeInputCorrections = stabilizeInputCorrections.filter { now.timeIntervalSince($0) < 10 }
             if stabilizeInputCorrections.count >= 3 {
                 stabilizeInputBackedOff = true
-                stabilizeWarning = "Your microphone kept changing — AudioBar stopped re-asserting it. Pick it again here to re-lock."
             }
         }
     }

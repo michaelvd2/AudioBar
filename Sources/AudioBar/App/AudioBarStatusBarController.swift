@@ -12,6 +12,8 @@ final class AudioBarStatusBarController: NSObject {
     private var outsideClickMonitor: Any?
     private var localClickMonitor: Any?
     private var suppressResignActiveCloseUntil: Date?
+    private var popoverIntendedOpen = false
+    private var suppressExpandedBeginUntil: Date?
     private var cancellables: Set<AnyCancellable> = []
 
     init(store: AudioProcessStore) {
@@ -92,6 +94,12 @@ final class AudioBarStatusBarController: NSObject {
                     return
                 }
 
+                // Don't let an OS session-begin re-open the popover right after a
+                // deliberate close (rapid click-to-close race).
+                if let until = self.suppressExpandedBeginUntil, until > Date() {
+                    return
+                }
+
                 self.showSettingsIfNeeded(relativeTo: button)
             },
             onEnd: { [weak self] in
@@ -137,7 +145,10 @@ final class AudioBarStatusBarController: NSObject {
     }
 
     private func togglePopover(relativeTo button: NSStatusBarButton) {
-        if popover.isShown {
+        // Toggle on our own synchronous intent, not popover.isShown — the latter
+        // lags behind show/close (and the OS expanded-interface session), so on
+        // fast clicks it read stale and the popover could stay open.
+        if popoverIntendedOpen {
             closePopover()
             return
         }
@@ -157,6 +168,7 @@ final class AudioBarStatusBarController: NSObject {
     }
 
     private func showSettingsIfNeeded(relativeTo button: NSStatusBarButton) {
+        popoverIntendedOpen = true
         guard !popover.isShown else {
             return
         }
@@ -212,6 +224,11 @@ final class AudioBarStatusBarController: NSObject {
     }
 
     private func closePopoverWithoutCancelingExpandedInterface() {
+        popoverIntendedOpen = false
+        // Briefly ignore an OS expanded-interface "begin" right after a deliberate
+        // close, so a fast click-to-close isn't immediately undone by the bridge
+        // re-opening the popover (the rapid-click "won't close" race).
+        suppressExpandedBeginUntil = Date().addingTimeInterval(0.3)
         popover.performClose(nil)
         removeOutsideClickMonitors()
     }
