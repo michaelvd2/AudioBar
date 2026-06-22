@@ -53,6 +53,11 @@ public enum SystemEQEngineStatus: Equatable, Sendable {
 public final class SystemEQEngine: @unchecked Sendable {
     private static let ioSetupRetryCount = 2
     private static let ioSetupRetryDelaySeconds = 0.08
+    /// Target IO buffer for the EQ aggregate — small enough to keep A/V lip-sync
+    /// drift below the perceptual threshold, large enough to avoid dropouts.
+    /// 256 (not 128) is the validated sweet spot: sync is good on Bluetooth with
+    /// no crackle; going smaller buys little and raises xrun risk on AirPods.
+    private static let targetBufferFrameSize: UInt32 = 256
 
     public private(set) var status: SystemEQEngineStatus = .stopped
 
@@ -222,6 +227,11 @@ public final class SystemEQEngine: @unchecked Sendable {
             return failLocked("IO setup failed (\(operationStatus))")
         }
         ioProcID = newIOProcID
+
+        // Shrink the IO buffer before starting, to cut the capture→re-play delay
+        // that shows up as A/V lip-sync drift when EQ is on (the player can't see
+        // this added latency). No-op if the device won't go below its current size.
+        applyLowLatencyBufferLocked(to: aggregateID)
 
         operationStatus = AudioDeviceStart(aggregateID, newIOProcID)
         guard operationStatus == noErr else {
@@ -882,6 +892,59 @@ public final class SystemEQEngine: @unchecked Sendable {
             &value
         )
         return status == noErr ? value : nil
+    }
+
+    private func readValueRange(
+        objectID: AudioObjectID,
+        selector: AudioObjectPropertySelector
+    ) -> AudioValueRange? {
+        var address = propertyAddress(selector)
+        var dataSize = UInt32(MemoryLayout<AudioValueRange>.stride)
+        var value = AudioValueRange()
+        let status = AudioObjectGetPropertyData(
+            objectID,
+            &address,
+            0,
+            nil,
+            &dataSize,
+            &value
+        )
+        return status == noErr ? value : nil
+    }
+
+    @discardableResult
+    private func writeUInt32(
+        objectID: AudioObjectID,
+        selector: AudioObjectPropertySelector,
+        value: UInt32
+    ) -> OSStatus {
+        var address = propertyAddress(selector)
+        var newValue = value
+        let dataSize = UInt32(MemoryLayout<UInt32>.stride)
+        return AudioObjectSetPropertyData(objectID, &address, 0, nil, dataSize, &newValue)
+    }
+
+    /// Reduce the aggregate's IO buffer toward `Self.targetBufferFrameSize`,
+    /// clamped to what the device supports. Smaller buffer = less capture→re-play
+    /// latency = less A/V lip-sync drift while EQ is engaged. Leaves the buffer
+    /// alone if it's already at/below the target (don't risk dropouts for nothing).
+    private func applyLowLatencyBufferLocked(to aggregateID: AudioObjectID) {
+        let current = readUInt32(objectID: aggregateID, selector: kAudioDevicePropertyBufferFrameSize)
+        guard let range = readValueRange(objectID: aggregateID, selector: kAudioDevicePropertyBufferFrameSizeRange) else {
+            return
+        }
+        let lowerBound = UInt32(max(1, range.mMinimum.rounded()))
+        let upperBound = UInt32(max(range.mMaximum.rounded(), Double(lowerBound)))
+        let desired = min(max(Self.targetBufferFrameSize, lowerBound), upperBound)
+
+        if let current, current <= desired {
+            systemEQLogger.info("System EQ buffer already tight: \(current, privacy: .public) frames (target \(desired, privacy: .public))")
+            return
+        }
+
+        let status = writeUInt32(objectID: aggregateID, selector: kAudioDevicePropertyBufferFrameSize, value: desired)
+        let currentText = current.map(String.init) ?? "unknown"
+        systemEQLogger.info("System EQ buffer frame size: \(currentText, privacy: .public) → \(desired, privacy: .public) (range \(lowerBound, privacy: .public)–\(upperBound, privacy: .public), status \(status, privacy: .public))")
     }
 
     private func readStreamDescription(
