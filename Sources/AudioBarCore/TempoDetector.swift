@@ -79,7 +79,7 @@ public final class TempoDetector {
 
         var bestLag = 0
         var bestScore: Float = 0
-        var lagScores: [(lag: Int, score: Float)] = []
+        var scoreByLag = [Float](repeating: 0, count: maxLag - minLag + 1)
         for lag in minLag...maxLag {
             var sum: Float = 0
             var index = 0
@@ -88,7 +88,7 @@ public final class TempoDetector {
                 index += 1
             }
             let score = sum / zeroLag
-            lagScores.append((lag, score))
+            scoreByLag[lag - minLag] = score
             if score > bestScore {
                 bestScore = score
                 bestLag = lag
@@ -99,11 +99,22 @@ public final class TempoDetector {
             return nil
         }
 
-        let closeEnoughScore = bestScore * 0.70
-        let selectedLag = lagScores
-            .filter { $0.score >= closeEnoughScore }
-            .map(\.lag)
-            .min() ?? bestLag
+        func score(forLag lag: Int) -> Float {
+            guard lag >= minLag, lag <= maxLag else { return 0 }
+            return scoreByLag[lag - minLag]
+        }
+
+        // Octave correction: a strong steady beat also autocorrelates at multiples
+        // of its period, so the strongest peak is often the half/quarter tempo
+        // (the techno "~72 instead of ~144" error). Fold toward the faster tempo
+        // while a peak at half the current period stays strong; minLag (= maxBPM)
+        // caps the folding so genuinely fast/correct tempos aren't doubled, and a
+        // real slow track has no strong half-period peak so it stays put.
+        var selectedLag = bestLag
+        while selectedLag / 2 >= minLag,
+              score(forLag: selectedLag / 2) >= 0.5 * score(forLag: selectedLag) {
+            selectedLag /= 2
+        }
 
         let bpm = 60.0 * framesPerSecond / Double(selectedLag)
         return BPMReading(bpm: bpm, confidence: Double(max(0, min(1, bestScore))))

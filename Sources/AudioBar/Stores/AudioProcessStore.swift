@@ -762,11 +762,26 @@ final class AudioProcessStore: ObservableObject {
         }
     }
 
+    /// The sole BPM on/off control (decoupled from the popover lifecycle): when
+    /// on, the engine runs continuously off-main; when off, it fully tears down.
     func setBackgroundBPMEnabled(_ enabled: Bool) {
         backgroundBPMEnabled = enabled
         userDefaults.set(enabled, forKey: backgroundBPMKey)
-        if enabled, !bpmAnalysisActive {
-            startBPMAnalysis()
+        if enabled {
+            if !bpmAnalysisActive {
+                startBPMAnalysis()
+            }
+        } else {
+            bpmAnalysisActive = false
+            lastBPMSources = []
+            bpmSourceSetGate.reset(appliedSources: [])
+            bpmStabilizers.removeAll()
+            bpmGraceTicks.removeAll()
+            lastBPMPublishTime = nil
+            bpmEngine.stop()
+            if !bpmBySourceID.isEmpty {
+                bpmBySourceID = [:]
+            }
         }
     }
 

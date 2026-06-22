@@ -28,11 +28,14 @@ final class AudioBarStatusMenuSourceTests: XCTestCase {
         XCTAssertFalse(source.contains("popover.behavior = .transient"))
     }
 
-    func testPopoverStartsBPMAnalysisAfterShowing() throws {
+    func testPopoverDoesNotDriveBPMAnalysisLifecycle() throws {
         let source = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
 
-        XCTAssertTrue(source.contains("store.startBPMAnalysis()"))
-        XCTAssertFalse(source.contains("// store.startBPMAnalysis()"))
+        // BPM analysis is decoupled from the popover: open/close must not start
+        // or stop it (that churned CoreAudio and wedged the toggle). It is
+        // controlled solely by the explicit toggle.
+        XCTAssertFalse(source.contains("store.startBPMAnalysis()"))
+        XCTAssertFalse(source.contains("store.stopBPMAnalysisIfNotBackground()"))
     }
 
     func testStatusItemIconReflectsEffectiveEQOutputState() throws {

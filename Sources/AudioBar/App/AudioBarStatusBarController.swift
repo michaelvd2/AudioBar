@@ -177,11 +177,10 @@ final class AudioBarStatusBarController: NSObject {
         popover.show(relativeTo: anchorRect, of: button, preferredEdge: .minY)
         installOutsideClickMonitors()
         NSApp.activate(ignoringOtherApps: true)
-        // BPM auto-start disabled: in real use (open/close + source-set changes)
-        // the analysis engine drove ~40% CPU and wedged the popover toggle. The
-        // detection is correct but the engine isn't runtime-stable yet; keep it
-        // dormant until the CoreAudio churn is genuinely fixed and dogfooded.
-        // store.startBPMAnalysis()
+        // BPM analysis is intentionally decoupled from the popover lifecycle —
+        // opening/closing must not start or stop it. Driving it from here churned
+        // CoreAudio aggregates and wedged this toggle. It is controlled solely by
+        // the explicit toggle in the store.
     }
 
     func showFirstUseSetup() {
@@ -236,7 +235,9 @@ final class AudioBarStatusBarController: NSObject {
         suppressExpandedBeginUntil = Date().addingTimeInterval(0.3)
         popover.performClose(nil)
         removeOutsideClickMonitors()
-        store.stopBPMAnalysisIfNotBackground()
+        // BPM analysis is intentionally NOT tied to the popover lifecycle — it
+        // runs only via the explicit toggle. Starting/stopping it on every
+        // open/close churned CoreAudio aggregates and wedged this toggle.
     }
 
     private func installOutsideClickMonitors() {

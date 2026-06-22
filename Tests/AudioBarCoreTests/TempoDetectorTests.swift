@@ -38,6 +38,32 @@ final class TempoDetectorTests: XCTestCase {
         XCTAssertEqual(detector.reading?.bpm ?? 0, 150, accuracy: 5)
     }
 
+    func testCorrectsHalfTempoOnAlternatingAccentBeat() {
+        // 144 BPM beats with every other beat accented louder. The onset
+        // envelope autocorrelates most strongly at the 72 BPM (loud-to-loud)
+        // period, which without octave correction reads ~72. The detector
+        // should fold up to ~144 (the real beat).
+        let sr = 44_100.0
+        let bpm = 144.0
+        let total = Int(sr * 8)
+        var signal = [Float](repeating: 0, count: total)
+        let samplesPerBeat = Int(sr * 60.0 / bpm)
+        var beat = 0
+        var i = 0
+        while i < total {
+            let amp: Float = beat.isMultiple(of: 2) ? 1.0 : 0.5
+            for k in 0..<8 where i + k < total {
+                signal[i + k] = amp
+            }
+            i += samplesPerBeat
+            beat += 1
+        }
+
+        let detector = TempoDetector(sampleRate: sr)
+        detector.append(signal)
+        XCTAssertEqual(detector.reading?.bpm ?? 0, 144, accuracy: 6)
+    }
+
     func testSilenceIsNotConfident() {
         let detector = TempoDetector(sampleRate: 44_100)
 

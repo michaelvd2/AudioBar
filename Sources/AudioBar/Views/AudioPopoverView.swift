@@ -102,13 +102,10 @@ struct AudioPopoverView: View {
                 store.toggleStabilizeCallAudio()
             }
 
-            FooterIconToggle(
-                systemImage: "metronome",
-                isOn: store.backgroundBPMEnabled,
-                help: "Background BPM — keep detecting tempo even when this window is closed (uses a little CPU)"
-            ) {
-                store.setBackgroundBPMEnabled(!store.backgroundBPMEnabled)
-            }
+            // BPM toggle hidden: the analysis engine leaks CPU over time
+            // (measured 0.9% → 7.5% → 19.4% over 26s), so it must not be
+            // exposed until that CoreAudio leak is fixed. Octave/detection are
+            // done; re-show once the engine holds steady CPU.
 
             PermissionButton(store: store)
 
@@ -875,16 +872,20 @@ private struct FooterIconToggle: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.caption)
-                .foregroundStyle(isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+                .foregroundStyle(isOn ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
+                .background(
+                    isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.clear),
+                    in: RoundedRectangle(cornerRadius: 6)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(Color.primary.opacity(isOn ? 0 : 0.18), lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
-        .background(
-            isOn ? AnyShapeStyle(Color.accentColor.opacity(0.16)) : AnyShapeStyle(.tertiary.opacity(0.15)),
-            in: RoundedRectangle(cornerRadius: 6)
-        )
-        .help(help)
+        .help("\(help) — currently \(isOn ? "ON" : "off")")
     }
 }
 
