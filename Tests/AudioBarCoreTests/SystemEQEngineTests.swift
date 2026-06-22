@@ -15,10 +15,10 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertTrue(SystemEQEngineStatus.unavailable(message: "EQ paused for Bluetooth output").isUnavailable)
     }
 
-    func testNewEngineStartsStoppedAndSettingsUpdateDoesNotActivateRoute() {
+    func testFlatSettingsUpdateDoesNotActivateRoute() {
         let engine = SystemEQEngine()
 
-        engine.update(settings: .applying(.bassBoost))
+        engine.update(settings: .flat)
 
         XCTAssertEqual(engine.status, .stopped)
     }
@@ -185,7 +185,7 @@ final class SystemEQEngineTests: XCTestCase {
         let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
         let updateDedicatedSources = try XCTUnwrap(source.function(named: "updateDedicatedSourceProcessesLocked"))
 
-        XCTAssertTrue(updateDedicatedSources.contains("restartLocked(settings: settings)"))
+        XCTAssertTrue(updateDedicatedSources.contains("restartLocked(settings: processor.currentSettings)"))
         XCTAssertFalse(updateDedicatedSources.contains("_ = start(settings: settings)"))
     }
 

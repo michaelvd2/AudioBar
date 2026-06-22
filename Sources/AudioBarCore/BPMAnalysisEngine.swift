@@ -43,6 +43,12 @@ public final class BPMAnalysisEngine {
 }
 
 private final class BPMAnalysisCore: @unchecked Sendable {
+    private enum Work: Sendable {
+        case start(sources: [AudioObjectID], sampleRateHint: Double?)
+        case setSources([AudioObjectID])
+        case stop(publishEmptyReadings: Bool)
+    }
+
     private static let ioSetupRetryCount = 2
     private static let ioSetupRetryDelaySeconds = 0.08
     private static let publishIntervalSeconds = 1.0
@@ -52,6 +58,7 @@ private final class BPMAnalysisCore: @unchecked Sendable {
         return info
     }()
 
+    private let workQueue = DispatchQueue(label: "com.michaelvandijk.AudioBar.BPMAnalysis.CoreAudio")
     private let lock = NSRecursiveLock()
     private let publishReadings: @Sendable ([AudioObjectID: BPMReading]) -> Void
 
@@ -69,28 +76,61 @@ private final class BPMAnalysisCore: @unchecked Sendable {
     }
 
     deinit {
-        stop()
+        stopSynchronously(publishEmptyReadings: false)
     }
 
     func start(sources: [AudioObjectID], sampleRateHint: Double?) {
-        lock.lock()
-        defer { lock.unlock() }
-
-        stopLocked(publishEmptyReadings: false)
-        startLocked(sources: sources, sampleRateHint: sampleRateHint)
+        performCoreAudioWork(.start(sources: sources, sampleRateHint: sampleRateHint))
     }
 
     func setSources(_ sources: [AudioObjectID]) {
+        performCoreAudioWork(.setSources(sources))
+    }
+
+    func stop() {
+        performCoreAudioWork(BPMAnalysisCore.Work.stop(publishEmptyReadings: true))
+    }
+
+    private func performCoreAudioWork(_ work: Work) {
+        workQueue.async {
+            self.applyCoreAudioWork(work)
+        }
+    }
+
+    private func applyCoreAudioWork(_ work: Work) {
         lock.lock()
         defer { lock.unlock() }
 
+        switch work {
+        case let .start(sources, sampleRateHint):
+            startImmediately(sources: sources, sampleRateHint: sampleRateHint)
+        case let .setSources(sources):
+            setSourcesImmediately(sources)
+        case let .stop(publishEmptyReadings):
+            stopLocked(publishEmptyReadings: publishEmptyReadings)
+        }
+    }
+
+    private func startImmediately(sources: [AudioObjectID], sampleRateHint: Double?) {
+        let nextSources = normalizedSources(sources)
+        let nextSampleRate = max(8_000, sampleRateHint ?? currentSampleRate)
+        if isRunningLocked,
+           nextSources == sourceProcessObjectIDs,
+           abs(nextSampleRate - currentSampleRate) < 1 {
+            return
+        }
+
+        stopLocked(publishEmptyReadings: false)
+        startLocked(sources: nextSources, sampleRateHint: nextSampleRate)
+    }
+
+    private func setSourcesImmediately(_ sources: [AudioObjectID]) {
         let nextSources = normalizedSources(sources)
         guard nextSources != sourceProcessObjectIDs else {
             return
         }
 
-        let wasRunning = aggregateID != kAudioObjectUnknown || ioProcID != nil
-        if wasRunning {
+        if isRunningLocked {
             stopLocked(publishEmptyReadings: false)
             startLocked(sources: nextSources, sampleRateHint: currentSampleRate)
         } else {
@@ -100,11 +140,11 @@ private final class BPMAnalysisCore: @unchecked Sendable {
         }
     }
 
-    func stop() {
+    private func stopSynchronously(publishEmptyReadings: Bool) {
         lock.lock()
         defer { lock.unlock() }
 
-        stopLocked(publishEmptyReadings: true)
+        stopLocked(publishEmptyReadings: publishEmptyReadings)
     }
 
     private func startLocked(sources: [AudioObjectID], sampleRateHint: Double?) {
@@ -334,6 +374,10 @@ private final class BPMAnalysisCore: @unchecked Sendable {
         if publishEmptyReadings {
             publishReadings([:])
         }
+    }
+
+    private var isRunningLocked: Bool {
+        aggregateID != kAudioObjectUnknown || ioProcID != nil || !tapIDs.isEmpty
     }
 
     private func normalizedSources(_ sources: [AudioObjectID]) -> [AudioObjectID] {

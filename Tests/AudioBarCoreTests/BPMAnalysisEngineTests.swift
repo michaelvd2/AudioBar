@@ -47,6 +47,15 @@ final class BPMAnalysisEngineTests: XCTestCase {
         XCTAssertTrue(stopFunction.contains("AudioHardwareDestroyProcessTap"))
     }
 
+    func testBPMEngineSerializesCoreAudioWorkOffMainActor() throws {
+        let source = try String(contentsOf: bpmEngineURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("private let workQueue = DispatchQueue("))
+        XCTAssertTrue(source.contains("private func performCoreAudioWork"))
+        XCTAssertTrue(source.contains("workQueue.async"))
+        XCTAssertTrue(source.contains("BPMAnalysisCore.Work.stop"))
+    }
+
     @MainActor
     func testStopAfterEmptyStartLeavesNoReadingsOrAggregate() {
         let engine = BPMAnalysisEngine()

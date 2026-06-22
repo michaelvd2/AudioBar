@@ -76,6 +76,7 @@ final class AudioProcessStore: ObservableObject {
     private let bpmEngine = BPMAnalysisEngine()
     private var bpmAnalysisActive = false
     private var lastBPMSources: [AudioObjectID] = []
+    private var bpmSourceSetGate = BPMSourceSetGate(settleInterval: 1.0)
     private var bpmStabilizers: [String: BPMStabilizer] = [:]
     private var bpmGraceTicks: [String: Int] = [:]
     private var lastBPMPublishTime: Date?
@@ -731,10 +732,10 @@ final class AudioProcessStore: ObservableObject {
 
     /// Active output sources to analyze for tempo (process object ids).
     private func activeSourceObjectIDs() -> [AudioObjectID] {
-        processes
+        BPMSourceSetGate.normalized(processes
             .filter { $0.isActiveOutput }
             .map { AudioObjectID($0.audioObjectID) }
-            .filter { $0 != kAudioObjectUnknown }
+        )
     }
 
     /// Begin tempo analysis on the current active sources — called when the
@@ -742,6 +743,7 @@ final class AudioProcessStore: ObservableObject {
     func startBPMAnalysis() {
         bpmAnalysisActive = true
         lastBPMSources = activeSourceObjectIDs()
+        bpmSourceSetGate.reset(appliedSources: lastBPMSources)
         bpmEngine.start(sources: lastBPMSources, sampleRateHint: outputFormat?.sampleRate)
     }
 
@@ -750,6 +752,7 @@ final class AudioProcessStore: ObservableObject {
         guard !backgroundBPMEnabled else { return }
         bpmAnalysisActive = false
         lastBPMSources = []
+        bpmSourceSetGate.reset(appliedSources: [])
         bpmStabilizers.removeAll()
         bpmGraceTicks.removeAll()
         lastBPMPublishTime = nil
@@ -768,21 +771,21 @@ final class AudioProcessStore: ObservableObject {
     }
 
     /// Per tick (0.25s): keep the analyzed source set fresh and republish
-    /// readings. Source-set changes go through `start()` (not `setSources()`)
-    /// because the engine only (re)creates its taps from `start()`.
+    /// readings. Source changes are normalized and debounced so transient
+    /// CoreAudio source flicker cannot churn BPM aggregate devices.
     private func updateBPMAnalysisTick() {
         guard bpmAnalysisActive else { return }
 
+        let now = Date()
         let sources = activeSourceObjectIDs()
-        if sources != lastBPMSources {
-            lastBPMSources = sources
-            bpmEngine.start(sources: sources, sampleRateHint: outputFormat?.sampleRate)
+        if let nextSources = bpmSourceSetGate.nextAppliedSources(observed: sources, now: now) {
+            lastBPMSources = nextSources
+            bpmEngine.setSources(nextSources)
         }
 
         // Stabilize + publish at ~1 Hz to match the engine's publish cadence —
         // the 0.25s tick would otherwise feed the same reading into the smoother
         // four times and distort the rolling median.
-        let now = Date()
         if let last = lastBPMPublishTime, now.timeIntervalSince(last) < 0.9 {
             return
         }

@@ -28,6 +28,13 @@ final class AudioBarStatusMenuSourceTests: XCTestCase {
         XCTAssertFalse(source.contains("popover.behavior = .transient"))
     }
 
+    func testPopoverStartsBPMAnalysisAfterShowing() throws {
+        let source = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("store.startBPMAnalysis()"))
+        XCTAssertFalse(source.contains("// store.startBPMAnalysis()"))
+    }
+
     func testStatusItemIconReflectsEffectiveEQOutputState() throws {
         let source = try String(contentsOf: statusBarControllerURL(), encoding: .utf8)
 
