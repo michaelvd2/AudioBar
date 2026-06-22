@@ -102,10 +102,13 @@ struct AudioPopoverView: View {
                 store.toggleStabilizeCallAudio()
             }
 
-            // BPM toggle hidden: the analysis engine leaks CPU over time
-            // (measured 0.9% → 7.5% → 19.4% over 26s), so it must not be
-            // exposed until that CoreAudio leak is fixed. Octave/detection are
-            // done; re-show once the engine holds steady CPU.
+            FooterIconToggle(
+                systemImage: "metronome",
+                isOn: store.backgroundBPMEnabled,
+                help: "Show BPM — continuously detect each source's tempo. Off by default; uses noticeably more CPU while on."
+            ) {
+                store.setBackgroundBPMEnabled(!store.backgroundBPMEnabled)
+            }
 
             PermissionButton(store: store)
 
