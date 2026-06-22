@@ -41,4 +41,23 @@ enum SystemEQRouteDescription {
             ] }
         ]
     }
+
+    static func makeTapOnlyAggregate(
+        aggregateUID: String,
+        tapUIDs: [String]
+    ) -> [String: Any] {
+        [
+            kAudioAggregateDeviceNameKey: "AudioBar BPM Analysis",
+            kAudioAggregateDeviceUIDKey: aggregateUID,
+            kAudioAggregateDeviceIsPrivateKey: true,
+            kAudioAggregateDeviceIsStackedKey: false,
+            kAudioAggregateDeviceTapAutoStartKey: false,
+            kAudioAggregateDeviceTapListKey: tapUIDs.map { tapUID in [
+                kAudioSubTapUIDKey: tapUID,
+                kAudioSubTapExtraInputLatencyKey: 0,
+                kAudioSubTapExtraOutputLatencyKey: 0,
+                kAudioSubTapDriftCompensationKey: false
+            ] }
+        ]
+    }
 }

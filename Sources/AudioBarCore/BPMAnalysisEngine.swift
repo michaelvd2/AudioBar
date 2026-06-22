@@ -52,6 +52,7 @@ private final class BPMAnalysisCore: @unchecked Sendable {
     private static let ioSetupRetryCount = 2
     private static let ioSetupRetryDelaySeconds = 0.08
     private static let publishIntervalSeconds = 1.0
+    private static let targetAnalysisBufferFrameSize: UInt32 = 2048
     private static let machTimebase: mach_timebase_info_data_t = {
         var info = mach_timebase_info_data_t()
         mach_timebase_info(&info)
@@ -169,17 +170,9 @@ private final class BPMAnalysisCore: @unchecked Sendable {
             return
         }
 
-        guard let outputDeviceID = defaultOutputDeviceID(),
-              let outputDeviceUID = readString(objectID: outputDeviceID, selector: kAudioDevicePropertyDeviceUID)
-        else {
-            bpmAnalysisLogger.error("BPM analysis output device unavailable")
-            publishCurrentReadingsLocked(force: true)
-            return
-        }
-
         var processObjectIDsForInputBuffers: [AudioObjectID?] = []
         for processObjectID in sources {
-            let tapDescription = CATapDescription(stereoMixdownOfProcesses: [processObjectID])
+            let tapDescription = CATapDescription(monoMixdownOfProcesses: [processObjectID])
             tapDescription.name = "AudioBar BPM Source Tap \(processObjectID)"
             tapDescription.isPrivate = true
             tapDescription.muteBehavior = CATapMuteBehavior(rawValue: 0) ?? tapDescription.muteBehavior
@@ -207,9 +200,8 @@ private final class BPMAnalysisCore: @unchecked Sendable {
         }
         pruneDetectorsLocked(to: sources, sampleRate: currentSampleRate)
 
-        let aggregateDescription = SystemEQRouteDescription.makeAggregate(
+        let aggregateDescription = SystemEQRouteDescription.makeTapOnlyAggregate(
             aggregateUID: "com.michaelvandijk.AudioBar.BPMAnalysis.\(UUID().uuidString)",
-            outputDeviceUID: outputDeviceUID,
             tapUIDs: tapUIDs
         )
 
@@ -233,6 +225,8 @@ private final class BPMAnalysisCore: @unchecked Sendable {
             return
         }
         ioProcID = newIOProcID
+
+        applyAnalysisBufferLocked(to: aggregateID)
 
         operationStatus = AudioDeviceStart(aggregateID, newIOProcID)
         guard operationStatus == noErr else {
@@ -422,19 +416,71 @@ private final class BPMAnalysisCore: @unchecked Sendable {
         return newTapID
     }
 
-    private func defaultOutputDeviceID() -> AudioObjectID? {
-        var deviceID = AudioObjectID(kAudioObjectUnknown)
-        var dataSize = UInt32(MemoryLayout<AudioObjectID>.stride)
-        var address = propertyAddress(kAudioHardwarePropertyDefaultOutputDevice)
+    private func readUInt32(
+        objectID: AudioObjectID,
+        selector: AudioObjectPropertySelector
+    ) -> UInt32? {
+        var address = propertyAddress(selector)
+        var dataSize = UInt32(MemoryLayout<UInt32>.stride)
+        var value: UInt32 = 0
         let status = AudioObjectGetPropertyData(
-            AudioObjectID(kAudioObjectSystemObject),
+            objectID,
             &address,
             0,
             nil,
             &dataSize,
-            &deviceID
+            &value
         )
-        return status == noErr && deviceID != kAudioObjectUnknown ? deviceID : nil
+        return status == noErr ? value : nil
+    }
+
+    private func readValueRange(
+        objectID: AudioObjectID,
+        selector: AudioObjectPropertySelector
+    ) -> AudioValueRange? {
+        var address = propertyAddress(selector)
+        var dataSize = UInt32(MemoryLayout<AudioValueRange>.stride)
+        var value = AudioValueRange()
+        let status = AudioObjectGetPropertyData(
+            objectID,
+            &address,
+            0,
+            nil,
+            &dataSize,
+            &value
+        )
+        return status == noErr ? value : nil
+    }
+
+    @discardableResult
+    private func writeUInt32(
+        objectID: AudioObjectID,
+        selector: AudioObjectPropertySelector,
+        value: UInt32
+    ) -> OSStatus {
+        var address = propertyAddress(selector)
+        var newValue = value
+        let dataSize = UInt32(MemoryLayout<UInt32>.stride)
+        return AudioObjectSetPropertyData(objectID, &address, 0, nil, dataSize, &newValue)
+    }
+
+    private func applyAnalysisBufferLocked(to aggregateID: AudioObjectID) {
+        let current = readUInt32(objectID: aggregateID, selector: kAudioDevicePropertyBufferFrameSize)
+        guard let range = readValueRange(objectID: aggregateID, selector: kAudioDevicePropertyBufferFrameSizeRange) else {
+            return
+        }
+        let lowerBound = UInt32(max(1, range.mMinimum.rounded()))
+        let upperBound = UInt32(max(range.mMaximum.rounded(), Double(lowerBound)))
+        let desired = min(max(Self.targetAnalysisBufferFrameSize, lowerBound), upperBound)
+
+        guard current.map({ $0 < desired }) ?? true else {
+            bpmAnalysisLogger.info("BPM analysis buffer already sufficient: \(current ?? 0, privacy: .public) frames (target \(desired, privacy: .public))")
+            return
+        }
+
+        let status = writeUInt32(objectID: aggregateID, selector: kAudioDevicePropertyBufferFrameSize, value: desired)
+        let currentText = current.map(String.init) ?? "unknown"
+        bpmAnalysisLogger.info("BPM analysis buffer frame size: \(currentText, privacy: .public) → \(desired, privacy: .public) (range \(lowerBound, privacy: .public)–\(upperBound, privacy: .public), status \(status, privacy: .public))")
     }
 
     private func readString(

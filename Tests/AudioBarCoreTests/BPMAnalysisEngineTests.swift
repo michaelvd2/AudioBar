@@ -14,13 +14,56 @@ final class BPMAnalysisEngineTests: XCTestCase {
         XCTAssertTrue(source.contains("public private(set) var readings: [AudioObjectID: BPMReading]"))
     }
 
-    func testBPMEngineUsesUnmutedPassiveTaps() throws {
+    func testBPMEngineUsesMonoUnmutedPassiveTaps() throws {
         let source = try String(contentsOf: bpmEngineURL(), encoding: .utf8)
         let startFunction = try XCTUnwrap(source.function(named: "startLocked"))
 
-        XCTAssertTrue(startFunction.contains("CATapDescription(stereoMixdownOfProcesses: [processObjectID])"))
+        XCTAssertTrue(startFunction.contains("CATapDescription(monoMixdownOfProcesses: [processObjectID])"))
+        XCTAssertFalse(startFunction.contains("CATapDescription(stereoMixdownOfProcesses: [processObjectID])"))
         XCTAssertTrue(startFunction.contains("CATapMuteBehavior(rawValue: 0)"))
         XCTAssertFalse(startFunction.contains("CATapMuteBehavior(rawValue: 2)"))
+    }
+
+    func testBPMEngineUsesTapOnlyAnalysisAggregate() throws {
+        let source = try String(contentsOf: bpmEngineURL(), encoding: .utf8)
+        let startFunction = try XCTUnwrap(source.function(named: "startLocked"))
+
+        XCTAssertTrue(startFunction.contains("SystemEQRouteDescription.makeTapOnlyAggregate"))
+        XCTAssertFalse(startFunction.contains("defaultOutputDeviceID()"))
+        XCTAssertFalse(startFunction.contains("outputDeviceUID"))
+        XCTAssertFalse(startFunction.contains("SystemEQRouteDescription.makeAggregate"))
+    }
+
+    func testBPMTapOnlyAggregateAvoidsOutputDeviceAndDriftCompensation() {
+        let description = SystemEQRouteDescription.makeTapOnlyAggregate(
+            aggregateUID: "bpm",
+            tapUIDs: ["tap"]
+        )
+
+        XCTAssertEqual(description[kAudioAggregateDeviceUIDKey] as? String, "bpm")
+        XCTAssertNil(description[kAudioAggregateDeviceMainSubDeviceKey])
+        XCTAssertNil(description[kAudioAggregateDeviceClockDeviceKey])
+        XCTAssertNil(description[kAudioAggregateDeviceSubDeviceListKey])
+        XCTAssertEqual(description[kAudioAggregateDeviceTapAutoStartKey] as? Bool, false)
+
+        let taps = description[kAudioAggregateDeviceTapListKey] as? [[String: Any]]
+        XCTAssertEqual(taps?.first?[kAudioSubTapUIDKey] as? String, "tap")
+        XCTAssertEqual(taps?.first?[kAudioSubTapDriftCompensationKey] as? Bool, false)
+        XCTAssertNil(taps?.first?[kAudioSubTapDriftCompensationQualityKey])
+    }
+
+    func testBPMEngineTargetsAnalysisBufferBeforeStartingIO() throws {
+        let source = try String(contentsOf: bpmEngineURL(), encoding: .utf8)
+        let startFunction = try XCTUnwrap(source.function(named: "startLocked"))
+        let bufferFunction = try XCTUnwrap(source.function(named: "applyAnalysisBufferLocked"))
+
+        XCTAssertTrue(source.contains("private static let targetAnalysisBufferFrameSize: UInt32 = 2048"))
+        XCTAssertTrue(bufferFunction.contains("kAudioDevicePropertyBufferFrameSizeRange"))
+        XCTAssertTrue(bufferFunction.contains("kAudioDevicePropertyBufferFrameSize"))
+
+        let bufferRequest = try XCTUnwrap(startFunction.range(of: "applyAnalysisBufferLocked(to: aggregateID)"))
+        let startRequest = try XCTUnwrap(startFunction.range(of: "AudioDeviceStart"))
+        XCTAssertLessThan(bufferRequest.lowerBound, startRequest.lowerBound)
     }
 
     func testBPMEngineReadsInputsWithoutReplayingOutput() throws {
