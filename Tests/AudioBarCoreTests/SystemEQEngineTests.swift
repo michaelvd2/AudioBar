@@ -17,9 +17,18 @@ final class SystemEQEngineTests: XCTestCase {
 
     func testNewEngineStartsStoppedAndSettingsUpdateDoesNotActivateRoute() {
         let engine = SystemEQEngine()
+        XCTAssertEqual(engine.status, .stopped)
+
+        // A route backend that declines to activate is the deterministic stand-in
+        // for a host that can't (or isn't permitted to) build a real CoreAudio
+        // route. The update should *try* to engage the route but adopt that
+        // verdict — never leave a phantom `.active` route behind.
+        let activator = StubRouteActivator(statusToReturn: .stopped)
+        engine.routeActivatorForTesting = activator
 
         engine.update(settings: .applying(.bassBoost))
 
+        XCTAssertEqual(activator.activationCount, 1)
         XCTAssertEqual(engine.status, .stopped)
     }
 
@@ -181,12 +190,40 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertTrue(source.contains("processor.processInterleaved"))
     }
 
-    func testActiveRouteRestartsWhenDedicatedSourceProcessesChange() throws {
-        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
-        let updateDedicatedSources = try XCTUnwrap(source.function(named: "updateDedicatedSourceProcessesLocked"))
+    func testActiveRouteRestartsWhenDedicatedSourceProcessesChange() {
+        let engine = SystemEQEngine()
+        let activator = StubRouteActivator(statusToReturn: .active)
+        engine.routeActivatorForTesting = activator
 
-        XCTAssertTrue(updateDedicatedSources.contains("restartLocked(settings: settings)"))
-        XCTAssertFalse(updateDedicatedSources.contains("_ = start(settings: settings)"))
+        // Engage the route.
+        engine.update(settings: .applying(.bassBoost))
+        XCTAssertEqual(engine.status, .active)
+        XCTAssertEqual(activator.activationCount, 1)
+
+        let process = AudioProcess(
+            audioObjectID: 42,
+            pid: 420,
+            bundleID: "com.example.Player",
+            appName: "Player",
+            trackTitle: nil,
+            currentVolume: 100,
+            volumeCapability: .systemRoute
+        )
+
+        // A source with only default controls doesn't need a dedicated tap, so the
+        // active route is untouched — no rebuild.
+        engine.setSourceProcesses([process])
+        XCTAssertEqual(activator.activationCount, 1)
+
+        // A dedicated per-source control now appears while the route is active. The
+        // route must be fully rebuilt (restartLocked → a fresh activation) so the
+        // new source tap actually takes effect — NOT short-circuited by start()'s
+        // "already active" guard, which would silently drop the new source.
+        engine.setSourceBalance(40, for: process.audioObjectID)
+
+        XCTAssertEqual(activator.activationCount, 2)
+        XCTAssertEqual(engine.status, .active)
+        XCTAssertEqual(sourceProcessObjectIDs(in: engine), [AudioObjectID(process.audioObjectID)])
     }
 
     func testBluetoothReplacementRouteDoesNotDedicateEveryAvailableSource() throws {
@@ -325,6 +362,26 @@ final class SystemEQEngineTests: XCTestCase {
 
     private func sourceProcessObjectIDs(in engine: SystemEQEngine) -> [AudioObjectID] {
         Mirror(reflecting: engine).children.first { $0.label == "sourceProcessObjectIDs" }?.value as? [AudioObjectID] ?? []
+    }
+}
+
+/// Deterministic stand-in for the engine's real CoreAudio route. Records how many
+/// times the engine asked to (re)activate a route and reports a fixed status, so
+/// activation/restart behavior can be asserted without creating or muting real
+/// system audio.
+private final class StubRouteActivator: SystemEQRouteActivating {
+    private(set) var activationCount = 0
+    private(set) var lastSettings: EQSettings?
+    var statusToReturn: SystemEQEngineStatus
+
+    init(statusToReturn: SystemEQEngineStatus) {
+        self.statusToReturn = statusToReturn
+    }
+
+    func activateRoute(for engine: SystemEQEngine, settings: EQSettings) -> SystemEQEngineStatus {
+        activationCount += 1
+        lastSettings = settings
+        return statusToReturn
     }
 }
 

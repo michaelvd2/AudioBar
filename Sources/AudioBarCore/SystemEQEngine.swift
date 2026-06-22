@@ -50,6 +50,21 @@ public enum SystemEQEngineStatus: Equatable, Sendable {
     }
 }
 
+/// Test seam for route activation.
+///
+/// Production leaves the engine's activator nil, so `start()` builds the real
+/// CoreAudio aggregate-device + process-tap route. Tests inject a fake instead,
+/// so route engagement is deterministic and never creates — or mutes — real
+/// system audio. The behavior under test is the engine's *decision* logic (when
+/// to engage, when to rebuild), not CoreAudio plumbing the host may or may not
+/// be able (or permitted) to perform.
+protocol SystemEQRouteActivating: AnyObject {
+    /// Produce the status the engine should adopt for a requested activation.
+    /// Implementations may read engine state but must not assume any real
+    /// CoreAudio objects were created.
+    func activateRoute(for engine: SystemEQEngine, settings: EQSettings) -> SystemEQEngineStatus
+}
+
 public final class SystemEQEngine: @unchecked Sendable {
     private static let ioSetupRetryCount = 2
     private static let ioSetupRetryDelaySeconds = 0.08
@@ -60,6 +75,11 @@ public final class SystemEQEngine: @unchecked Sendable {
     private static let targetBufferFrameSize: UInt32 = 256
 
     public private(set) var status: SystemEQEngineStatus = .stopped
+
+    /// Test seam — see `SystemEQRouteActivating`. Nil in production, so `start()`
+    /// builds the real CoreAudio route; tests assign a fake to make activation
+    /// deterministic without creating or muting real system audio.
+    var routeActivatorForTesting: SystemEQRouteActivating?
 
     private let lock = NSRecursiveLock()
     private let processor = EQProcessor(sampleRate: 48_000, channelCount: 2)
@@ -123,6 +143,17 @@ public final class SystemEQEngine: @unchecked Sendable {
         stopLocked(updateStatus: false)
         status = .starting
         systemEQLogger.info("Starting system EQ route")
+
+        // Test seam: when a fake activator is injected, adopt its verdict instead
+        // of touching real CoreAudio. Nil in production — the real route below
+        // runs unchanged. Reached only after the `.active` short-circuit above, so
+        // a redundant `start()` on an already-active route still no-ops (the fake
+        // sees no spurious activation), exactly as the real route does.
+        if let routeActivatorForTesting {
+            let resolved = routeActivatorForTesting.activateRoute(for: self, settings: settings)
+            status = resolved
+            return resolved
+        }
 
         guard #available(macOS 14.2, *) else {
             return failLocked("Requires macOS 14.2+")
