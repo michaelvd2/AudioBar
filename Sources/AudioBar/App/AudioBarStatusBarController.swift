@@ -177,7 +177,11 @@ final class AudioBarStatusBarController: NSObject {
         popover.show(relativeTo: anchorRect, of: button, preferredEdge: .minY)
         installOutsideClickMonitors()
         NSApp.activate(ignoringOtherApps: true)
-        store.startBPMAnalysis()
+        // BPM auto-start disabled: in real use (open/close + source-set changes)
+        // the analysis engine drove ~40% CPU and wedged the popover toggle. The
+        // detection is correct but the engine isn't runtime-stable yet; keep it
+        // dormant until the CoreAudio churn is genuinely fixed and dogfooded.
+        // store.startBPMAnalysis()
     }
 
     func showFirstUseSetup() {

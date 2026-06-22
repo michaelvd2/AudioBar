@@ -852,7 +852,7 @@ private struct BPMPill: View {
     private var rounded: Int { Int(reading.bpm.rounded()) }
 
     var body: some View {
-        Text("~\(rounded)")
+        Text("~\(rounded) BPM")
             .font(.caption2.monospacedDigit())
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
