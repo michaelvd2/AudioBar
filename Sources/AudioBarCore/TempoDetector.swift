@@ -9,9 +9,12 @@ public struct BPMReading: Equatable, Sendable {
         self.confidence = confidence
     }
 
-    /// Display threshold; below this the pill should stay hidden.
+    /// Display threshold; below this the pill should stay hidden. Real music
+    /// produces weaker onset peaks than click tracks (measured ~0.24–0.39 for a
+    /// steady beat), so 0.30 flickered; 0.22 keeps a locked beat steady while
+    /// still gating out non-rhythmic audio.
     public var isConfident: Bool {
-        confidence >= 0.30
+        confidence >= 0.22
     }
 }
 

@@ -76,6 +76,10 @@ final class AudioProcessStore: ObservableObject {
     private let bpmEngine = BPMAnalysisEngine()
     private var bpmAnalysisActive = false
     private var lastBPMSources: [AudioObjectID] = []
+    private var bpmStabilizers: [String: BPMStabilizer] = [:]
+    private var bpmGraceTicks: [String: Int] = [:]
+    private var lastBPMPublishTime: Date?
+    private static let bpmGraceTickCount = 3
     private let defaultOutputBalanceController: DefaultOutputBalanceController
     private let userDefaults: UserDefaults
     private var timer: Timer?
@@ -746,6 +750,9 @@ final class AudioProcessStore: ObservableObject {
         guard !backgroundBPMEnabled else { return }
         bpmAnalysisActive = false
         lastBPMSources = []
+        bpmStabilizers.removeAll()
+        bpmGraceTicks.removeAll()
+        lastBPMPublishTime = nil
         bpmEngine.stop()
         if !bpmBySourceID.isEmpty {
             bpmBySourceID = [:]
@@ -772,13 +779,37 @@ final class AudioProcessStore: ObservableObject {
             bpmEngine.start(sources: sources, sampleRateHint: outputFormat?.sampleRate)
         }
 
+        // Stabilize + publish at ~1 Hz to match the engine's publish cadence —
+        // the 0.25s tick would otherwise feed the same reading into the smoother
+        // four times and distort the rolling median.
+        let now = Date()
+        if let last = lastBPMPublishTime, now.timeIntervalSince(last) < 0.9 {
+            return
+        }
+        lastBPMPublishTime = now
+
         let readings = bpmEngine.readings
+        let presentIDs = Set(processes.map(\.stableSourceID))
+        bpmStabilizers = bpmStabilizers.filter { presentIDs.contains($0.key) }
+        bpmGraceTicks = bpmGraceTicks.filter { presentIDs.contains($0.key) }
+
         var mapped: [String: BPMReading] = [:]
-        if !readings.isEmpty {
-            for process in processes {
-                if let reading = readings[AudioObjectID(process.audioObjectID)] {
-                    mapped[process.stableSourceID] = reading
+        for process in processes {
+            let sid = process.stableSourceID
+            if let raw = readings[AudioObjectID(process.audioObjectID)] {
+                let stable = bpmStabilizers[sid, default: BPMStabilizer()].add(raw.bpm)
+                bpmGraceTicks[sid] = Self.bpmGraceTickCount
+                if let stable {
+                    mapped[sid] = BPMReading(bpm: stable, confidence: raw.confidence)
                 }
+            } else if let remaining = bpmGraceTicks[sid], remaining > 0,
+                      let held = bpmStabilizers[sid]?.stableBPM {
+                // Hold the last steady value briefly through a confidence dip so
+                // the pill doesn't blink out between beats.
+                bpmGraceTicks[sid] = remaining - 1
+                mapped[sid] = BPMReading(bpm: held, confidence: 0.3)
+            } else {
+                bpmStabilizers[sid]?.reset()
             }
         }
         if mapped != bpmBySourceID {
