@@ -170,6 +170,14 @@ private final class BPMAnalysisCore: @unchecked Sendable {
             return
         }
 
+        guard let outputDeviceID = defaultOutputDeviceID(),
+              let outputDeviceUID = readString(objectID: outputDeviceID, selector: kAudioDevicePropertyDeviceUID)
+        else {
+            bpmAnalysisLogger.error("BPM analysis output device unavailable")
+            publishCurrentReadingsLocked(force: true)
+            return
+        }
+
         var processObjectIDsForInputBuffers: [AudioObjectID?] = []
         for processObjectID in sources {
             let tapDescription = CATapDescription(monoMixdownOfProcesses: [processObjectID])
@@ -200,8 +208,9 @@ private final class BPMAnalysisCore: @unchecked Sendable {
         }
         pruneDetectorsLocked(to: sources, sampleRate: currentSampleRate)
 
-        let aggregateDescription = SystemEQRouteDescription.makeTapOnlyAggregate(
+        let aggregateDescription = SystemEQRouteDescription.makeBPMAnalysisAggregate(
             aggregateUID: "com.michaelvandijk.AudioBar.BPMAnalysis.\(UUID().uuidString)",
+            outputDeviceUID: outputDeviceUID,
             tapUIDs: tapUIDs
         )
 
@@ -414,6 +423,21 @@ private final class BPMAnalysisCore: @unchecked Sendable {
             return nil
         }
         return newTapID
+    }
+
+    private func defaultOutputDeviceID() -> AudioObjectID? {
+        var deviceID = AudioObjectID(kAudioObjectUnknown)
+        var dataSize = UInt32(MemoryLayout<AudioObjectID>.stride)
+        var address = propertyAddress(kAudioHardwarePropertyDefaultOutputDevice)
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            0,
+            nil,
+            &dataSize,
+            &deviceID
+        )
+        return status == noErr && deviceID != kAudioObjectUnknown ? deviceID : nil
     }
 
     private func readUInt32(

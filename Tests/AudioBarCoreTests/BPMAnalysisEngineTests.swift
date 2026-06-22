@@ -24,27 +24,33 @@ final class BPMAnalysisEngineTests: XCTestCase {
         XCTAssertFalse(startFunction.contains("CATapMuteBehavior(rawValue: 2)"))
     }
 
-    func testBPMEngineUsesTapOnlyAnalysisAggregate() throws {
+    func testBPMEngineUsesClockedAnalysisAggregate() throws {
         let source = try String(contentsOf: bpmEngineURL(), encoding: .utf8)
         let startFunction = try XCTUnwrap(source.function(named: "startLocked"))
 
-        XCTAssertTrue(startFunction.contains("SystemEQRouteDescription.makeTapOnlyAggregate"))
-        XCTAssertFalse(startFunction.contains("defaultOutputDeviceID()"))
-        XCTAssertFalse(startFunction.contains("outputDeviceUID"))
+        XCTAssertTrue(startFunction.contains("defaultOutputDeviceID()"))
+        XCTAssertTrue(startFunction.contains("outputDeviceUID"))
+        XCTAssertTrue(startFunction.contains("SystemEQRouteDescription.makeBPMAnalysisAggregate"))
+        XCTAssertFalse(startFunction.contains("SystemEQRouteDescription.makeTapOnlyAggregate"))
         XCTAssertFalse(startFunction.contains("SystemEQRouteDescription.makeAggregate"))
     }
 
-    func testBPMTapOnlyAggregateAvoidsOutputDeviceAndDriftCompensation() {
-        let description = SystemEQRouteDescription.makeTapOnlyAggregate(
+    func testBPMAnalysisAggregateKeepsClockWithoutPlaybackDriftCompensation() {
+        let description = SystemEQRouteDescription.makeBPMAnalysisAggregate(
             aggregateUID: "bpm",
+            outputDeviceUID: "output",
             tapUIDs: ["tap"]
         )
 
         XCTAssertEqual(description[kAudioAggregateDeviceUIDKey] as? String, "bpm")
-        XCTAssertNil(description[kAudioAggregateDeviceMainSubDeviceKey])
-        XCTAssertNil(description[kAudioAggregateDeviceClockDeviceKey])
-        XCTAssertNil(description[kAudioAggregateDeviceSubDeviceListKey])
+        XCTAssertEqual(description[kAudioAggregateDeviceMainSubDeviceKey] as? String, "output")
+        XCTAssertEqual(description[kAudioAggregateDeviceClockDeviceKey] as? String, "output")
         XCTAssertEqual(description[kAudioAggregateDeviceTapAutoStartKey] as? Bool, false)
+
+        let subDevices = description[kAudioAggregateDeviceSubDeviceListKey] as? [[String: Any]]
+        XCTAssertEqual(subDevices?.first?[kAudioSubDeviceUIDKey] as? String, "output")
+        XCTAssertEqual(subDevices?.first?[kAudioSubDeviceExtraInputLatencyKey] as? Int, 0)
+        XCTAssertEqual(subDevices?.first?[kAudioSubDeviceExtraOutputLatencyKey] as? Int, 0)
 
         let taps = description[kAudioAggregateDeviceTapListKey] as? [[String: Any]]
         XCTAssertEqual(taps?.first?[kAudioSubTapUIDKey] as? String, "tap")
