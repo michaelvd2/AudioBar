@@ -107,13 +107,41 @@ public final class TempoDetector {
         // Octave correction: a strong steady beat also autocorrelates at multiples
         // of its period, so the strongest peak is often the half/quarter tempo
         // (the techno "~72 instead of ~144" error). Fold toward the faster tempo
-        // while a peak at half the current period stays strong; minLag (= maxBPM)
-        // caps the folding so genuinely fast/correct tempos aren't doubled, and a
-        // real slow track has no strong half-period peak so it stays put.
+        // while a peak near half the current period stays strong. The true
+        // sub-peak rarely lands exactly on `selectedLag / 2` (integer-lag
+        // truncation puts it between bins, where it reads as a trough), so search
+        // a small neighborhood and snap to its argmax — that both recovers the
+        // peak's real strength and keeps the reported tempo on the true beat.
+        // minLag (= maxBPM) caps folding so genuinely fast tempos aren't doubled;
+        // a real slow track has no strong half-period peak so it stays put.
+        func strongestLagNear(_ lag: Int) -> (lag: Int, score: Float) {
+            let lower = max(minLag, lag - 2)
+            let upper = min(maxLag, lag + 2)
+            guard lower <= upper else { return (lag, 0) }
+            var bestLag = lower
+            var bestScore = score(forLag: lower)
+            for candidate in lower...upper {
+                let candidateScore = score(forLag: candidate)
+                if candidateScore > bestScore {
+                    bestScore = candidateScore
+                    bestLag = candidate
+                }
+            }
+            return (bestLag, bestScore)
+        }
+
+        // Fold-up gate: the faster peak only needs to be a *clearly real* peak,
+        // not nearly as strong as the dominant one. Measured on a 138 BPM beat
+        // with a strong 2-beat accent, the real (faster) beat scores ~0.31× the
+        // dominant half-tempo peak — whereas a genuinely slow track has ~0 or
+        // negative energy at its double. 0.25 sits cleanly between the two, so
+        // backbeat-heavy techno folds up to the real tempo while real slow music
+        // stays put.
         var selectedLag = bestLag
-        while selectedLag / 2 >= minLag,
-              score(forLag: selectedLag / 2) >= 0.5 * score(forLag: selectedLag) {
-            selectedLag /= 2
+        while selectedLag / 2 >= minLag {
+            let half = strongestLagNear(selectedLag / 2)
+            guard half.score >= 0.25 * score(forLag: selectedLag) else { break }
+            selectedLag = half.lag
         }
 
         let bpm = 60.0 * framesPerSecond / Double(selectedLag)
