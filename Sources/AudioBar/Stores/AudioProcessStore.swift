@@ -102,6 +102,7 @@ final class AudioProcessStore: ObservableObject {
     private let monoSourceIDsKey = "AudioBar.monoSourceIDs"
     private let hiddenSourcesKey = "AudioBar.hiddenSources"
     private let firstUseSetupCompletedKey = "AudioBar.firstUseSetupCompleted"
+    private static let launchAtLoginPreferenceKey = "AudioBar.launchAtLogin"
     private let stabilizeCallAudioKey = "AudioBar.stabilizeCallAudio"
     private let backgroundBPMKey = "AudioBar.backgroundBPM"
     private let stabilizedOutputUIDKey = "AudioBar.stabilizedOutputUID"
@@ -136,6 +137,11 @@ final class AudioProcessStore: ObservableObject {
         self.userDefaults = userDefaults
         self.eqSettings = Self.loadEQSettings(from: userDefaults, key: eqSettingsKey)
         self.needsFirstUseSetup = !userDefaults.bool(forKey: firstUseSetupCompletedKey)
+        let preferredLaunchAtLogin = Self.loadLaunchAtLoginPreference(
+            from: userDefaults,
+            key: Self.launchAtLoginPreferenceKey
+        )
+        loginItemController.setEnabled(preferredLaunchAtLogin)
         self.isLaunchAtLoginEnabled = loginItemController.isEnabled
         self.savedEQPresets = Self.loadSavedEQPresets(from: userDefaults, key: savedEQPresetsKey)
         self.sourceBalances = Self.loadSourceBalances(from: userDefaults, key: sourceBalancesKey)
@@ -599,6 +605,7 @@ final class AudioProcessStore: ObservableObject {
     func setLaunchAtLoginEnabled(_ isEnabled: Bool) {
         loginItemController.setEnabled(isEnabled)
         isLaunchAtLoginEnabled = loginItemController.isEnabled
+        userDefaults.set(isLaunchAtLoginEnabled, forKey: Self.launchAtLoginPreferenceKey)
     }
 
     func setEQGain(_ gain: Double, for frequencyHz: Int) {
@@ -1025,6 +1032,10 @@ final class AudioProcessStore: ObservableObject {
             return []
         }
         return presets
+    }
+
+    private static func loadLaunchAtLoginPreference(from userDefaults: UserDefaults, key: String) -> Bool {
+        userDefaults.object(forKey: key) as? Bool ?? true
     }
 
     private static func loadSourceVolumes(from userDefaults: UserDefaults, key: String) -> [String: Int] {

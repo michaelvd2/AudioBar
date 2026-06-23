@@ -98,8 +98,12 @@ final class AudioProcessStoreSourceTests: XCTestCase {
 
         XCTAssertTrue(source.contains("@Published private(set) var isLaunchAtLoginEnabled"))
         XCTAssertTrue(source.contains("private let loginItemController"))
-        XCTAssertTrue(source.contains("loginItemController.isEnabled"))
+        XCTAssertTrue(source.contains("private static let launchAtLoginPreferenceKey"))
+        XCTAssertTrue(source.contains("Self.loadLaunchAtLoginPreference("))
+        XCTAssertTrue(source.contains("key: Self.launchAtLoginPreferenceKey"))
+        XCTAssertTrue(source.contains("loginItemController.setEnabled(preferredLaunchAtLogin)"))
         XCTAssertTrue(setLaunchFunction.contains("loginItemController.setEnabled(isEnabled)"))
+        XCTAssertTrue(setLaunchFunction.contains("userDefaults.set(isLaunchAtLoginEnabled, forKey: Self.launchAtLoginPreferenceKey)"))
         XCTAssertTrue(setLaunchFunction.contains("isLaunchAtLoginEnabled = loginItemController.isEnabled"))
         XCTAssertTrue(loginController.contains("import ServiceManagement"))
         XCTAssertTrue(loginController.contains("SMAppService.mainApp"))
