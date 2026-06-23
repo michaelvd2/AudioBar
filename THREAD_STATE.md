@@ -1,59 +1,57 @@
-# AudioBar App Store v2 Release
+# BPM Engine CoreAudio Stability
 
 ## State
 
 - Owner: Codex
 - Repo: AudioBar
-- Worktree: `/Users/michaelvandijk/Developer/AudioBar`
-- Branch: `main`
-- Current `main`: includes the v2 merge, final screenshot/page refresh, v0.2.0 metadata bump, and release state updates.
-- Release tag: `v0.2.0`.
-- Integrated branch: `origin/v2/stereo-lr` at `11a13e5`
-- Local page-refresh checkpoint: `da50c00` (`Refresh App Store page for v2 UI`)
-- Local v2 merge checkpoint: `4be33e2` (`Merge remote-tracking branch 'origin/v2/stereo-lr'`)
-- Existing untracked files left untouched: `THREAD_STATE.premerge-backup.md`, `docs/app-store-readiness-2026-06-10.md`, `tmp/`.
+- Worktree: `/Users/michaelvandijk/.config/superpowers/worktrees/AudioBar/track-navigation-controls`
+- Branch: `v2/stereo-lr`
+- Base commit before this repair: `7d7604c` (`BPM: disable auto-start pending a CoreAudio-performance fix`)
+- Dirty state before commit: intended BPM engine/store/status-bar/test changes plus this state/report; pre-existing untracked `tmp/` remains untouched.
 
 ## Goal
 
-Prepare the combined v2 app/page state so Michael can decide whether it is App Store v2 ready, with refreshed public screenshots, green tests, and v0.2.0 release metadata.
+Make BPM analysis safe to auto-start when the popover opens by removing main-thread CoreAudio setup/teardown work and preventing transient source-list flicker from churning BPM aggregate devices.
+
+## Root Cause
+
+- `AudioProcessStore.updateBPMAnalysisTick()` ran every 0.25s on the main actor and called `bpmEngine.start(...)` whenever the active source array changed.
+- `BPMAnalysisCore.start(...)` synchronously stopped and recreated taps, aggregate device, IOProc, and retry sleeps on the caller path.
+- The store compared unsorted/un-deduplicated source arrays, so harmless order/flicker could trigger repeated CoreAudio rebuilds.
+- The observed sample showing `AudioObjectGetPropertyData` / `HasProperty` dominance matches this rebuild churn.
 
 ## Delta
 
-- Committed the pre-merge App Store page refresh locally as `da50c00`.
-- Merged `origin/v2/stereo-lr` into local `main`; merge was clean and brought in:
-  - `6e600bf` GPU/WebKit helper naming fix.
-  - `dfe9d65` source mute button and stable marquee.
-  - `dc720f4` 4pt volume/balance tracks.
-  - `0a072f1` accent-filled slider family and EQ 0 dB center-fill.
-- Committed the final screenshot/page refresh as `ec2c53c`.
-- Re-shot public-facing App Store and website screenshots against the final combined UI: mute icon, accent fills, EQ center-fill, and Safari source naming.
-- Updated `docs/index.html` copy, metadata, alt text, captions, and feature bullets for quick mute, accent fills, Safari media, and final EQ/source controls.
-- Bumped release metadata for the v2 lane:
-  - Developer ID release script: `APP_VERSION=0.2.0`, `BUILD_NUMBER=9`.
-  - App Store package and local smoke scripts: `APP_VERSION=0.2.0`, `APP_BUILD=10`.
-  - Website direct-download URL and JSON-LD software version: `v0.2.0`.
-- Committed the release metadata bump locally as `909c0f4`.
-- Committed the release state refresh locally after the v0.2.0 metadata bump.
-- Created local annotated tag `v0.2.0`.
+- Added `BPMSourceSetGate` in `AudioBarCore` to normalize source IDs and require a changed source set to remain stable for 1s before applying it.
+- Updated `AudioProcessStore` BPM tracking to:
+  - normalize active source IDs,
+  - reset the source gate on BPM start/stop,
+  - use `bpmEngine.setSources(...)` only after a stable source-set change.
+- Moved BPM CoreAudio start/setSources/stop work onto a serial background queue inside `BPMAnalysisCore`, keeping the main actor for published readings only.
+- Made `BPMAnalysisCore.start(...)` idempotent for already-running same-source/same-rate requests.
+- Re-enabled `store.startBPMAnalysis()` after popover show.
+- Repaired two stale/environment-sensitive `SystemEQEngineTests` so full-suite verification is meaningful on a machine where CoreAudio taps are available.
 
 ## Evidence
 
-- Focused test probes passed after merge:
-  - `swift test --filter AudioPopoverViewSourceTests`
-  - `swift test --filter AudioProcessStoreSourceTests`
-- Static page asset check passed: every `docs/index.html` image exists, dimensions match, and JSON-LD parses.
-- Screenshot dimensions confirmed with `sips`: App Store assets are 2880x1800; website gallery assets are 1080x620, 1160x615, and 1600x1000; raw popover assets are 860x1068 and 864x1058.
-- Visual spot checks inspected the website overview, source crop, and EQ crop.
-- `swift test --filter ReleasePackagingScriptTests` passed after the `0.2.0` metadata bump.
-- Static page asset check passed after the `0.2.0` metadata bump: every local image exists, declared dimensions match, and JSON-LD parses with softwareVersion `0.2.0`.
-- Final `swift test` passed after the `0.2.0` metadata bump: 165 tests, 0 failures.
-- Final `swift build` passed after the `0.2.0` metadata bump.
-- In-app Browser refused direct `file://` page navigation under URL policy earlier; no browser-render workaround was attempted.
+- Red checks were observed first:
+  - `swift test --filter BPMSourceSetGateTests` failed on missing `BPMSourceSetGate`.
+  - `swift test --filter AudioBarStatusMenuSourceTests/testPopoverStartsBPMAnalysisAfterShowing` failed on the commented-out auto-start.
+- Targeted green checks:
+  - `swift test --filter BPMSourceSetGateTests` passed, 3 tests.
+  - `swift test --filter BPMAnalysisEngineTests` passed, 6 tests.
+  - `swift test --filter AudioProcessStoreSourceTests` passed, 28 tests.
+  - `swift test --filter AudioBarStatusMenuSourceTests` passed, 10 tests.
+  - `swift test --filter SystemEQEngineTests` passed, 22 tests.
+- Full verification:
+  - `swift test` passed, 186 tests, 0 failures.
+  - `swift build` passed.
 
-## Risks / Caveats
+## Caveats
 
-- Final App Store upload still requires account-side signing/provisioning credentials and an App Store Connect submission pass.
+- Live CPU/popover validation was not run in this pass because it would require relaunching/killing the currently running AudioBar process, which is an explicit process-control gate.
+- `BPMAnalysisCore.setSources(...)` still rebuilds the CoreAudio aggregate for a real stable source-set change; the performance fix is that such rebuilds are off-main and debounced, so transient flicker cannot repeatedly block the popover.
 
 ## Next
 
-Publish `main` and tag `v0.2.0` if not already pushed, then continue through the App Store submission lane.
+Optionally relaunch AudioBar from this worktree and sample CPU with BPM auto-start enabled. That needs explicit approval because it touches the running app process.

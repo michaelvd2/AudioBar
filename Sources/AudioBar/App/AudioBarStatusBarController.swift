@@ -4,7 +4,7 @@ import Combine
 import SwiftUI
 
 @MainActor
-final class AudioBarStatusBarController: NSObject {
+final class AudioBarStatusBarController: NSObject, NSPopoverDelegate {
     private let statusItem: NSStatusItem
     private let store: AudioProcessStore
     private let popover = NSPopover()
@@ -81,9 +81,18 @@ final class AudioBarStatusBarController: NSObject {
     private func configurePopover() {
         popover.behavior = .applicationDefined
         popover.animates = false
+        popover.delegate = self
         let hostingController = NSHostingController(rootView: AudioPopoverView(store: store))
         hostingController.sizingOptions = [.preferredContentSize]
         popover.contentViewController = hostingController
+    }
+
+    /// Fires on ANY popover close (ours, an OS-initiated close, app hide, etc.).
+    /// Resync the intent flag so a close that bypassed our own teardown can't
+    /// leave the toggle thinking it's still open — the recurring "can't reopen".
+    func popoverDidClose(_ notification: Notification) {
+        popoverIntendedOpen = false
+        removeOutsideClickMonitors()
     }
 
     private func installExpandedInterfaceBridge() {
@@ -177,6 +186,10 @@ final class AudioBarStatusBarController: NSObject {
         popover.show(relativeTo: anchorRect, of: button, preferredEdge: .minY)
         installOutsideClickMonitors()
         NSApp.activate(ignoringOtherApps: true)
+        // BPM analysis is intentionally decoupled from the popover lifecycle —
+        // opening/closing must not start or stop it. Driving it from here churned
+        // CoreAudio aggregates and wedged this toggle. It is controlled solely by
+        // the explicit toggle in the store.
     }
 
     func showFirstUseSetup() {
@@ -231,6 +244,9 @@ final class AudioBarStatusBarController: NSObject {
         suppressExpandedBeginUntil = Date().addingTimeInterval(0.3)
         popover.performClose(nil)
         removeOutsideClickMonitors()
+        // BPM analysis is intentionally NOT tied to the popover lifecycle — it
+        // runs only via the explicit toggle. Starting/stopping it on every
+        // open/close churned CoreAudio aggregates and wedged this toggle.
     }
 
     private func installOutsideClickMonitors() {

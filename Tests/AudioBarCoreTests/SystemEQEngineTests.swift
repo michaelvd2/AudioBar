@@ -15,20 +15,20 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertTrue(SystemEQEngineStatus.unavailable(message: "EQ paused for Bluetooth output").isUnavailable)
     }
 
-    func testNewEngineStartsStoppedAndSettingsUpdateDoesNotActivateRoute() {
+    func testFlatSettingsUpdateDoesNotActivateRoute() {
         let engine = SystemEQEngine()
         XCTAssertEqual(engine.status, .stopped)
 
-        // A route backend that declines to activate is the deterministic stand-in
-        // for a host that can't (or isn't permitted to) build a real CoreAudio
-        // route. The update should *try* to engage the route but adopt that
-        // verdict — never leave a phantom `.active` route behind.
+        // Flat settings need no processing, so the idle gate short-circuits in
+        // update() before the route is ever engaged: the activator is not even
+        // invoked, and no phantom `.active` route is left behind. (The route
+        // seam itself is exercised by the dedicated-source-change test below.)
         let activator = StubRouteActivator(statusToReturn: .stopped)
         engine.routeActivatorForTesting = activator
 
-        engine.update(settings: .applying(.bassBoost))
+        engine.update(settings: .flat)
 
-        XCTAssertEqual(activator.activationCount, 1)
+        XCTAssertEqual(activator.activationCount, 0)
         XCTAssertEqual(engine.status, .stopped)
     }
 

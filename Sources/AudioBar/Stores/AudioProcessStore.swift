@@ -43,6 +43,8 @@ final class AudioProcessStore: ObservableObject {
     @Published private(set) var outputFormat: AudioOutputFormat?
     @Published private(set) var microphoneHolders: [String] = []
     @Published private(set) var stabilizeCallAudio = false
+    @Published private(set) var bpmBySourceID: [String: BPMReading] = [:]
+    @Published private(set) var backgroundBPMEnabled = false
 
     /// True (and assumed true when unknown) when the output runs at full fidelity.
     /// Bluetooth call/headset mode drops to ~16 kHz mono, which trips this false.
@@ -71,6 +73,14 @@ final class AudioProcessStore: ObservableObject {
     private let playbackController: SourcePlaybackController
     private let loginItemController: LoginItemController
     private let eqEngine: SystemEQEngine
+    private let bpmEngine = BPMAnalysisEngine()
+    private var bpmAnalysisActive = false
+    private var lastBPMSources: [AudioObjectID] = []
+    private var bpmSourceSetGate = BPMSourceSetGate(settleInterval: 1.0)
+    private var bpmStabilizers: [String: BPMStabilizer] = [:]
+    private var bpmGraceTicks: [String: Int] = [:]
+    private var lastBPMPublishTime: Date?
+    private static let bpmGraceTickCount = 3
     private let defaultOutputBalanceController: DefaultOutputBalanceController
     private let userDefaults: UserDefaults
     private var timer: Timer?
@@ -93,6 +103,7 @@ final class AudioProcessStore: ObservableObject {
     private let hiddenSourcesKey = "AudioBar.hiddenSources"
     private let firstUseSetupCompletedKey = "AudioBar.firstUseSetupCompleted"
     private let stabilizeCallAudioKey = "AudioBar.stabilizeCallAudio"
+    private let backgroundBPMKey = "AudioBar.backgroundBPM"
     private let stabilizedOutputUIDKey = "AudioBar.stabilizedOutputUID"
     private let stabilizedInputUIDKey = "AudioBar.stabilizedInputUID"
     private var processCache: AudioProcessListCache
@@ -135,6 +146,7 @@ final class AudioProcessStore: ObservableObject {
             persistedVolumes: Self.loadSourceVolumes(from: userDefaults, key: sourceVolumesKey)
         )
         self.stabilizeCallAudio = userDefaults.bool(forKey: stabilizeCallAudioKey)
+        self.backgroundBPMEnabled = userDefaults.bool(forKey: backgroundBPMKey)
         self.stabilizedOutputUID = userDefaults.string(forKey: stabilizedOutputUIDKey)
         self.stabilizedInputUID = userDefaults.string(forKey: stabilizedInputUIDKey)
     }
@@ -168,6 +180,9 @@ final class AudioProcessStore: ObservableObject {
             Task { @MainActor in
                 self?.updateEQStreamSnapshot()
             }
+        }
+        if backgroundBPMEnabled {
+            startBPMAnalysis()
         }
     }
 
@@ -709,6 +724,115 @@ final class AudioProcessStore: ObservableObject {
             eqEngineStatus = engineStatus
         }
         eqStreamSnapshot = eqEngine.streamSnapshot
+
+        updateBPMAnalysisTick()
+    }
+
+    // MARK: - BPM analysis
+
+    /// Active output sources to analyze for tempo (process object ids).
+    private func activeSourceObjectIDs() -> [AudioObjectID] {
+        BPMSourceSetGate.normalized(processes
+            .filter { $0.isActiveOutput }
+            .map { AudioObjectID($0.audioObjectID) }
+        )
+    }
+
+    /// Begin tempo analysis on the current active sources — called when the
+    /// popover opens, or at launch when Background BPM is enabled.
+    func startBPMAnalysis() {
+        bpmAnalysisActive = true
+        lastBPMSources = activeSourceObjectIDs()
+        bpmSourceSetGate.reset(appliedSources: lastBPMSources)
+        bpmEngine.start(sources: lastBPMSources, sampleRateHint: outputFormat?.sampleRate)
+    }
+
+    /// Stop analysis when the popover closes — unless Background BPM keeps it on.
+    func stopBPMAnalysisIfNotBackground() {
+        guard !backgroundBPMEnabled else { return }
+        bpmAnalysisActive = false
+        lastBPMSources = []
+        bpmSourceSetGate.reset(appliedSources: [])
+        bpmStabilizers.removeAll()
+        bpmGraceTicks.removeAll()
+        lastBPMPublishTime = nil
+        bpmEngine.stop()
+        if !bpmBySourceID.isEmpty {
+            bpmBySourceID = [:]
+        }
+    }
+
+    /// The sole BPM on/off control (decoupled from the popover lifecycle): when
+    /// on, the engine runs continuously off-main; when off, it fully tears down.
+    func setBackgroundBPMEnabled(_ enabled: Bool) {
+        backgroundBPMEnabled = enabled
+        userDefaults.set(enabled, forKey: backgroundBPMKey)
+        if enabled {
+            if !bpmAnalysisActive {
+                startBPMAnalysis()
+            }
+        } else {
+            bpmAnalysisActive = false
+            lastBPMSources = []
+            bpmSourceSetGate.reset(appliedSources: [])
+            bpmStabilizers.removeAll()
+            bpmGraceTicks.removeAll()
+            lastBPMPublishTime = nil
+            bpmEngine.stop()
+            if !bpmBySourceID.isEmpty {
+                bpmBySourceID = [:]
+            }
+        }
+    }
+
+    /// Per tick (0.25s): keep the analyzed source set fresh and republish
+    /// readings. Source changes are normalized and debounced so transient
+    /// CoreAudio source flicker cannot churn BPM aggregate devices.
+    private func updateBPMAnalysisTick() {
+        guard bpmAnalysisActive else { return }
+
+        let now = Date()
+        let sources = activeSourceObjectIDs()
+        if let nextSources = bpmSourceSetGate.nextAppliedSources(observed: sources, now: now) {
+            lastBPMSources = nextSources
+            bpmEngine.setSources(nextSources)
+        }
+
+        // Stabilize + publish at ~1 Hz to match the engine's publish cadence —
+        // the 0.25s tick would otherwise feed the same reading into the smoother
+        // four times and distort the rolling median.
+        if let last = lastBPMPublishTime, now.timeIntervalSince(last) < 0.9 {
+            return
+        }
+        lastBPMPublishTime = now
+
+        let readings = bpmEngine.readings
+        let presentIDs = Set(processes.map(\.stableSourceID))
+        bpmStabilizers = bpmStabilizers.filter { presentIDs.contains($0.key) }
+        bpmGraceTicks = bpmGraceTicks.filter { presentIDs.contains($0.key) }
+
+        var mapped: [String: BPMReading] = [:]
+        for process in processes {
+            let sid = process.stableSourceID
+            if let raw = readings[AudioObjectID(process.audioObjectID)] {
+                let stable = bpmStabilizers[sid, default: BPMStabilizer()].add(raw.bpm)
+                bpmGraceTicks[sid] = Self.bpmGraceTickCount
+                if let stable {
+                    mapped[sid] = BPMReading(bpm: stable, confidence: raw.confidence)
+                }
+            } else if let remaining = bpmGraceTicks[sid], remaining > 0,
+                      let held = bpmStabilizers[sid]?.stableBPM {
+                // Hold the last steady value briefly through a confidence dip so
+                // the pill doesn't blink out between beats.
+                bpmGraceTicks[sid] = remaining - 1
+                mapped[sid] = BPMReading(bpm: held, confidence: 0.3)
+            } else {
+                bpmStabilizers[sid]?.reset()
+            }
+        }
+        if mapped != bpmBySourceID {
+            bpmBySourceID = mapped
+        }
     }
 
     private func applyRouteVolume(_ volume: Int, for process: AudioProcess) {

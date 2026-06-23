@@ -202,6 +202,20 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("safariMediaEQController.reset()"))
     }
 
+    func testBPMSourceChangesAreDebouncedAndDoNotRestartAggregateEveryTick() throws {
+        let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
+        let activeSourcesFunction = try XCTUnwrap(source.function(named: "activeSourceObjectIDs"))
+        let startFunction = try XCTUnwrap(source.function(named: "startBPMAnalysis"))
+        let tickFunction = try XCTUnwrap(source.function(named: "updateBPMAnalysisTick"))
+
+        XCTAssertTrue(source.contains("private var bpmSourceSetGate = BPMSourceSetGate("))
+        XCTAssertTrue(activeSourcesFunction.contains("BPMSourceSetGate.normalized"))
+        XCTAssertTrue(startFunction.contains("bpmSourceSetGate.reset(appliedSources: lastBPMSources)"))
+        XCTAssertTrue(tickFunction.contains("bpmSourceSetGate.nextAppliedSources"))
+        XCTAssertTrue(tickFunction.contains("bpmEngine.setSources(nextSources)"))
+        XCTAssertFalse(tickFunction.contains("bpmEngine.start"))
+    }
+
     func testStorePersistsAndAppliesSourceChannelMode() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let toggleFunction = try XCTUnwrap(source.function(named: "toggleChannelMode"))
