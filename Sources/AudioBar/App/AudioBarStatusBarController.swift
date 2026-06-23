@@ -13,7 +13,11 @@ final class AudioBarStatusBarController: NSObject, NSPopoverDelegate {
     private var localClickMonitor: Any?
     private var suppressResignActiveCloseUntil: Date?
     private var popoverIntendedOpen = false
-    private var suppressExpandedBeginUntil: Date?
+    /// One physical status-item click is seen by both the button action and the
+    /// OS expanded-interface session, in a non-deterministic order. Coalesce
+    /// them so a single click resolves to exactly one open/close.
+    private let clickCoalescer = PopoverClickCoalescer(window: 0.2)
+    private var lastInteractionTime: Date?
     private var cancellables: Set<AnyCancellable> = []
 
     init(store: AudioProcessStore) {
@@ -103,16 +107,12 @@ final class AudioBarStatusBarController: NSObject, NSPopoverDelegate {
                     return
                 }
 
-                // Don't let an OS session-begin re-open the popover right after a
-                // deliberate close (rapid click-to-close race).
-                if let until = self.suppressExpandedBeginUntil, until > Date() {
-                    return
-                }
-
-                self.showSettingsIfNeeded(relativeTo: button)
+                // Same entry point as the button action — the coalescer decides
+                // open vs close once per click regardless of which path fires.
+                self.togglePopover(relativeTo: button)
             },
             onEnd: { [weak self] in
-                self?.closePopoverFromExpandedInterfaceSession()
+                self?.handleExpandedInterfaceSessionEnd()
             }
         )
         expandedInterfaceBridge?.installIfAvailable()
@@ -154,15 +154,27 @@ final class AudioBarStatusBarController: NSObject, NSPopoverDelegate {
     }
 
     private func togglePopover(relativeTo button: NSStatusBarButton) {
-        // Toggle on our own synchronous intent, not popover.isShown — the latter
-        // lags behind show/close (and the OS expanded-interface session), so on
-        // fast clicks it read stale and the popover could stay open.
-        if popoverIntendedOpen {
-            closePopover()
+        // The button action and the OS expanded-interface session both call here
+        // for one physical click. Coalesce: the first handler in a fresh window
+        // decides (from our synchronous intent, not the laggy popover.isShown),
+        // and any later handler for the same click is ignored — so the OS session
+        // can't open the popover only for the button action to immediately close
+        // it (the intermittent "won't open on click").
+        let now = Date()
+        switch clickCoalescer.resolve(
+            intendedOpen: popoverIntendedOpen,
+            lastInteraction: lastInteractionTime,
+            now: now
+        ) {
+        case .ignore:
             return
+        case .open:
+            lastInteractionTime = now
+            showSettingsIfNeeded(relativeTo: button)
+        case .close:
+            lastInteractionTime = now
+            closePopover()
         }
-
-        showSettingsIfNeeded(relativeTo: button)
     }
 
     private func showContextMenu(for button: NSStatusBarButton) {
@@ -232,16 +244,20 @@ final class AudioBarStatusBarController: NSObject, NSPopoverDelegate {
         closePopoverWithoutCancelingExpandedInterface()
     }
 
+    /// The OS ended the expanded-interface session — often the same click that
+    /// is closing the popover. Claim the click cycle so a trailing button action
+    /// for that click is coalesced away and can't reopen what this just closed.
+    private func handleExpandedInterfaceSessionEnd() {
+        lastInteractionTime = Date()
+        closePopoverFromExpandedInterfaceSession()
+    }
+
     private func closePopoverFromExpandedInterfaceSession() {
         closePopoverWithoutCancelingExpandedInterface()
     }
 
     private func closePopoverWithoutCancelingExpandedInterface() {
         popoverIntendedOpen = false
-        // Briefly ignore an OS expanded-interface "begin" right after a deliberate
-        // close, so a fast click-to-close isn't immediately undone by the bridge
-        // re-opening the popover (the rapid-click "won't close" race).
-        suppressExpandedBeginUntil = Date().addingTimeInterval(0.3)
         popover.performClose(nil)
         removeOutsideClickMonitors()
         // BPM analysis is intentionally NOT tied to the popover lifecycle — it
