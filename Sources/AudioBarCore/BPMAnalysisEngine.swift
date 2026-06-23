@@ -134,6 +134,12 @@ private final class BPMAnalysisCore: @unchecked Sendable {
         if isRunningLocked {
             stopLocked(publishEmptyReadings: false)
             startLocked(sources: nextSources, sampleRateHint: currentSampleRate)
+        } else if !nextSources.isEmpty {
+            // Cold start: the engine was started before any source existed, so no
+            // aggregate has been built yet. Build the route now that a source has
+            // appeared — previously this branch only updated the list, so a source
+            // arriving after start() was never actually analyzed (engineReadings=0).
+            startLocked(sources: nextSources, sampleRateHint: currentSampleRate)
         } else {
             sourceProcessObjectIDs = nextSources
             pruneDetectorsLocked(to: nextSources, sampleRate: currentSampleRate)

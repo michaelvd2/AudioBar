@@ -102,11 +102,13 @@ struct AudioPopoverView: View {
                 store.toggleStabilizeCallAudio()
             }
 
-            // BPM toggle hidden again: the efficiency change (tap-only aggregate,
-            // no output/clock device) made the IOProc stop delivering audio, so
-            // detection produces zero readings. The working engine, conversely,
-            // climbs to ~40% CPU. Needs a CoreAudio fix that is both functional
-            // and efficient (see the Codex handoff) before re-showing.
+            FooterIconToggle(
+                systemImage: "metronome",
+                isOn: store.backgroundBPMEnabled,
+                help: "Show BPM — continuously detect each source's tempo. Off by default; uses extra CPU while on."
+            ) {
+                store.setBackgroundBPMEnabled(!store.backgroundBPMEnabled)
+            }
 
             PermissionButton(store: store)
 
