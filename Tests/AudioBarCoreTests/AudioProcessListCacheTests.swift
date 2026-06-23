@@ -135,6 +135,47 @@ final class AudioProcessListCacheTests: XCTestCase {
         XCTAssertEqual(merged.first?.isActiveOutput, false)
     }
 
+    func testRemoveEvictsPausedSourcePermanently() {
+        var cache = AudioProcessListCache()
+        let devSource = AudioProcess(
+            audioObjectID: 12,
+            pid: 345,
+            bundleID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718",
+            appName: "YouTube",
+            trackTitle: nil,
+            currentVolume: 50,
+            volumeCapability: .webAppKeyboard,
+            volumeControlID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718"
+        )
+
+        _ = cache.merge(activeProcesses: [devSource])
+        cache.remove(stableSourceID: devSource.stableSourceID)
+
+        // A dead source that won't return stays gone after removal.
+        XCTAssertTrue(cache.merge(activeProcesses: []).isEmpty)
+        XCTAssertNil(cache.persistedVolumes[devSource.stableSourceID])
+    }
+
+    func testRemovedSourceReappearsIfStillActive() {
+        var cache = AudioProcessListCache()
+        let liveSource = AudioProcess(
+            audioObjectID: 12,
+            pid: 345,
+            bundleID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718",
+            appName: "YouTube",
+            trackTitle: nil,
+            currentVolume: 50,
+            volumeCapability: .webAppKeyboard,
+            volumeControlID: "com.apple.Safari.WebApp.E95-B392-D57ECE8D1718"
+        )
+
+        _ = cache.merge(activeProcesses: [liveSource])
+        cache.remove(stableSourceID: liveSource.stableSourceID)
+
+        // A still-live source is re-discovered on the next refresh.
+        XCTAssertEqual(cache.merge(activeProcesses: [liveSource]).map(\.displayTitle), ["YouTube"])
+    }
+
     func testCacheKeepsSystemSoundsVisibleAfterNotificationAudioStops() {
         var cache = AudioProcessListCache()
         let systemSounds = AudioProcess(
