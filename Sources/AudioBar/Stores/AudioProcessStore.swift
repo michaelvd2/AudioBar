@@ -146,11 +146,7 @@ final class AudioProcessStore: ObservableObject {
             persistedVolumes: Self.loadSourceVolumes(from: userDefaults, key: sourceVolumesKey)
         )
         self.stabilizeCallAudio = userDefaults.bool(forKey: stabilizeCallAudioKey)
-        // Temporarily force continuous BPM off at launch: its analysis taps +
-        // aggregate add real-time load that, alongside the EQ re-play, overloads
-        // the audio path and breaks up playback. Re-enable once the BPM engine's
-        // runtime cost is fixed (Codex). Persisted preference is left intact.
-        self.backgroundBPMEnabled = false
+        self.backgroundBPMEnabled = userDefaults.bool(forKey: backgroundBPMKey)
         self.stabilizedOutputUID = userDefaults.string(forKey: stabilizedOutputUIDKey)
         self.stabilizedInputUID = userDefaults.string(forKey: stabilizedInputUIDKey)
     }
