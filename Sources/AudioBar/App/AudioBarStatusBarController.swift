@@ -248,7 +248,13 @@ final class AudioBarStatusBarController: NSObject, NSPopoverDelegate {
     /// is closing the popover. Claim the click cycle so a trailing button action
     /// for that click is coalesced away and can't reopen what this just closed.
     private func handleExpandedInterfaceSessionEnd() {
-        lastInteractionTime = Date()
+        // Only claim the click cycle when we're actually closing an open popover.
+        // A spurious or idle session-end must NOT stamp the cycle, or it would
+        // coalesce away (ignore) the user's next genuine open click — wedging the
+        // popover shut ("can't open").
+        if popoverIntendedOpen {
+            lastInteractionTime = Date()
+        }
         closePopoverFromExpandedInterfaceSession()
     }
 

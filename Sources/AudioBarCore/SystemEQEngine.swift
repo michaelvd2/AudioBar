@@ -70,9 +70,10 @@ public final class SystemEQEngine: @unchecked Sendable {
     private static let ioSetupRetryDelaySeconds = 0.08
     /// Target IO buffer for the EQ aggregate — small enough to keep A/V lip-sync
     /// drift below the perceptual threshold, large enough to avoid dropouts.
-    /// 256 (not 128) is the validated sweet spot: sync is good on Bluetooth with
-    /// no crackle; going smaller buys little and raises xrun risk on AirPods.
-    private static let targetBufferFrameSize: UInt32 = 256
+    /// Raised 256 → 512 after constant playback breakup: 256 left no headroom for
+    /// CPU bursts (the IOProc would miss its deadline → xruns/crackle). 512 (~11ms
+    /// at 48k) restores margin; the extra latency is well under the sync threshold.
+    private static let targetBufferFrameSize: UInt32 = 512
 
     public private(set) var status: SystemEQEngineStatus = .stopped
 
