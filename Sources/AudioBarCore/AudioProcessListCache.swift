@@ -36,6 +36,15 @@ public struct AudioProcessListCache {
         return AudioProcess.sortedForDisplay(activeProcesses + pausedProcesses)
     }
 
+    /// Permanently forgets a source so it will not reappear as a paused row.
+    /// Use for one-off / dev sources that won't come back (unlike hiding, which
+    /// keeps the source on a restorable list). If the source is still actively
+    /// producing audio it will be re-discovered on the next `merge`.
+    public mutating func remove(stableSourceID: String) {
+        knownProcesses.removeValue(forKey: stableSourceID)
+        persistedVolumes.removeValue(forKey: stableSourceID)
+    }
+
     public mutating func setCurrentVolume(_ volume: Int, forStableSourceID stableSourceID: String) {
         let volume = min(100, max(0, volume))
         persistedVolumes[stableSourceID] = volume

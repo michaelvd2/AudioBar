@@ -424,6 +424,30 @@ final class AudioProcessStore: ObservableObject {
         updateEQSourceProcesses(processes)
     }
 
+    /// Removes a source outright without adding it to the restorable hidden
+    /// list — for one-off / dev sources that won't return. A still-live source
+    /// will be re-discovered on the next refresh; a dead one stays gone.
+    func deleteSource(_ process: AudioProcess) {
+        let id = process.stableSourceID
+        processCache.remove(stableSourceID: id)
+        processes.removeAll { $0.stableSourceID == id }
+        displayOrder.removeAll { $0 == id }
+        lastTrackTitles.removeValue(forKey: id)
+        playbackStateOverrides.removeValue(forKey: id)
+        preMuteVolumes.removeValue(forKey: id)
+        bpmStabilizers.removeValue(forKey: id)
+        bpmGraceTicks.removeValue(forKey: id)
+        bpmBySourceID.removeValue(forKey: id)
+        if sourceBalances.removeValue(forKey: id) != nil {
+            saveSourceBalances()
+        }
+        if monoSourceIDs.remove(id) != nil {
+            saveMonoSourceIDs()
+        }
+        saveSourceVolumes()
+        updateEQSourceProcesses(processes)
+    }
+
     func restoreHiddenSource(_ sourceID: String) {
         hiddenSourceNames.removeValue(forKey: sourceID)
         updateHiddenSources()

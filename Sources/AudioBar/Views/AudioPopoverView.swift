@@ -1173,6 +1173,10 @@ private struct AudioProcessRow: View {
             Button("Hide Source") {
                 store.hideSource(process)
             }
+            Divider()
+            Button("Delete Source", role: .destructive) {
+                store.deleteSource(process)
+            }
         }
         .opacity(draggingID == process.stableSourceID ? 0.5 : 1)
         .onDrop(
