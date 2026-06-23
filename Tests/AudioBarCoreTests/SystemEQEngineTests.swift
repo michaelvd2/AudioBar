@@ -156,7 +156,7 @@ final class SystemEQEngineTests: XCTestCase {
         let startFunction = try XCTUnwrap(source.function(named: "start"))
         let bufferFunction = try XCTUnwrap(source.function(named: "applyLowLatencyBufferLocked"))
 
-        XCTAssertTrue(source.contains("private static let targetBufferFrameSize: UInt32 = 256"))
+        XCTAssertTrue(source.contains("private static let targetBufferFrameSize: UInt32 = 512"))
         XCTAssertTrue(bufferFunction.contains("kAudioDevicePropertyBufferFrameSizeRange"))
         XCTAssertTrue(bufferFunction.contains("kAudioDevicePropertyBufferFrameSize"))
         XCTAssertTrue(bufferFunction.contains("writeUInt32"))
