@@ -794,8 +794,17 @@ final class AudioProcessStore: ObservableObject {
         let now = Date()
         let sources = activeSourceObjectIDs()
         if let nextSources = bpmSourceSetGate.nextAppliedSources(observed: sources, now: now) {
+            let wasEmpty = lastBPMSources.isEmpty
             lastBPMSources = nextSources
-            bpmEngine.setSources(nextSources)
+            // Cold start (engine started before any source existed): build the
+            // route with start(); setSources() from a stopped engine only updates
+            // the list without creating the aggregate, so sources that appear
+            // after launch would never get analyzed.
+            if wasEmpty && !nextSources.isEmpty {
+                bpmEngine.start(sources: nextSources, sampleRateHint: outputFormat?.sampleRate)
+            } else {
+                bpmEngine.setSources(nextSources)
+            }
         }
 
         // Stabilize + publish at ~1 Hz to match the engine's publish cadence —
