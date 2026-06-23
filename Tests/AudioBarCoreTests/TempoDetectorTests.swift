@@ -64,6 +64,34 @@ final class TempoDetectorTests: XCTestCase {
         XCTAssertEqual(detector.reading?.bpm ?? 0, 144, accuracy: 6)
     }
 
+    func testCorrectsHalfTempoWithStrongTwoBeatAccent() {
+        // Four-on-the-floor at 138 BPM where every other beat carries a much
+        // stronger accent (1.0 vs 0.3) — a clap/bass on the 2-beat. The onset
+        // envelope autocorrelates most strongly at the 69 BPM period, and the
+        // 138 peak lands between integer lag bins, so a naive exact-half fold
+        // undervalues it and the reading sticks at ~69. The detector should
+        // still recover the real ~138 beat.
+        let sr = 44_100.0
+        let bpm = 138.0
+        let total = Int(sr * 8)
+        var signal = [Float](repeating: 0, count: total)
+        let samplesPerBeat = Int(sr * 60.0 / bpm)
+        var beat = 0
+        var i = 0
+        while i < total {
+            let amp: Float = beat.isMultiple(of: 2) ? 1.0 : 0.3
+            for k in 0..<8 where i + k < total {
+                signal[i + k] = amp
+            }
+            i += samplesPerBeat
+            beat += 1
+        }
+
+        let detector = TempoDetector(sampleRate: sr)
+        detector.append(signal)
+        XCTAssertEqual(detector.reading?.bpm ?? 0, 138, accuracy: 6)
+    }
+
     func testSilenceIsNotConfident() {
         let detector = TempoDetector(sampleRate: 44_100)
 
