@@ -61,9 +61,10 @@ final class ReleasePackagingScriptTests: XCTestCase {
 
         XCTAssertTrue(script.contains("AUDIOBAR_DEV_SIGN_IDENTITY"))
         XCTAssertTrue(script.contains("Apple Development:"))
+        XCTAssertTrue(script.contains("Developer ID Application:"))
         XCTAssertTrue(script.contains("SIGN_IDENTITY"))
         XCTAssertTrue(script.contains("codesign --force --sign \"$SIGN_IDENTITY\""))
-        XCTAssertTrue(script.contains("codesign --force --sign -"))
+        XCTAssertFalse(script.contains("codesign --force --sign -"))
     }
 
     func testAppStorePackagingUsesSeparateSandboxedLane() throws {

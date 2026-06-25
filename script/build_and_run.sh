@@ -65,12 +65,24 @@ if [[ -z "$SIGN_IDENTITY" ]]; then
   )"
 fi
 if [[ -z "$SIGN_IDENTITY" ]]; then
-  SIGN_IDENTITY="-"
+  SIGN_IDENTITY="$(
+    security find-identity -v -p codesigning 2>/dev/null |
+      sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' |
+      head -n 1
+  )"
 fi
 
-if ! /usr/bin/codesign --force --sign "$SIGN_IDENTITY" --entitlements "$ENTITLEMENTS_PLIST" "$APP_BUNDLE" >/dev/null 2>&1; then
-  /usr/bin/codesign --force --sign - --entitlements "$ENTITLEMENTS_PLIST" "$APP_BUNDLE" >/dev/null 2>&1 || true
+if [[ -z "$SIGN_IDENTITY" ]]; then
+  cat >&2 <<MSG
+Missing stable AudioBar development signing identity.
+Set AUDIOBAR_DEV_SIGN_IDENTITY or install an Apple Development / Developer ID Application certificate.
+Refusing to ad-hoc sign because that makes macOS ask for Accessibility/system-audio permissions again after rebuilds.
+MSG
+  exit 1
 fi
+
+/usr/bin/codesign --force --sign "$SIGN_IDENTITY" --entitlements "$ENTITLEMENTS_PLIST" "$APP_BUNDLE"
+/usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"
