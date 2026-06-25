@@ -65,6 +65,12 @@ protocol SystemEQRouteActivating: AnyObject {
     func activateRoute(for engine: SystemEQEngine, settings: EQSettings) -> SystemEQEngineStatus
 }
 
+private struct RouteFormatListenerRegistration {
+    let objectID: AudioObjectID
+    let address: AudioObjectPropertyAddress
+    let token: AudioObjectPropertyListenerBlock
+}
+
 public final class SystemEQEngine: @unchecked Sendable {
     private static let ioSetupRetryCount = 2
     private static let ioSetupRetryDelaySeconds = 0.08
@@ -96,6 +102,7 @@ public final class SystemEQEngine: @unchecked Sendable {
     private var currentStreamSnapshot = SystemAudioStreamSnapshot.inactive
     private var didLogIOBufferLayout = false
     private var defaultOutputDeviceChangeToken: AudioObjectPropertyListenerBlock?
+    private var routeFormatListenerRegistrations: [RouteFormatListenerRegistration] = []
 
     // Liveness watchdog. The global tap mutes the system's real audio and relies
     // on our IOProc to play the replacement back. If the IOProc dies (e.g. a
@@ -106,6 +113,9 @@ public final class SystemEQEngine: @unchecked Sendable {
     private static let stallThresholdSeconds = 1.0
     private static let maxStallRecoveryAttempts = 3
     private static let stallBackoffResetSeconds = 5.0
+    private static let audibleResumeIdleThresholdSeconds = 30.0
+    private static let audibleResumeRestartCooldownSeconds = 5.0
+    private static let audibleInputThresholdDB = -60.0
     private static let machTimebase: mach_timebase_info_data_t = {
         var info = mach_timebase_info_data_t()
         mach_timebase_info(&info)
@@ -113,7 +123,10 @@ public final class SystemEQEngine: @unchecked Sendable {
     }()
     private var lastIOProcMachTime: UInt64 = 0
     private var lastStallRestartMachTime: UInt64 = 0
+    private var lastAudibleInputMachTime: UInt64 = 0
+    private var lastAudibleResumeRestartMachTime: UInt64 = 0
     private var stallRecoveryAttempts = 0
+    private var pendingAudibleResumeRestart = false
 
     public init() {
         registerDefaultOutputDeviceListener()
@@ -264,6 +277,7 @@ public final class SystemEQEngine: @unchecked Sendable {
         // that shows up as A/V lip-sync drift when EQ is on (the player can't see
         // this added latency). No-op if the device won't go below its current size.
         applyLowLatencyBufferLocked(to: aggregateID)
+        registerRouteFormatListenersLocked(outputDeviceID: outputDeviceID, aggregateID: aggregateID)
 
         operationStatus = AudioDeviceStart(aggregateID, newIOProcID)
         guard operationStatus == noErr else {
@@ -271,7 +285,10 @@ public final class SystemEQEngine: @unchecked Sendable {
         }
 
         // Seed liveness so the watchdog doesn't fire before the first callback.
-        lastIOProcMachTime = mach_absolute_time()
+        let routeStartMachTime = mach_absolute_time()
+        lastIOProcMachTime = routeStartMachTime
+        lastAudibleInputMachTime = routeStartMachTime
+        pendingAudibleResumeRestart = false
         status = .active
         systemEQLogger.info("System EQ route active; outputDevice=\(outputDeviceUID, privacy: .public) tapCount=\(tapUIDs.count) tapFormat=\(self.formatSummary(tapFormat), privacy: .public)")
         return status
@@ -449,6 +466,7 @@ public final class SystemEQEngine: @unchecked Sendable {
                     channelCount: outputChannelCount
                 )
                 let inputLevelDB = levelDB(samples: mixedBase, count: sampleCount)
+                markAudibleInputResumeIfNeeded(inputLevelDB: inputLevelDB)
 
                 processor.processInterleaved(
                     input: mixedBase,
@@ -723,6 +741,22 @@ public final class SystemEQEngine: @unchecked Sendable {
         _ = restartLocked(settings: settings)
     }
 
+    private func restartAfterRouteFormatChange(reason: String) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        switch status {
+        case .active, .unavailable:
+            break
+        default:
+            return
+        }
+
+        let settings = processor.currentSettings
+        systemEQLogger.info("Route format changed (\(reason, privacy: .public)); restarting system EQ route")
+        _ = restartLocked(settings: settings)
+    }
+
     /// Watchdog, driven off the audio thread by the host on a short timer. If the
     /// route still claims `.active` but our IOProc has gone silent, the system's
     /// real audio is muted with nothing replacing it — recover by tearing the
@@ -733,6 +767,15 @@ public final class SystemEQEngine: @unchecked Sendable {
         defer { lock.unlock() }
 
         guard status == .active else {
+            return
+        }
+
+        if pendingAudibleResumeRestart {
+            pendingAudibleResumeRestart = false
+            stallRecoveryAttempts = 0
+            lastAudibleResumeRestartMachTime = mach_absolute_time()
+            systemEQLogger.info("System EQ input resumed after idle; rebuilding route")
+            _ = restartLocked(settings: processor.currentSettings)
             return
         }
 
@@ -760,6 +803,26 @@ public final class SystemEQEngine: @unchecked Sendable {
         _ = restartLocked(settings: processor.currentSettings)
     }
 
+    private func markAudibleInputResumeIfNeeded(inputLevelDB: Double) {
+        guard inputLevelDB >= Self.audibleInputThresholdDB else {
+            return
+        }
+
+        let now = mach_absolute_time()
+        defer {
+            lastAudibleInputMachTime = now
+        }
+
+        guard lastAudibleInputMachTime != 0,
+              elapsedSeconds(from: lastAudibleInputMachTime, to: now) >= Self.audibleResumeIdleThresholdSeconds,
+              elapsedSeconds(from: lastAudibleResumeRestartMachTime, to: now) >= Self.audibleResumeRestartCooldownSeconds
+        else {
+            return
+        }
+
+        pendingAudibleResumeRestart = true
+    }
+
     private func elapsedSeconds(since machTime: UInt64) -> Double {
         guard machTime != 0 else {
             return .greatestFiniteMagnitude
@@ -769,6 +832,17 @@ public final class SystemEQEngine: @unchecked Sendable {
             return 0
         }
         let nanos = (now - machTime) &* UInt64(Self.machTimebase.numer) / UInt64(Self.machTimebase.denom)
+        return Double(nanos) / 1_000_000_000
+    }
+
+    private func elapsedSeconds(from start: UInt64, to end: UInt64) -> Double {
+        guard start != 0 else {
+            return .greatestFiniteMagnitude
+        }
+        guard end > start else {
+            return 0
+        }
+        let nanos = (end - start) &* UInt64(Self.machTimebase.numer) / UInt64(Self.machTimebase.denom)
         return Double(nanos) / 1_000_000_000
     }
 
@@ -788,6 +862,10 @@ public final class SystemEQEngine: @unchecked Sendable {
     }
 
     private func stopLocked(updateStatus: Bool) {
+        unregisterRouteFormatListenersLocked()
+        pendingAudibleResumeRestart = false
+        lastAudibleInputMachTime = 0
+
         if let ioProcID {
             if aggregateID != kAudioObjectUnknown {
                 AudioDeviceStop(aggregateID, ioProcID)
@@ -886,6 +964,88 @@ public final class SystemEQEngine: @unchecked Sendable {
             defaultOutputDeviceChangeToken
         )
         self.defaultOutputDeviceChangeToken = nil
+    }
+
+    private func registerRouteFormatListenersLocked(
+        outputDeviceID: AudioObjectID,
+        aggregateID: AudioObjectID
+    ) {
+        unregisterRouteFormatListenersLocked()
+        addRouteFormatListenerLocked(
+            objectID: outputDeviceID,
+            selector: kAudioDevicePropertyNominalSampleRate,
+            scope: kAudioObjectPropertyScopeGlobal,
+            reason: "output sample rate"
+        )
+        addRouteFormatListenerLocked(
+            objectID: outputDeviceID,
+            selector: kAudioDevicePropertyStreamConfiguration,
+            scope: kAudioDevicePropertyScopeOutput,
+            reason: "output stream configuration"
+        )
+        addRouteFormatListenerLocked(
+            objectID: aggregateID,
+            selector: kAudioDevicePropertyNominalSampleRate,
+            scope: kAudioObjectPropertyScopeGlobal,
+            reason: "aggregate sample rate"
+        )
+        addRouteFormatListenerLocked(
+            objectID: aggregateID,
+            selector: kAudioDevicePropertyStreamConfiguration,
+            scope: kAudioDevicePropertyScopeOutput,
+            reason: "aggregate stream configuration"
+        )
+    }
+
+    private func addRouteFormatListenerLocked(
+        objectID: AudioObjectID,
+        selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope,
+        reason: String
+    ) {
+        guard objectID != kAudioObjectUnknown else {
+            return
+        }
+
+        var address = propertyAddress(selector, scope: scope)
+        guard AudioObjectHasProperty(objectID, &address) else {
+            return
+        }
+
+        let token: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            self?.restartAfterRouteFormatChange(reason: reason)
+        }
+
+        let status = AudioObjectAddPropertyListenerBlock(
+            objectID,
+            &address,
+            DispatchQueue.main,
+            token
+        )
+
+        guard status == noErr else {
+            systemEQLogger.error("Route format listener failed (\(reason, privacy: .public)): \(status)")
+            return
+        }
+
+        routeFormatListenerRegistrations.append(RouteFormatListenerRegistration(
+            objectID: objectID,
+            address: address,
+            token: token
+        ))
+    }
+
+    private func unregisterRouteFormatListenersLocked() {
+        for registration in routeFormatListenerRegistrations {
+            var address = registration.address
+            AudioObjectRemovePropertyListenerBlock(
+                registration.objectID,
+                &address,
+                DispatchQueue.main,
+                registration.token
+            )
+        }
+        routeFormatListenerRegistrations = []
     }
 
     private func readString(

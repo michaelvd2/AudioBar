@@ -54,6 +54,14 @@ struct AudioPopoverView: View {
             DeviceMenu(store: store, scope: .output)
             DeviceMenu(store: store, scope: .input)
 
+            FooterIconToggle(
+                systemImage: "lock.shield",
+                isOn: store.stabilizeCallAudio,
+                help: "Lock devices — keep your output & input from being switched by apps or macOS"
+            ) {
+                store.toggleStabilizeCallAudio()
+            }
+
             Button {
                 store.refresh()
             } label: {
@@ -92,14 +100,6 @@ struct AudioPopoverView: View {
                 help: "Launch at Login — open AudioBar automatically when you sign in"
             ) {
                 store.setLaunchAtLoginEnabled(!store.isLaunchAtLoginEnabled)
-            }
-
-            FooterIconToggle(
-                systemImage: "lock.shield",
-                isOn: store.stabilizeCallAudio,
-                help: "Lock devices — keep your output & input from being switched by apps or macOS"
-            ) {
-                store.toggleStabilizeCallAudio()
             }
 
             FooterIconToggle(

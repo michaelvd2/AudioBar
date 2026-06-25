@@ -251,6 +251,49 @@ final class SystemEQEngineTests: XCTestCase {
         XCTAssertTrue(restartFunction.contains("restartLocked(settings: settings)"))
     }
 
+    func testActiveRouteListensForOutputAndAggregateFormatChanges() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let startFunction = try XCTUnwrap(source.function(named: "start"))
+        let stopFunction = try XCTUnwrap(source.function(named: "stopLocked"))
+        let registerFunction = try XCTUnwrap(source.function(named: "registerRouteFormatListenersLocked"))
+        let unregisterFunction = try XCTUnwrap(source.function(named: "unregisterRouteFormatListenersLocked"))
+
+        XCTAssertTrue(source.contains("private var routeFormatListenerRegistrations"))
+        XCTAssertTrue(startFunction.contains("registerRouteFormatListenersLocked(outputDeviceID: outputDeviceID, aggregateID: aggregateID)"))
+        XCTAssertTrue(stopFunction.contains("unregisterRouteFormatListenersLocked()"))
+        XCTAssertTrue(registerFunction.contains("kAudioDevicePropertyNominalSampleRate"))
+        XCTAssertTrue(registerFunction.contains("kAudioDevicePropertyStreamConfiguration"))
+        XCTAssertTrue(registerFunction.contains("kAudioDevicePropertyScopeOutput"))
+        XCTAssertTrue(registerFunction.contains("outputDeviceID"))
+        XCTAssertTrue(registerFunction.contains("aggregateID"))
+        XCTAssertTrue(unregisterFunction.contains("AudioObjectRemovePropertyListenerBlock"))
+    }
+
+    func testRouteFormatChangeRestartsActiveOrUnavailableRoute() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let restartFunction = try XCTUnwrap(source.function(named: "restartAfterRouteFormatChange"))
+
+        XCTAssertTrue(restartFunction.contains("case .active, .unavailable"))
+        XCTAssertTrue(restartFunction.contains("restartLocked(settings: settings)"))
+        XCTAssertTrue(restartFunction.contains("Route format changed"))
+    }
+
+    func testWatchdogRestartsWhenAudioResumesAfterSustainedSilence() throws {
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let processFunction = try XCTUnwrap(source.function(named: "process"))
+        let recoverFunction = try XCTUnwrap(source.function(named: "recoverIfRouteStalled"))
+        let markFunction = try XCTUnwrap(source.function(named: "markAudibleInputResumeIfNeeded"))
+
+        XCTAssertTrue(source.contains("private static let audibleResumeIdleThresholdSeconds"))
+        XCTAssertTrue(source.contains("private var pendingAudibleResumeRestart"))
+        XCTAssertTrue(processFunction.contains("markAudibleInputResumeIfNeeded(inputLevelDB: inputLevelDB)"))
+        XCTAssertTrue(markFunction.contains("pendingAudibleResumeRestart = true"))
+        XCTAssertFalse(markFunction.contains("restartLocked(settings:"))
+        XCTAssertTrue(recoverFunction.contains("pendingAudibleResumeRestart"))
+        XCTAssertTrue(recoverFunction.contains("resumed after idle"))
+        XCTAssertTrue(recoverFunction.contains("restartLocked(settings: processor.currentSettings)"))
+    }
+
     func testRetainedPausedSourcesStayOutOfTapRouteToAvoidStaleCoreAudioObjects() {
         let engine = SystemEQEngine()
         let pausedWebApp = AudioProcess(

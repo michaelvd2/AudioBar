@@ -134,12 +134,41 @@ public enum SafariMediaPlaybackCommandBuilder {
 
 public enum WebAppKeyboardPlaybackCommandBuilder {
     #if !APP_STORE
+    public static func togglePlaybackScript(bundleID: String) -> String {
+        """
+        tell application id "\(bundleID)" to activate
+        delay 0.08
+        tell application "System Events"
+            tell (first process whose bundle identifier is "\(bundleID)")
+                keystroke "k"
+                return true
+            end tell
+        end tell
+        """
+    }
+
     public static func previousTrackScript(bundleID: String) -> String {
         trackShortcutScript(bundleID: bundleID, key: "p")
     }
 
     public static func nextTrackScript(bundleID: String) -> String {
         trackShortcutScript(bundleID: bundleID, key: "n")
+    }
+
+    public static func rewind15SecondsScript(bundleID: String) -> String {
+        """
+        tell application id "\(bundleID)" to activate
+        delay 0.08
+        tell application "System Events"
+            tell (first process whose bundle identifier is "\(bundleID)")
+                repeat 3 times
+                    key code 123
+                    delay 0.005
+                end repeat
+                return true
+            end tell
+        end tell
+        """
     }
 
     private static func trackShortcutScript(bundleID: String, key: String) -> String {
@@ -314,10 +343,10 @@ public final class SourcePlaybackController {
             #if APP_STORE
             return false
             #else
-            if nowPlayingController.togglePlayPause() {
-                return true
+            guard let bundleID = process.volumeControlID ?? process.bundleID else {
+                return false
             }
-            return mediaKeyController.togglePlayPause()
+            source = WebAppKeyboardPlaybackCommandBuilder.togglePlaybackScript(bundleID: bundleID)
             #endif
         case .safariMedia:
             source = SafariMediaPlaybackCommandBuilder.togglePlaybackScript()
@@ -421,7 +450,10 @@ public final class SourcePlaybackController {
             #if APP_STORE
             return false
             #else
-            return nowPlayingController.rewind15Seconds()
+            guard let bundleID = process.volumeControlID ?? process.bundleID else {
+                return false
+            }
+            source = WebAppKeyboardPlaybackCommandBuilder.rewind15SecondsScript(bundleID: bundleID)
             #endif
         case .safariMedia:
             source = SafariMediaPlaybackCommandBuilder.rewind15SecondsScript()

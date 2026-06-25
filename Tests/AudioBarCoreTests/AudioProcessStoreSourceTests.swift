@@ -323,11 +323,14 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(isPlayingFunction.contains("playbackStateOverrides[process.stableSourceID] ?? process.isActiveOutput"))
     }
 
-    func testWebAppPlaybackUsesBackgroundMediaKeyInsteadOfActivatingWebApp() throws {
+    func testWebAppPlaybackTargetsClickedWebAppInsteadOfNowPlaying() throws {
         let source = try String(contentsOf: sourcePlaybackControllerURL(), encoding: .utf8)
+        let toggleFunction = try XCTUnwrap(source.function(named: "togglePlayback(for process"))
+        let rewindFunction = try XCTUnwrap(source.function(named: "rewind15Seconds(for process"))
 
         XCTAssertTrue(source.contains("private let nowPlayingController"))
-        XCTAssertTrue(source.contains("nowPlayingController.togglePlayPause()"))
+        XCTAssertTrue(toggleFunction.contains("WebAppKeyboardPlaybackCommandBuilder.togglePlaybackScript"))
+        XCTAssertTrue(rewindFunction.contains("WebAppKeyboardPlaybackCommandBuilder.rewind15SecondsScript"))
         XCTAssertTrue(source.contains("WebAppKeyboardPlaybackCommandBuilder.previousTrackScript"))
         XCTAssertTrue(source.contains("WebAppKeyboardPlaybackCommandBuilder.nextTrackScript"))
         XCTAssertTrue(source.contains("MRMediaRemoteSendCommand"))
@@ -335,23 +338,24 @@ final class AudioProcessStoreSourceTests: XCTestCase {
         XCTAssertTrue(source.contains("let goBackFifteenSecondsCommand: Int32 = 12"))
         XCTAssertTrue(source.contains("public func rewind15Seconds() -> Bool"))
         XCTAssertTrue(source.contains("sendCommand(goBackFifteenSecondsCommand"))
-        XCTAssertTrue(source.contains("private let mediaKeyController"))
-        XCTAssertTrue(source.contains("mediaKeyController.togglePlayPause()"))
-        XCTAssertTrue(source.contains("CGPreflightListenEventAccess()"))
-        XCTAssertTrue(source.contains("CGRequestListenEventAccess()"))
-        XCTAssertFalse(source.contains("key code 40"))
-        XCTAssertFalse(source.contains("key code 49"))
+        XCTAssertFalse(toggleFunction.contains("nowPlayingController.togglePlayPause()"))
+        XCTAssertFalse(toggleFunction.contains("mediaKeyController.togglePlayPause()"))
+        XCTAssertFalse(rewindFunction.contains("nowPlayingController.rewind15Seconds()"))
     }
 
     func testStoreNotifiesBeforeExternalCommandCanMoveAppFocus() throws {
         let source = try String(contentsOf: audioProcessStoreURL(), encoding: .utf8)
         let setVolumeFunction = try XCTUnwrap(source.function(named: "setVolume"))
+        let toggleFunction = try XCTUnwrap(source.function(named: "togglePlayback"))
+        let rewindFunction = try XCTUnwrap(source.function(named: "rewindPlayback"))
         let previousFunction = try XCTUnwrap(source.function(named: "previousTrack"))
         let nextFunction = try XCTUnwrap(source.function(named: "nextTrack"))
 
         XCTAssertTrue(source.contains("extension Notification.Name"))
         XCTAssertTrue(source.contains("audioBarWillRunExternalFocusCommand"))
         XCTAssertTrue(setVolumeFunction.contains("notifyExternalFocusCommandIfNeeded(for: process)"))
+        XCTAssertTrue(toggleFunction.contains("notifyExternalFocusCommandIfNeeded(for: process)"))
+        XCTAssertTrue(rewindFunction.contains("notifyExternalFocusCommandIfNeeded(for: process)"))
         XCTAssertTrue(previousFunction.contains("notifyExternalFocusCommandIfNeeded(for: process)"))
         XCTAssertTrue(nextFunction.contains("notifyExternalFocusCommandIfNeeded(for: process)"))
         XCTAssertTrue(source.contains("private func notifyExternalFocusCommandIfNeeded"))

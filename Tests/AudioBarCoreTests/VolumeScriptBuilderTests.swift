@@ -118,6 +118,22 @@ final class VolumeScriptBuilderTests: XCTestCase {
         XCTAssertTrue(nextScript.contains("keystroke \"n\" using {shift down}"))
     }
 
+    func testYouTubeWebAppKeyboardPlaybackScriptsTargetSpecificWebApp() throws {
+        let toggleScript = WebAppKeyboardPlaybackCommandBuilder.togglePlaybackScript(
+            bundleID: "com.apple.Safari.WebApp.example"
+        )
+        let rewindScript = WebAppKeyboardPlaybackCommandBuilder.rewind15SecondsScript(
+            bundleID: "com.apple.Safari.WebApp.example"
+        )
+
+        XCTAssertTrue(toggleScript.contains("tell application id \"com.apple.Safari.WebApp.example\" to activate"))
+        XCTAssertTrue(toggleScript.contains("tell (first process whose bundle identifier is \"com.apple.Safari.WebApp.example\")"))
+        XCTAssertTrue(toggleScript.contains("keystroke \"k\""))
+        XCTAssertTrue(rewindScript.contains("tell application id \"com.apple.Safari.WebApp.example\" to activate"))
+        XCTAssertTrue(rewindScript.contains("repeat 3 times"))
+        XCTAssertTrue(rewindScript.contains("key code 123"))
+    }
+
     func testScriptedPlaybackToggleUsesApplicationID() {
         let script = ScriptPlaybackCommandBuilder.togglePlaybackScript(bundleID: "com.spotify.client")
 

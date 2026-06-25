@@ -563,6 +563,7 @@ final class AudioProcessStore: ObservableObject {
             return
         }
 
+        notifyExternalFocusCommandIfNeeded(for: process)
         guard playbackController.togglePlayback(for: process) else {
             return
         }
@@ -577,6 +578,7 @@ final class AudioProcessStore: ObservableObject {
             return
         }
 
+        notifyExternalFocusCommandIfNeeded(for: process)
         _ = playbackController.rewind15Seconds(for: process)
     }
 
