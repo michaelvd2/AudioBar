@@ -76,10 +76,12 @@ public final class SystemEQEngine: @unchecked Sendable {
     private static let ioSetupRetryDelaySeconds = 0.08
     /// Target IO buffer for the EQ aggregate — small enough to keep A/V lip-sync
     /// drift below the perceptual threshold, large enough to avoid dropouts.
-    /// Raised 256 → 512 after constant playback breakup: 256 left no headroom for
-    /// CPU bursts (the IOProc would miss its deadline → xruns/crackle). 512 (~11ms
-    /// at 48k) restores margin; the extra latency is well under the sync threshold.
-    private static let targetBufferFrameSize: UInt32 = 512
+    /// History: 256 caused constant breakup (no headroom for CPU bursts → the
+    /// IOProc missed its deadline → xruns) *while BPM analysis shared this audio
+    /// path*. BPM now runs on its own aggregate and only on request (v1), freeing
+    /// headroom — so we trim 512 → 384 (~8ms at 48k) for less lip-sync drift.
+    /// If crackle returns, raise back toward 512; 256 is the aggressive floor.
+    private static let targetBufferFrameSize: UInt32 = 384
 
     public private(set) var status: SystemEQEngineStatus = .stopped
 
@@ -204,7 +206,15 @@ public final class SystemEQEngine: @unchecked Sendable {
         fallbackTapDescription.muteBehavior = muteBehavior
 
         guard let fallbackTapID = createProcessTap(fallbackTapDescription) else {
-            return failLocked("Fallback tap failed")
+            // The global tap is the system-audio-capture gate. When it can't be
+            // created — almost always because Screen & System Audio Recording was
+            // never granted — settle into a STABLE direct-output state
+            // (.unavailable), NOT .failed. .failed makes the store retry start()
+            // every tick, which re-fires the consent prompt in a loop (the
+            // "permission spam") and can leave audio muted. .unavailable stops the
+            // retries, engages the direct-output fallbacks, and lets the prompt
+            // fire at most once. Switching to Music re-attempts cleanly.
+            return pauseLocked("System audio access needed — playing direct. Enable AudioBar in Settings ▸ Privacy ▸ Screen & System Audio Recording, then switch to Music.")
         }
         tapIDs.append(fallbackTapID)
         processObjectIDsForInputBuffers.append(nil)

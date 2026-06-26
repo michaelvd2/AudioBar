@@ -11,6 +11,7 @@ struct AudioPopoverView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: 0) {
                 header
+                outputModeSelector
                 CaptureStripView(snapshot: store.eqStreamSnapshot, systemFormat: store.outputFormat)
             }
             .background(Color.primary.opacity(0.05))
@@ -77,6 +78,27 @@ struct AudioPopoverView: View {
         .padding(.bottom, 6)
     }
 
+    /// Manual content mode (v1). Music = EQ engaged (accept minimal latency).
+    /// Video = EQ off → the capture tap is fully released, so audio plays DIRECT
+    /// with zero added latency (no lip-sync drift on video). Bound to the EQ
+    /// bypass state, so it stays in sync with the EQ On/Off switch in the panel.
+    private enum OutputMode: Hashable { case music, video }
+
+    private var outputModeSelector: some View {
+        Picker("Output mode", selection: Binding(
+            get: { store.eqSettings.isBypassed ? OutputMode.video : OutputMode.music },
+            set: { store.setEQBypassed($0 == .video) }
+        )) {
+            Text("Music").tag(OutputMode.music)
+            Text("Video").tag(OutputMode.video)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
+        .help("Music: EQ on. Video: direct audio with zero added latency (no lip-sync delay on video).")
+    }
+
     private var footer: some View {
         HStack(spacing: 8) {
             Text(footerText)
@@ -105,7 +127,7 @@ struct AudioPopoverView: View {
             FooterIconToggle(
                 systemImage: "metronome",
                 isOn: store.backgroundBPMEnabled,
-                help: "Show BPM — continuously detect each source's tempo. Off by default; uses extra CPU while on."
+                help: "BPM — detect each source's tempo on request. Off by default; tap to start, uses extra CPU while running."
             ) {
                 store.setBackgroundBPMEnabled(!store.backgroundBPMEnabled)
             }

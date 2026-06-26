@@ -165,7 +165,7 @@ final class SystemEQEngineTests: XCTestCase {
         let startFunction = try XCTUnwrap(source.function(named: "start"))
         let bufferFunction = try XCTUnwrap(source.function(named: "applyLowLatencyBufferLocked"))
 
-        XCTAssertTrue(source.contains("private static let targetBufferFrameSize: UInt32 = 512"))
+        XCTAssertTrue(source.contains("private static let targetBufferFrameSize: UInt32 = 384"))
         XCTAssertTrue(bufferFunction.contains("kAudioDevicePropertyBufferFrameSizeRange"))
         XCTAssertTrue(bufferFunction.contains("kAudioDevicePropertyBufferFrameSize"))
         XCTAssertTrue(bufferFunction.contains("writeUInt32"))
@@ -173,6 +173,21 @@ final class SystemEQEngineTests: XCTestCase {
         let bufferRequest = try XCTUnwrap(startFunction.range(of: "applyLowLatencyBufferLocked(to: aggregateID)"))
         let startRequest = try XCTUnwrap(startFunction.range(of: "AudioDeviceStart(aggregateID, newIOProcID)"))
         XCTAssertLessThan(bufferRequest.lowerBound, startRequest.lowerBound)
+    }
+
+    func testDeniedGlobalTapSettlesToUnavailableNotFailedRetry() throws {
+        // The global (fallback) tap is the system-audio-capture gate. When it
+        // can't be created — almost always a missing Screen & System Audio
+        // Recording grant — start() must settle into stable direct output
+        // (.unavailable via pauseLocked), NOT .failed. .failed makes the store
+        // retry start() every tick, re-firing the consent prompt in a loop (the
+        // "permission spam") and risking muted audio. This guards that fix.
+        let source = try String(contentsOf: systemEQEngineURL(), encoding: .utf8)
+        let startFunction = try XCTUnwrap(source.function(named: "start"))
+
+        XCTAssertTrue(startFunction.contains("createProcessTap(fallbackTapDescription)"))
+        XCTAssertTrue(startFunction.contains("return pauseLocked("))
+        XCTAssertFalse(startFunction.contains("return failLocked(\"Fallback tap failed\")"))
     }
 
     func testEngineKeepsSourceTapGainStateForRouteMixer() throws {
