@@ -11,7 +11,6 @@ struct AudioPopoverView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: 0) {
                 header
-                outputModeSelector
                 CaptureStripView(snapshot: store.eqStreamSnapshot, systemFormat: store.outputFormat)
             }
             .background(Color.primary.opacity(0.05))
@@ -45,18 +44,21 @@ struct AudioPopoverView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("AudioBar")
                     .font(.headline)
+                    .fixedSize()
                 Text(store.statusMessage)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
-            Spacer()
+            outputModePicker
+                .padding(.horizontal, 8)
 
             DeviceMenu(store: store, scope: .output)
             DeviceMenu(store: store, scope: .input)
 
             FooterIconToggle(
-                systemImage: "lock.shield",
+                systemImage: "lock",
                 isOn: store.stabilizeCallAudio,
                 help: "Lock devices — keep your output & input from being switched by apps or macOS"
             ) {
@@ -84,7 +86,7 @@ struct AudioPopoverView: View {
     /// bypass state, so it stays in sync with the EQ On/Off switch in the panel.
     private enum OutputMode: Hashable { case music, video }
 
-    private var outputModeSelector: some View {
+    private var outputModePicker: some View {
         Picker("Output mode", selection: Binding(
             get: { store.eqSettings.isBypassed ? OutputMode.video : OutputMode.music },
             set: { store.setEQBypassed($0 == .video) }
@@ -94,8 +96,6 @@ struct AudioPopoverView: View {
         }
         .pickerStyle(.segmented)
         .labelsHidden()
-        .padding(.horizontal, 14)
-        .padding(.bottom, 8)
         .help("Music: EQ on. Video: direct audio with zero added latency (no lip-sync delay on video).")
     }
 
@@ -627,6 +627,8 @@ private struct DeviceMenu: View {
                 Text(scope == .output ? "out" : "in")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .padding(.horizontal, 7)
             .padding(.vertical, 5)
